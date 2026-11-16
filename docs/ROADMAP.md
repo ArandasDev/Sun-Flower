@@ -65,15 +65,9 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - Interface Discord com `discord.js`: conexão, registro de comandos no servidor e restrição ao servidor `DISCORD_GUILD_ID` ([decisão 0003](decisions/0003-single-guild.md)).
 - Módulo de exemplo `ping` com o comando `/ping`.
 
-**Decisões pendentes:**
+**Decisões:** resolvidas em [0005](decisions/0005-runtime-and-persistence.md) (TypeScript executado diretamente e SQLite embutido), [0006](decisions/0006-permission-model.md) (desenvolvedores do bot e cargos do servidor), [0007](decisions/0007-event-bus-delivery.md) (Event Bus assíncrono e isolado), [0008](decisions/0008-logging-and-validation.md) (pino e zod) e [0009](decisions/0009-api-version-compatibility.md) (`apiVersion` por SemVer completo).
 
-| Decisão                                        | Recomendação                                                                                                        |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Banco de dados                                 | SQLite, pois o bot atende um único servidor; migrações versionadas.                                                 |
-| Associação de permissões aos cargos do Discord | Tabela configurável que associa cada permissão a um ou mais cargos do servidor.                                     |
-| Semântica de entrega do Event Bus              | Consumidores executados de forma assíncrona e isolada; a falha de um consumidor é registrada e não afeta os demais. |
-| Biblioteca de logs                             | pino.                                                                                                               |
-| Validação de manifesto e configurações         | zod.                                                                                                                |
+**Spec:** [2026-11-16-fase-1-core-discord.md](specs/2026-11-16-fase-1-core-discord.md).
 
 **Critérios de conclusão:**
 
@@ -131,21 +125,22 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - Ativação e desativação de módulos.
 - Edição das configurações dos módulos, incluindo as regras de moderação.
 - Consulta de logs, histórico e estado dos módulos.
-- Módulo `administration`: gestão da equipe e da associação de permissões aos cargos.
+- Módulo `administration`: gestão da lista de desenvolvedores do bot e da associação de permissões aos cargos ([0006](decisions/0006-permission-model.md)).
 
 **Decisões pendentes:**
 
-| Decisão                | Recomendação                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| Autenticação do painel | Login com Discord (OAuth2), permitido apenas a membros do servidor com permissão administrativa. |
-| Framework do painel    | Decidir na spec da fase.                                                                         |
-| Hospedagem do painel   | Mesmo processo do bot, servindo a API e o painel.                                                |
+| Decisão                | Recomendação                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Autenticação do painel | Login com Discord (OAuth2), permitido apenas a desenvolvedores do bot ([0006](decisions/0006-permission-model.md)). |
+| Framework do painel    | Decidir na spec da fase.                                                                                            |
+| Hospedagem do painel   | Mesmo processo do bot, servindo a API e o painel.                                                                   |
 
 **Critérios de conclusão:**
 
 - [ ] Toda operação da API verifica permissão no backend.
 - [ ] Um membro sem permissão não acessa o painel.
 - [ ] Uma alteração de configuração pelo painel tem efeito sem reiniciar a aplicação.
+- [ ] **Revisão ofensiva:** três subagentes independentes atacam o projeto como invasores, um focado em autenticação e permissões, um na API e em injeção, e um em vazamento de informações e segredos. Todas as falhas encontradas são corrigidas ou registradas como aceitas pela pessoa mantenedora antes da release.
 
 **Release:** `v0.3.0`.
 

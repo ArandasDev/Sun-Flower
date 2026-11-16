@@ -107,7 +107,7 @@ Esse arquivo será responsável por declarar sua identidade, versão, compatibil
   "name": "Moderation",
   "description": "Active server moderation system",
   "version": "1.0.0",
-  "apiVersion": "1",
+  "apiVersion": "1.0.0",
   "entrypoint": "index.ts",
   "enabledByDefault": false,
   "dependencies": [],
@@ -133,7 +133,7 @@ Esse arquivo será responsável por declarar sua identidade, versão, compatibil
 | `name`         | string   | Nome de apresentação.                                                                         |
 | `description`  | string   | Descrição funcional em uma frase.                                                             |
 | `version`      | string   | Versão do módulo em SemVer (`MAJOR.MINOR.PATCH`).                                             |
-| `apiVersion`   | string   | Versão `MAJOR` do contrato do Core que o módulo implementa (ex.: `"1"`).                      |
+| `apiVersion`   | string   | Versão SemVer completa do contrato do Core que o módulo utiliza (ex.: `"1.0.0"`).             |
 | `entrypoint`   | string   | Caminho, relativo ao diretório do módulo, do arquivo que exporta a implementação do contrato. |
 | `dependencies` | string[] | Ids dos módulos dos quais este depende. Lista vazia quando não houver.                        |
 | `permissions`  | string[] | Permissões que o módulo declara, no formato da seção 9.1.                                     |
@@ -378,7 +378,7 @@ Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id.
 - Eventos críticos deverão possuir estratégias de recuperação adequadas.
 - O processamento não deverá presumir entrega exatamente uma vez.
 
-A semântica de entrega do Event Bus local (execução síncrona ou assíncrona dos consumidores, ordem de entrega e tratamento de falhas de um consumidor) é uma decisão pendente da Fase 1 do [ROADMAP](ROADMAP.md).
+A semântica de entrega do Event Bus local está definida na [decisão 0007](decisions/0007-event-bus-delivery.md): consumidores assíncronos e isolados, entrega no máximo uma vez e profundidade máxima de encadeamento 8.
 
 Caso futuramente exista comunicação distribuída, deverão ser consideradas estratégias de idempotência, retentativas e entrega pelo menos uma vez.
 
@@ -442,9 +442,21 @@ social.wishlist.read
 social.wishlist.manage
 ```
 
-### 9.2. Regras
+### 9.2. Origem das permissões
+
+Conforme a [decisão 0006](decisions/0006-permission-model.md):
+
+| Permissões                 | Quem recebe                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `core.*` (operação do bot) | Somente usuários da lista de desenvolvedores do bot. Nunca associáveis a cargos do servidor.                       |
+| Permissões de módulo       | Membros cujos cargos do servidor tenham a permissão associada. Ser desenvolvedor não concede permissões de módulo. |
+
+O dono do servidor e membros com a permissão de Administrador do Discord não recebem nenhuma permissão automática.
+
+### 9.3. Regras
 
 - Permissões deverão possuir escopo definido.
+- Um módulo só pode verificar as permissões que declarou no próprio manifesto.
 - Operações originadas fora do servidor autorizado deverão ser rejeitadas antes da verificação de permissões.
 - Operações administrativas deverão exigir permissões específicas.
 - O módulo não poderá conceder permissões por conta própria.
@@ -595,18 +607,18 @@ O versionamento do módulo representa a compatibilidade de suas interfaces públ
 A versão do módulo e a versão da API do Core são conceitos distintos:
 
 - `version` é a versão do próprio módulo.
-- `apiVersion` é a versão `MAJOR` do contrato do Core que o módulo implementa.
+- `apiVersion` é a versão SemVer completa do contrato do Core que o módulo utiliza.
 
 Exemplo:
 
 ```json
 {
   "version": "2.1.0",
-  "apiVersion": "1"
+  "apiVersion": "1.0.0"
 }
 ```
 
-O Core só inicializa um módulo cujo `apiVersion` seja igual à versão `MAJOR` atual do seu contrato. Caso contrário, o módulo é rejeitado na etapa Manifest Validation.
+O Core só inicializa um módulo cujo `apiVersion` tenha o mesmo `MAJOR` da versão do contrato do Core e `MINOR.PATCH` menor ou igual ao do Core, conforme a [decisão 0009](decisions/0009-api-version-compatibility.md). Caso contrário, o módulo é rejeitado na etapa Manifest Validation.
 
 Alterações incompatíveis nos contratos públicos deverão ser documentadas e acompanhadas de orientações de migração.
 
