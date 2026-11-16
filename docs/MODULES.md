@@ -173,12 +173,10 @@ O contrato define as operações fundamentais necessárias para integrar o módu
 
 ### 5.1. Interface
 
-O contrato é uma interface TypeScript exportada por `shared/contracts`. A forma abaixo é a referência; os tipos `ModuleManifest` e `ModuleContext` são detalhados na spec da Fase 1 do [ROADMAP](ROADMAP.md).
+O contrato é uma interface TypeScript exportada por `shared/contracts`. Os tipos `ModuleManifest` e `ModuleContext` são detalhados na spec da Fase 1 do [ROADMAP](ROADMAP.md).
 
 ```typescript
 interface SunFlowerModule {
-  manifest: ModuleManifest;
-
   register(context: ModuleContext): Promise<void>;
 
   initialize(): Promise<void>;
@@ -190,6 +188,8 @@ interface SunFlowerModule {
   dispose(): Promise<void>;
 }
 ```
+
+O manifesto não faz parte da interface: o `manifest.json` do módulo é a fonte única do manifesto. O `entrypoint` declarado nele exporta `default`, uma fábrica (`ModuleFactory`) que devolve a instância de `SunFlowerModule`, e, opcionalmente, `configSchema`, um schema zod usado para validar a configuração do módulo.
 
 ### 5.2. Responsabilidade dos métodos
 
