@@ -20,3 +20,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Projeto Node.js 26 + TypeScript (`strict`) com ESLint, Prettier e Vitest, executáveis por `npm run check`.
 - CI no GitHub Actions executando `npm run check` em todo Pull Request para `main`.
 - `.env.example` com as variáveis `DISCORD_TOKEN` e `DISCORD_GUILD_ID`.
+- Registros de decisão 0005 a 0009 (execução direta de TypeScript e SQLite, modelo de permissões, Event Bus, pino e zod, compatibilidade do `apiVersion`) e spec da Fase 1.
+
+### Changed
+
+- **BREAKING:** `apiVersion` do manifesto passa a ser a versão SemVer completa do contrato do Core (`"1.0.0"`), com compatibilidade por `MAJOR` igual e `MINOR.PATCH` menor ou igual ao do Core.
+- Permissões em duas camadas: lista de desenvolvedores do bot para as permissões `core.*` e cargos do servidor para as permissões dos módulos; o dono e os administradores do servidor não recebem permissões automáticas.
+- Fase 3 do ROADMAP passa a exigir revisão ofensiva por três subagentes antes da release.

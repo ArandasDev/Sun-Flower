@@ -16,9 +16,14 @@ Cada assunto tem um único documento responsável. Quando dois documentos tratam
 
 ## Registros de decisão
 
-| Nº                                         | Decisão                              | Status |
-| ------------------------------------------ | ------------------------------------ | ------ |
-| [0001](decisions/0001-modular-monolith.md) | Arquitetura Modular Monolith         | Aceita |
-| [0002](decisions/0002-typescript-node.md)  | TypeScript + Node.js                 | Aceita |
-| [0003](decisions/0003-single-guild.md)     | Atuação em um único servidor Discord | Aceita |
-| [0004](decisions/0004-tooling.md)          | Ferramentas de desenvolvimento       | Aceita |
+| Nº                                                  | Decisão                                            | Status |
+| --------------------------------------------------- | -------------------------------------------------- | ------ |
+| [0001](decisions/0001-modular-monolith.md)          | Arquitetura Modular Monolith                       | Aceita |
+| [0002](decisions/0002-typescript-node.md)           | TypeScript + Node.js                               | Aceita |
+| [0003](decisions/0003-single-guild.md)              | Atuação em um único servidor Discord               | Aceita |
+| [0004](decisions/0004-tooling.md)                   | Ferramentas de desenvolvimento                     | Aceita |
+| [0005](decisions/0005-runtime-and-persistence.md)   | TypeScript executado diretamente e SQLite embutido | Aceita |
+| [0006](decisions/0006-permission-model.md)          | Desenvolvedores do bot e cargos do servidor        | Aceita |
+| [0007](decisions/0007-event-bus-delivery.md)        | Semântica de entrega do Event Bus                  | Aceita |
+| [0008](decisions/0008-logging-and-validation.md)    | Logs com pino e validação com zod                  | Aceita |
+| [0009](decisions/0009-api-version-compatibility.md) | Compatibilidade do contrato por SemVer completo    | Aceita |

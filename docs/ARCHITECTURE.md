@@ -237,7 +237,7 @@ Todos os módulos deverão respeitar um modelo centralizado de identidade, auten
 
 **Requisitos:**
 
-- Controle de acesso baseado em permissões (RBAC), com permissões nomeadas conforme [MODULES.md §9](MODULES.md#9-permissões). A forma de associar essas permissões aos cargos do Discord é uma decisão pendente da Fase 1 do [ROADMAP](ROADMAP.md).
+- Controle de acesso baseado em permissões (RBAC), com permissões nomeadas conforme [MODULES.md §9](MODULES.md#9-permissões), em duas camadas independentes ([decisão 0006](decisions/0006-permission-model.md)): a **lista de desenvolvedores do bot**, que opera o próprio Sun Flower, e os **cargos do servidor**, que concedem as permissões dos módulos à equipe da comunidade. Ser dono ou administrador do servidor não concede controle sobre o bot.
 - Restrição de atuação ao servidor autorizado, rejeitando eventos e comandos de qualquer outro servidor.
 - Proteção de credenciais e tokens.
 - Validação das operações administrativas.
@@ -266,7 +266,7 @@ Os módulos poderão possuir estruturas de dados próprias, respeitando os padr�
 - Suporte a futuras estratégias de cache.
 - Migrações de banco de dados versionadas.
 
-A escolha do banco de dados é uma decisão pendente da Fase 1 do [ROADMAP](ROADMAP.md).
+O banco de dados é SQLite, acessado pelo módulo embutido `node:sqlite` ([decisão 0005](decisions/0005-runtime-and-persistence.md)).
 
 A arquitetura não deverá obrigar todos os módulos a utilizarem a mesma estratégia de persistência quando suas necessidades forem diferentes.
 
