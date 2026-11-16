@@ -14,7 +14,21 @@ export function createLogger(options: CreateLoggerOptions): Logger {
       level: options.level,
       base: { service: 'sun-flower' },
       redact: {
-        paths: ['token', '*.token', 'authorization', '*.authorization'],
+        // pino has no recursive wildcard: only these fixed depths are covered.
+        // token: depth 0-2; authorization: depth 0-1, plus headers.authorization at depth 1-2.
+        paths: [
+          'token',
+          '*.token',
+          '*.*.token',
+          'authorization',
+          'Authorization',
+          '*.authorization',
+          '*.Authorization',
+          '*.headers.authorization',
+          '*.headers.Authorization',
+          '*.*.headers.authorization',
+          '*.*.headers.Authorization',
+        ],
         censor: '[REDACTED]',
       },
     },

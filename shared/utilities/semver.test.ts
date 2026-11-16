@@ -4,6 +4,7 @@ import { isApiCompatible, parseSemver } from './semver.ts';
 describe('semver', () => {
   it.each([
     ['1.3.0', '1.2.0', true],
+    ['1.3.0', '1.2.5', true],
     ['1.3.0', '1.3.0', true],
     ['1.3.0', '1.4.0', false],
     ['1.3.0', '1.3.1', false],

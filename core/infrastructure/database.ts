@@ -6,7 +6,7 @@ export function openDatabase(file: string): DatabaseSync {
   if (file !== ':memory:') {
     fs.mkdirSync(path.dirname(file), { recursive: true });
   }
-  const db = new DatabaseSync(file);
+  const db = new DatabaseSync(file, { timeout: 5000 });
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   return db;

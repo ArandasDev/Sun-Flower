@@ -83,7 +83,29 @@ describe('runMigrations', () => {
   });
 });
 
+describe('core schema constraints', () => {
+  const insert =
+    'INSERT INTO module_config (module_id, enabled, settings, updated_at) VALUES (?, ?, ?, ?)';
+
+  it('rejects enabled values other than null, 0 and 1', () => {
+    runMigrations(db, MIGRATIONS_DIR);
+    expect(() => db.prepare(insert).run('m1', 2, '{}', 'now')).toThrow();
+    expect(() => db.prepare(insert).run('m2', null, '{}', 'now')).not.toThrow();
+    expect(() => db.prepare(insert).run('m3', 1, '{}', 'now')).not.toThrow();
+  });
+
+  it('rejects settings that are not valid JSON', () => {
+    runMigrations(db, MIGRATIONS_DIR);
+    expect(() => db.prepare(insert).run('m1', 1, 'not json', 'now')).toThrow();
+  });
+});
+
 describe('openDatabase', () => {
+  it('sets a 5000 ms busy timeout', () => {
+    const row = db.prepare('PRAGMA busy_timeout').get() as { timeout: number };
+    expect(row.timeout).toBe(5000);
+  });
+
   it('creates missing parent directories for file databases', () => {
     const file = path.join(dir, 'nested', 'deeper', 'bot.db');
     const fileDb = openDatabase(file);

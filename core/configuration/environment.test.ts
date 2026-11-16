@@ -14,6 +14,11 @@ describe('loadEnvironment', () => {
     });
   });
 
+  it('treats whitespace-only values as absent', () => {
+    expect(() => loadEnvironment({ ...valid, DISCORD_TOKEN: '   ' })).toThrow(/DISCORD_TOKEN/);
+    expect(loadEnvironment({ ...valid, LOG_LEVEL: '  ' }).logLevel).toBe('info');
+  });
+
   it('rejects missing and invalid variables without leaking values', () => {
     const run = () =>
       loadEnvironment({

@@ -19,7 +19,6 @@ type Source = Record<string, string | undefined>;
 const rules: Record<string, string> = {
   DISCORD_TOKEN: 'must not be empty',
   DISCORD_GUILD_ID: 'must have 17 to 20 digits',
-  SUNFLOWER_DB_PATH: 'must not be empty when set',
   LOG_LEVEL: 'must be one of fatal, error, warn, info, debug, trace',
 };
 
@@ -39,7 +38,8 @@ export class EnvironmentError extends Error {
 
 function present(source: Source, name: string): string | undefined {
   const value = source[name];
-  return value === undefined || value === '' ? undefined : value;
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
 }
 
 const databaseShape = {

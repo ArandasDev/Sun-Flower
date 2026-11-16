@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { TimeoutError, withTimeout } from './timeout.ts';
 
 describe('withTimeout', () => {
+  it.each([Number.NaN, 0, -1, Number.POSITIVE_INFINITY])(
+    'rejects with RangeError for ms=%s',
+    async (ms) => {
+      await expect(withTimeout(() => Promise.resolve(1), ms, 'job')).rejects.toBeInstanceOf(
+        RangeError,
+      );
+    },
+  );
+
   it('resolves when work finishes in time', async () => {
     await expect(withTimeout(() => Promise.resolve(7), 50, 'job')).resolves.toBe(7);
   });

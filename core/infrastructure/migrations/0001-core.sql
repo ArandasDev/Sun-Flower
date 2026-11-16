@@ -12,7 +12,7 @@ CREATE TABLE permission_grants (
 
 CREATE TABLE module_config (
   module_id TEXT PRIMARY KEY,
-  enabled INTEGER NULL,
-  settings TEXT NOT NULL DEFAULT '{}',
+  enabled INTEGER NULL CHECK (enabled IS NULL OR enabled IN (0, 1)),
+  settings TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(settings)),
   updated_at TEXT NOT NULL
 );
