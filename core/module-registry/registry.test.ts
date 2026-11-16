@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import type { ModuleContext } from '../../shared/contracts/module.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
 import { EventBus } from '../event-bus/event-bus.ts';
 import { openDatabase } from '../infrastructure/database.ts';
@@ -457,20 +458,159 @@ describe('ModuleRegistry', () => {
     await registry.stop();
     expect(calls().slice(before)).toEqual(['a:unsubscribeAll', 'a:stop', 'a:dispose']);
   });
-});
 
-function canSymlink(): boolean {
-  const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-symlink-probe-'));
-  try {
-    fs.writeFileSync(path.join(probe, 'target.ts'), '');
-    fs.symlinkSync(path.join(probe, 'target.ts'), path.join(probe, 'link.ts'), 'file');
-    return true;
-  } catch {
-    return false;
-  } finally {
-    fs.rmSync(probe, { recursive: true, force: true });
-  }
-}
+  it('ignores a subscribe made after the module failed by timeout', async () => {
+    const key = JSON.stringify(callsKey);
+    writeModule('late', {
+      manifest: { events: { subscribes: ['pub.thing.happened'], publishes: [] } },
+      rawSource: `const calls = (globalThis[${key}] ??= []);
+export default () => ({
+  async register(ctx) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    ctx.events.subscribe('pub.thing.happened', () => { calls.push('late:received'); });
+    calls.push('late:subscribed');
+    await new Promise(() => {});
+  },
+  async initialize() {}, async start() {}, async stop() {}, async dispose() {},
+});
+`,
+    });
+    const registry = createRegistry(20);
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('late')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
+    await vi.waitFor(() => {
+      expect(calls()).toContain('late:subscribed');
+    });
+
+    const publisher = bus.forModule({
+      id: 'pub',
+      name: 'pub',
+      description: 'pub',
+      version: '1.0.0',
+      apiVersion: '1.0.0',
+      entrypoint: 'index.ts',
+      dependencies: [],
+      permissions: [],
+      enabledByDefault: true,
+      events: { subscribes: [], publishes: ['pub.thing.happened'] },
+    });
+    publisher.publish('pub.thing.happened', {});
+    await bus.idle();
+    expect(calls()).not.toContain('late:received');
+    expect(
+      logger.calls.some(
+        (call) => call.level === 'warn' && (call.obj as { module?: string }).module === 'late',
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores a publish made after stop()', async () => {
+    const key = JSON.stringify(`${callsKey}_context`);
+    writeModule('a', {
+      manifest: { events: { subscribes: [], publishes: ['a.thing.happened'] } },
+      rawSource: `export default () => ({
+  async register(ctx) { globalThis[${key}] = ctx; },
+  async initialize() {}, async start() {}, async stop() {}, async dispose() {},
+});
+`,
+    });
+    const received: unknown[] = [];
+    bus
+      .forModule({
+        id: 'listener',
+        name: 'listener',
+        description: 'listener',
+        version: '1.0.0',
+        apiVersion: '1.0.0',
+        entrypoint: 'index.ts',
+        dependencies: [],
+        permissions: [],
+        enabledByDefault: true,
+        events: { subscribes: ['a.thing.happened'], publishes: [] },
+      })
+      .subscribe('a.thing.happened', (event) => {
+        received.push(event);
+      });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const context = (globalThis as unknown as Record<string, ModuleContext>)[`${callsKey}_context`];
+    Reflect.deleteProperty(globalThis, `${callsKey}_context`);
+    context?.events.publish('a.thing.happened', {});
+    await bus.idle();
+    expect(received).toHaveLength(1);
+
+    await registry.stop();
+    context?.events.publish('a.thing.happened', {});
+    await bus.idle();
+    expect(received).toHaveLength(1);
+    expect(
+      logger.calls.some((call) => call.level === 'warn' && /publish/.test(call.msg ?? '')),
+    ).toBe(true);
+  });
+
+  it('fails a module that swallows a duplicate command error', async () => {
+    writeModule('a', { commands: ['hello'] });
+    writeModule('b', {
+      rawSource: `export default () => ({
+  async register(ctx) {
+    try {
+      ctx.commands.register({ name: 'hello', description: 'Duplicate', handle: async () => {} });
+    } catch {}
+  },
+  async initialize() {}, async start() {}, async stop() {}, async dispose() {},
+});
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('b')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
+    expect(registry.status().get('b')?.error).toMatch(/hello/);
+  });
+
+  it('discards earlier commands of a module that hits a duplicate and releases them', async () => {
+    writeModule('a', { commands: ['hello'] });
+    writeModule('b', { commands: ['bx', 'hello'] });
+    writeModule('c', { commands: ['bx'] });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('b')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
+    expect(stateOf(registry, 'c')).toBe('RUNNING');
+    expect([...registry.commands().keys()].sort()).toEqual(['bx', 'hello']);
+    expect(registry.status().get('c')?.error).toBeUndefined();
+  });
+
+  it('returns the same in-flight promise for concurrent stop() calls', async () => {
+    writeModule('a');
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const first = registry.stop();
+    const second = registry.stop();
+    expect(second).toBe(first);
+    await first;
+    expect(calls().filter((call) => call === 'a:stop')).toHaveLength(1);
+  });
+
+  it('still shuts down started modules when start() rejects', async () => {
+    writeModule('a');
+    writeModule('b');
+    const isEnabled = config.isEnabled.bind(config);
+    vi.spyOn(config, 'isEnabled').mockImplementation((id, enabledByDefault) => {
+      if (id === 'b') throw new Error('database unavailable');
+      return isEnabled(id, enabledByDefault);
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await expect(registry.start()).rejects.toThrow(/database unavailable/);
+    await expect(registry.stop()).resolves.toBeUndefined();
+    expect(stateOf(registry, 'a')).toBe('DISPOSED');
+    expect(calls()).toEqual(['a:register', 'a:initialize', 'a:start', 'a:stop', 'a:dispose']);
+  });
+});
 
 describe('resolveEntrypoint', () => {
   it('returns the real path of an entrypoint inside the module directory', () => {
@@ -493,18 +633,18 @@ describe('resolveEntrypoint', () => {
     expect(() => resolveEntrypoint(directory, '../a-evil/index.ts')).toThrow(EntrypointError);
   });
 
-  it.skipIf(!canSymlink())('rejects a symlinked entrypoint that points outside', async () => {
-    const directory = writeModule('a');
-    const outside = path.join(tempDir, 'outside.ts');
-    fs.writeFileSync(outside, 'export default () => ({});\n');
-    fs.symlinkSync(outside, path.join(directory, 'link.ts'), 'file');
-    expect(() => resolveEntrypoint(directory, 'link.ts')).toThrow(EntrypointError);
+  it('rejects an entrypoint reached through a linked directory that points outside', async () => {
+    const outsideDir = path.join(tempDir, 'outside');
+    fs.mkdirSync(outsideDir);
+    fs.writeFileSync(path.join(outsideDir, 'index.ts'), 'export default () => ({});\n');
+    const directory = writeModule('a', { manifest: { entrypoint: 'sub/index.ts' } });
+    // A junction needs no privileges on Windows; the type is ignored on other systems.
+    fs.symlinkSync(outsideDir, path.join(directory, 'sub'), 'junction');
+    expect(() => resolveEntrypoint(directory, 'sub/index.ts')).toThrow(/outside/);
 
-    const manifestPath = path.join(directory, 'manifest.json');
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-    fs.writeFileSync(manifestPath, JSON.stringify({ ...manifest, entrypoint: 'link.ts' }));
     const registry = createRegistry();
     await registry.load();
     expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
+    expect(registry.status().get('a')?.error).toMatch(/outside the module directory/);
   });
 });

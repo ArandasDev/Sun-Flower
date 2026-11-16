@@ -26,6 +26,12 @@ import {
 export { CommandRegistrationError, type ModuleState, type ModuleStatus } from './lifecycle.ts';
 
 const DEFAULT_STEP_TIMEOUT_MS = 10_000;
+const EVENT_STATES: ReadonlySet<ModuleState> = new Set([
+  'VALIDATED',
+  'REGISTERED',
+  'INITIALIZED',
+  'RUNNING',
+]);
 
 export class RegistryStateError extends Error {
   constructor(message: string) {
@@ -51,6 +57,7 @@ interface ModuleRecord {
   configSchema?: z.ZodType<unknown>;
   events?: ModuleEvents;
   settings?: { readonly value: unknown };
+  rejectedCommand?: string;
   readonly commands: Map<string, CommandDefinition>;
 }
 
@@ -70,6 +77,7 @@ export class ModuleRegistry {
   #order: string[] = [];
   #phase: Phase = 'new';
   #starting: Promise<void> | undefined;
+  #stopping: Promise<void> | undefined;
 
   constructor(deps: ModuleRegistryDeps) {
     this.#deps = deps;
@@ -143,9 +151,21 @@ export class ModuleRegistry {
     this.#phase = 'started';
   }
 
-  async stop(): Promise<void> {
-    if (this.#phase === 'starting') await this.#starting;
-    if (this.#phase !== 'started') {
+  /** Idempotent: concurrent calls share one shutdown, which never rethrows a failed start(). */
+  stop(): Promise<void> {
+    this.#stopping ??= this.#stopAll();
+    return this.#stopping;
+  }
+
+  async #stopAll(): Promise<void> {
+    if (this.#phase === 'starting') {
+      try {
+        await this.#starting;
+      } catch (error) {
+        this.#deps.logger.error({ error: describe(error) }, 'module start aborted');
+      }
+    }
+    if (this.#phase !== 'started' && this.#phase !== 'starting') {
       if (this.#phase === 'new' || this.#phase === 'loaded') this.#phase = 'stopped';
       return;
     }
@@ -212,7 +232,16 @@ export class ModuleRegistry {
     const context = this.#createContext(record, events);
 
     const steps: [string, () => Promise<void>, ModuleState][] = [
-      ['register', () => instance.register(context), 'REGISTERED'],
+      [
+        'register',
+        async () => {
+          await instance.register(context);
+          if (record.rejectedCommand !== undefined) {
+            throw new CommandRegistrationError(record.rejectedCommand);
+          }
+        },
+        'REGISTERED',
+      ],
       [
         'initialize',
         async () => {
@@ -249,10 +278,10 @@ export class ModuleRegistry {
       logger: this.#deps.logger.child({ module: id }),
       events: Object.freeze({
         publish: (type: string, payload: unknown, context?: EventContext) => {
-          events.publish(type, payload, context);
+          if (this.#eventsAllowed(id, 'publish', type)) events.publish(type, payload, context);
         },
         subscribe: (type: string, handler: EventHandler) => {
-          events.subscribe(type, handler);
+          if (this.#eventsAllowed(id, 'subscribe', type)) events.subscribe(type, handler);
         },
       }),
       permissions: this.#deps.permissions.forModule(record.manifest),
@@ -277,16 +306,33 @@ export class ModuleRegistry {
     if (this.#statuses.get(id)?.state !== 'VALIDATED') {
       throw new CommandRegistrationError(`Module "${id}" can only register commands in register()`);
     }
-    assertValidCommand(command);
-    const { name } = command;
-    const owner = this.#commandOwners.get(name);
-    if (owner !== undefined) {
-      throw new CommandRegistrationError(
-        `Command "${name}" is already registered by module "${owner}"`,
-      );
+    try {
+      assertValidCommand(command);
+      const owner = this.#commandOwners.get(command.name);
+      if (owner !== undefined) {
+        throw new CommandRegistrationError(
+          `Command "${command.name}" is already registered by module "${owner}"`,
+        );
+      }
+    } catch (error) {
+      // Recorded so the register step fails even if the module swallows the error.
+      record.rejectedCommand ??= describe(error);
+      throw error;
     }
+    const { name } = command;
     this.#commandOwners.set(name, id);
     record.commands.set(name, command);
+  }
+
+  /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */
+  #eventsAllowed(id: string, action: 'publish' | 'subscribe', type: string): boolean {
+    const state = this.#statuses.get(id)?.state;
+    if (state !== undefined && EVENT_STATES.has(state)) return true;
+    this.#deps.logger.warn(
+      { module: id, state, event: type },
+      `event ${action} ignored: module is not active`,
+    );
+    return false;
   }
 
   #dropCommands(record: ModuleRecord): void {
