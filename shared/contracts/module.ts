@@ -41,3 +41,12 @@ export interface SunFlowerModule {
 }
 
 export type ModuleFactory = () => SunFlowerModule;
+
+/**
+ * Shape of a module's entrypoint. `configSchema` is a zod schema; it is typed as `unknown`
+ * here to keep `shared/` free of a zod dependency, and the Core checks it at runtime.
+ */
+export interface ModuleEntrypoint {
+  readonly default: ModuleFactory;
+  readonly configSchema?: unknown;
+}

@@ -72,6 +72,13 @@ describe('validateManifest', () => {
     expect((result as { errors: string[] }).errors.join(' ')).toMatch(pattern);
   });
 
+  it('rejects the reserved id "core"', () => {
+    const raw = { ...minimal, id: 'core' };
+    const result = validateManifest(raw, 'core', '1.0.0');
+    expect(result.ok).toBe(false);
+    expect((result as { errors: string[] }).errors.join(' ')).toMatch(/"core" is reserved/);
+  });
+
   it('allows subscribing to events of other modules', () => {
     const raw = { ...base, events: { subscribes: ['other.x.created'], publishes: [] } };
     expect(validateManifest(raw, 'ping', '1.0.0').ok).toBe(true);

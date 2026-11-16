@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ModuleManifest } from '../../shared/contracts/module.ts';
 import { isApiCompatible } from '../../shared/utilities/semver.ts';
 
+const RESERVED_ID = 'core';
 const MODULE_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const THREE_SEGMENTS = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
@@ -71,6 +72,9 @@ export function validateManifest(
 
   const manifest = parsed.data;
   const errors: string[] = [];
+  if (manifest.id === RESERVED_ID) {
+    errors.push(`id "${RESERVED_ID}" is reserved for the Core`);
+  }
   if (manifest.id !== directoryName) {
     errors.push(`id "${manifest.id}" must match the directory name "${directoryName}"`);
   }
