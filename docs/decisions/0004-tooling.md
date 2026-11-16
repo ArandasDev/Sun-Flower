@@ -9,15 +9,15 @@ A Fase 0 do [ROADMAP](../ROADMAP.md) exige decidir versão do Node.js, gerenciad
 
 ## Decisão
 
-| Item | Escolha |
-|---|---|
-| Runtime | Node.js 26 (LTS ativa) |
-| Gerenciador de pacotes | npm, com `package-lock.json` versionado |
-| Executor de testes | Vitest |
-| Lint | ESLint com `typescript-eslint` (regras que usam informação de tipos) |
-| Formatação | Prettier |
-| CI | GitHub Actions |
-| Repositório | `https://github.com/ArandasDev/Sun-Flower` |
+| Item                   | Escolha                                                              |
+| ---------------------- | -------------------------------------------------------------------- |
+| Runtime                | Node.js 26 (LTS ativa)                                               |
+| Gerenciador de pacotes | npm, com `package-lock.json` versionado                              |
+| Executor de testes     | Vitest                                                               |
+| Lint                   | ESLint com `typescript-eslint` (regras que usam informação de tipos) |
+| Formatação             | Prettier                                                             |
+| CI                     | GitHub Actions                                                       |
+| Repositório            | `https://github.com/ArandasDev/Sun-Flower`                           |
 
 ## Consequências
 

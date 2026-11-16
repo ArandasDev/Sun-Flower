@@ -17,3 +17,6 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - `AGENTS.md`: resumo para agentes de IA.
 - Registros de decisão: Modular Monolith (0001), TypeScript + Node.js (0002), atuação exclusiva em um único servidor Discord (0003) e ferramentas de desenvolvimento (0004).
 - Spec da Fase 0 (base do repositório).
+- Projeto Node.js 26 + TypeScript (`strict`) com ESLint, Prettier e Vitest, executáveis por `npm run check`.
+- CI no GitHub Actions executando `npm run check` em todo Pull Request para `main`.
+- `.env.example` com as variáveis `DISCORD_TOKEN` e `DISCORD_GUILD_ID`.

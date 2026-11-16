@@ -31,12 +31,12 @@ Um módulo não deverá implementar funcionalidades pertencentes a outro domíni
 
 ### Exemplos
 
-| Módulo | Responsabilidade |
-|---|---|
-| `moderation` | Segurança e moderação |
-| `music` | Reprodução e gerenciamento musical |
-| `social` | Funcionalidades sociais |
-| `administration` | Operações administrativas |
+| Módulo           | Responsabilidade                   |
+| ---------------- | ---------------------------------- |
+| `moderation`     | Segurança e moderação              |
+| `music`          | Reprodução e gerenciamento musical |
+| `social`         | Funcionalidades sociais            |
+| `administration` | Operações administrativas          |
 
 ## 3. Estrutura de Diretórios
 
@@ -119,37 +119,32 @@ Esse arquivo será responsável por declarar sua identidade, versão, compatibil
     "moderation.actions.ban"
   ],
   "events": {
-    "subscribes": [
-      "discord.message.created"
-    ],
-    "publishes": [
-      "moderation.violation.detected",
-      "moderation.action.executed"
-    ]
+    "subscribes": ["discord.message.created"],
+    "publishes": ["moderation.violation.detected", "moderation.action.executed"]
   }
 }
 ```
 
 ### 4.2. Campos obrigatórios
 
-| Campo | Tipo | Regra |
-|---|---|---|
-| `id` | string | Único, em `kebab-case`, igual ao nome do diretório do módulo. |
-| `name` | string | Nome de apresentação. |
-| `description` | string | Descrição funcional em uma frase. |
-| `version` | string | Versão do módulo em SemVer (`MAJOR.MINOR.PATCH`). |
-| `apiVersion` | string | Versão `MAJOR` do contrato do Core que o módulo implementa (ex.: `"1"`). |
-| `entrypoint` | string | Caminho, relativo ao diretório do módulo, do arquivo que exporta a implementação do contrato. |
-| `dependencies` | string[] | Ids dos módulos dos quais este depende. Lista vazia quando não houver. |
-| `permissions` | string[] | Permissões que o módulo declara, no formato da seção 9.1. |
+| Campo          | Tipo     | Regra                                                                                         |
+| -------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `id`           | string   | Único, em `kebab-case`, igual ao nome do diretório do módulo.                                 |
+| `name`         | string   | Nome de apresentação.                                                                         |
+| `description`  | string   | Descrição funcional em uma frase.                                                             |
+| `version`      | string   | Versão do módulo em SemVer (`MAJOR.MINOR.PATCH`).                                             |
+| `apiVersion`   | string   | Versão `MAJOR` do contrato do Core que o módulo implementa (ex.: `"1"`).                      |
+| `entrypoint`   | string   | Caminho, relativo ao diretório do módulo, do arquivo que exporta a implementação do contrato. |
+| `dependencies` | string[] | Ids dos módulos dos quais este depende. Lista vazia quando não houver.                        |
+| `permissions`  | string[] | Permissões que o módulo declara, no formato da seção 9.1.                                     |
 
 ### 4.3. Campos opcionais
 
-| Campo | Tipo | Valor padrão | Regra |
-|---|---|---|---|
-| `enabledByDefault` | boolean | `false` | Se o módulo é ativado na primeira execução, antes de qualquer configuração administrativa. |
-| `events.subscribes` | string[] | `[]` | Eventos que o módulo consome. |
-| `events.publishes` | string[] | `[]` | Eventos que o módulo publica. |
+| Campo               | Tipo     | Valor padrão | Regra                                                                                      |
+| ------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------ |
+| `enabledByDefault`  | boolean  | `false`      | Se o módulo é ativado na primeira execução, antes de qualquer configuração administrativa. |
+| `events.subscribes` | string[] | `[]`         | Eventos que o módulo consome.                                                              |
+| `events.publishes`  | string[] | `[]`         | Eventos que o módulo publica.                                                              |
 
 Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 
@@ -198,13 +193,13 @@ interface SunFlowerModule {
 
 ### 5.2. Responsabilidade dos métodos
 
-| Método | Responsabilidade |
-|---|---|
-| `register()` | Registrar comandos, eventos e serviços |
-| `initialize()` | Preparar dependências e configurações |
-| `start()` | Ativar as operações do módulo |
-| `stop()` | Interromper novas operações |
-| `dispose()` | Liberar recursos e finalizar o módulo |
+| Método         | Responsabilidade                       |
+| -------------- | -------------------------------------- |
+| `register()`   | Registrar comandos, eventos e serviços |
+| `initialize()` | Preparar dependências e configurações  |
+| `start()`      | Ativar as operações do módulo          |
+| `stop()`       | Interromper novas operações            |
+| `dispose()`    | Liberar recursos e finalizar o módulo  |
 
 Todos os métodos deverão possuir comportamento previsível e tratamento adequado de erros.
 
@@ -280,17 +275,17 @@ Liberação de conexões, listeners, recursos e referências mantidas pelo módu
 
 ### 6.9. Correspondência com o contrato
 
-| Etapa | Executada por | Método do módulo |
-|---|---|---|
-| Discovery | Core | — |
-| Manifest Validation | Core | — |
-| Dependency Resolution | Core | — |
-| Register | Core → módulo | `register()` |
-| Initialize | Core → módulo | `initialize()` |
-| Start | Core → módulo | `start()` |
-| Running | Módulo | — |
-| Stop | Core → módulo | `stop()` |
-| Dispose | Core → módulo | `dispose()` |
+| Etapa                 | Executada por | Método do módulo |
+| --------------------- | ------------- | ---------------- |
+| Discovery             | Core          | —                |
+| Manifest Validation   | Core          | —                |
+| Dependency Resolution | Core          | —                |
+| Register              | Core → módulo | `register()`     |
+| Initialize            | Core → módulo | `initialize()`   |
+| Start                 | Core → módulo | `start()`        |
+| Running               | Módulo        | —                |
+| Stop                  | Core → módulo | `stop()`         |
+| Dispose               | Core → módulo | `dispose()`      |
 
 Os módulos são iniciados na ordem determinada pela resolução de dependências e encerrados na ordem inversa.
 
@@ -361,15 +356,15 @@ Exemplo:
 }
 ```
 
-| Campo | Regra |
-|---|---|
-| `id` | UUID v4 único por evento. |
-| `type` | Nome do evento no formato `<origem>.<entidade>.<ação>`, com a ação no passado (`created`, `detected`, `executed`). |
-| `version` | Inteiro que identifica a versão do formato de `payload` daquele `type`. Começa em `1` e é incrementado a cada alteração incompatível do payload. |
-| `source` | Id do módulo ou da interface que publicou o evento (`moderation`, `discord`). |
-| `timestamp` | Data e hora em ISO 8601, em UTC. |
-| `context` | Ids do Discord relacionados ao evento (`userId`, `channelId`); cada campo só aparece quando se aplica. |
-| `payload` | Dados específicos do evento, documentados no `README.md` do módulo que o publica. |
+| Campo       | Regra                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`        | UUID v4 único por evento.                                                                                                                        |
+| `type`      | Nome do evento no formato `<origem>.<entidade>.<ação>`, com a ação no passado (`created`, `detected`, `executed`).                               |
+| `version`   | Inteiro que identifica a versão do formato de `payload` daquele `type`. Começa em `1` e é incrementado a cada alteração incompatível do payload. |
+| `source`    | Id do módulo ou da interface que publicou o evento (`moderation`, `discord`).                                                                    |
+| `timestamp` | Data e hora em ISO 8601, em UTC.                                                                                                                 |
+| `context`   | Ids do Discord relacionados ao evento (`userId`, `channelId`); cada campo só aparece quando se aplica.                                           |
+| `payload`   | Dados específicos do evento, documentados no `README.md` do módulo que o publica.                                                                |
 
 Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id.
 
@@ -651,4 +646,4 @@ Um módulo será considerado apto para integração quando atender aos seguintes
 
 **Sun Flower Development Team**
 
-*Um módulo deve ser independente em suas responsabilidades, consistente em seus contratos e integrado em sua execução.*
+_Um módulo deve ser independente em suas responsabilidades, consistente em seus contratos e integrado em sua execução._

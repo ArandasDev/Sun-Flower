@@ -21,8 +21,8 @@
 
 ### 2.1. Branch permanente
 
-| Branch | Finalidade |
-|---|---|
+| Branch | Finalidade                                                |
+| ------ | --------------------------------------------------------- |
 | `main` | Código estável, revisado e pronto para uso ou publicação. |
 
 Não existe branch `develop`. Ela só será criada se uma etapa permanente de homologação se tornar necessária, por decisão registrada em `docs/decisions/`.
@@ -39,18 +39,18 @@ Proteções obrigatórias de `main` no GitHub:
 
 Toda branch de trabalho parte da versão atualizada de `main`.
 
-| Prefixo | Quando utilizar |
-|---|---|
-| `feature/` | Nova funcionalidade ou comportamento. |
-| `fix/` | Correção de defeito sem caráter emergencial. |
-| `hotfix/` | Correção crítica que precisa chegar rapidamente à `main`. |
-| `docs/` | Alterações exclusivamente de documentação. |
+| Prefixo     | Quando utilizar                                                 |
+| ----------- | --------------------------------------------------------------- |
+| `feature/`  | Nova funcionalidade ou comportamento.                           |
+| `fix/`      | Correção de defeito sem caráter emergencial.                    |
+| `hotfix/`   | Correção crítica que precisa chegar rapidamente à `main`.       |
+| `docs/`     | Alterações exclusivamente de documentação.                      |
 | `refactor/` | Reorganização interna sem mudança intencional de comportamento. |
-| `test/` | Criação ou ajuste de testes, sem alterar código de produção. |
-| `chore/` | Dependências, configurações, scripts e manutenção geral. |
-| `ci/` | Pipelines e automações de integração contínua. |
-| `perf/` | Melhoria de desempenho. |
-| `build/` | Sistema de build e empacotamento. |
+| `test/`     | Criação ou ajuste de testes, sem alterar código de produção.    |
+| `chore/`    | Dependências, configurações, scripts e manutenção geral.        |
+| `ci/`       | Pipelines e automações de integração contínua.                  |
+| `perf/`     | Melhoria de desempenho.                                         |
+| `build/`    | Sistema de build e empacotamento.                               |
 
 Regras de nome:
 
@@ -118,37 +118,37 @@ A descrição:
 
 ### 3.2. Tipos
 
-| Tipo | Uso |
-|---|---|
-| `feat` | Adiciona uma funcionalidade. |
-| `fix` | Corrige um defeito. |
-| `docs` | Altera documentação. |
-| `style` | Altera formatação sem mudar lógica. |
+| Tipo       | Uso                                                                  |
+| ---------- | -------------------------------------------------------------------- |
+| `feat`     | Adiciona uma funcionalidade.                                         |
+| `fix`      | Corrige um defeito.                                                  |
+| `docs`     | Altera documentação.                                                 |
+| `style`    | Altera formatação sem mudar lógica.                                  |
 | `refactor` | Reorganiza código sem adicionar funcionalidade nem corrigir defeito. |
-| `perf` | Melhora desempenho. |
-| `test` | Adiciona ou corrige testes. |
-| `build` | Altera build, empacotamento ou dependências de build. |
-| `ci` | Altera pipelines de integração contínua. |
-| `chore` | Manutenção que não se encaixa nos tipos anteriores. |
-| `revert` | Reverte um commit anterior. |
+| `perf`     | Melhora desempenho.                                                  |
+| `test`     | Adiciona ou corrige testes.                                          |
+| `build`    | Altera build, empacotamento ou dependências de build.                |
+| `ci`       | Altera pipelines de integração contínua.                             |
+| `chore`    | Manutenção que não se encaixa nos tipos anteriores.                  |
+| `revert`   | Reverte um commit anterior.                                          |
 
 ### 3.3. Escopos
 
 Escopos oficiais:
 
-| Escopo | Área |
-|---|---|
-| `core` | Núcleo da aplicação (registry, ciclo de vida, Event Bus, permissões, configuração, logs). |
-| `discord` | Interface com o Discord. |
-| `dashboard` | Interface do painel web. |
-| `api` | API consumida pelo painel e por integrações. |
-| `moderation` | Módulo de moderação. |
-| `social` | Módulo social. |
-| `music` | Módulo musical. |
-| `administration` | Módulo administrativo. |
-| `shared` | Contratos, tipos e utilitários compartilhados. |
-| `deps` | Dependências. |
-| `docs` | Documentação geral. |
+| Escopo           | Área                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `core`           | Núcleo da aplicação (registry, ciclo de vida, Event Bus, permissões, configuração, logs). |
+| `discord`        | Interface com o Discord.                                                                  |
+| `dashboard`      | Interface do painel web.                                                                  |
+| `api`            | API consumida pelo painel e por integrações.                                              |
+| `moderation`     | Módulo de moderação.                                                                      |
+| `social`         | Módulo social.                                                                            |
+| `music`          | Módulo musical.                                                                           |
+| `administration` | Módulo administrativo.                                                                    |
+| `shared`         | Contratos, tipos e utilitários compartilhados.                                            |
+| `deps`           | Dependências.                                                                             |
+| `docs`           | Documentação geral.                                                                       |
 
 Regra: o escopo é **obrigatório** quando a alteração afeta uma única área da tabela e **omitido** quando afeta várias. Um novo módulo adiciona seu id a esta tabela no mesmo Pull Request que o cria.
 
@@ -246,11 +246,11 @@ A versão do Sun Flower reflete a compatibilidade da sua superfície pública, c
 
 ### 5.2. Regras a partir da 1.0.0
 
-| Incremento | Quando | Exemplo |
-|---|---|---|
-| `MAJOR` | Alteração incompatível na superfície pública. | `1.4.2 → 2.0.0` |
-| `MINOR` | Nova funcionalidade compatível. Zera `PATCH`. | `1.4.2 → 1.5.0` |
-| `PATCH` | Correção compatível, sem nova funcionalidade. | `1.4.2 → 1.4.3` |
+| Incremento | Quando                                        | Exemplo         |
+| ---------- | --------------------------------------------- | --------------- |
+| `MAJOR`    | Alteração incompatível na superfície pública. | `1.4.2 → 2.0.0` |
+| `MINOR`    | Nova funcionalidade compatível. Zera `PATCH`. | `1.4.2 → 1.5.0` |
+| `PATCH`    | Correção compatível, sem nova funcionalidade. | `1.4.2 → 1.4.3` |
 
 ### 5.3. Regras antes da 1.0.0
 
@@ -270,12 +270,12 @@ Cada módulo tem versão SemVer própria no seu `manifest.json`, independente da
 
 ### 6.1. Formatos
 
-| Item | Formato | Exemplo |
-|---|---|---|
-| Tag Git (anotada) | `vMAJOR.MINOR.PATCH` | `v0.1.0` |
-| Mensagem da tag | `Sun-Flower vMAJOR.MINOR.PATCH` | `Sun-Flower v0.1.0` |
-| Nome da Release | `Sun-Flower vMAJOR.MINOR.PATCH` | `Sun-Flower v0.1.0` |
-| Pré-release | `vMAJOR.MINOR.PATCH-<estágio>.<n>` | `v1.0.0-rc.1` |
+| Item              | Formato                            | Exemplo             |
+| ----------------- | ---------------------------------- | ------------------- |
+| Tag Git (anotada) | `vMAJOR.MINOR.PATCH`               | `v0.1.0`            |
+| Mensagem da tag   | `Sun-Flower vMAJOR.MINOR.PATCH`    | `Sun-Flower v0.1.0` |
+| Nome da Release   | `Sun-Flower vMAJOR.MINOR.PATCH`    | `Sun-Flower v0.1.0` |
+| Pré-release       | `vMAJOR.MINOR.PATCH-<estágio>.<n>` | `v1.0.0-rc.1`       |
 
 Estágios de pré-release:
 
@@ -332,7 +332,7 @@ Regras:
 ## 8. Higiene do repositório
 
 - Nenhuma informação não pública entra no repositório ([CONTRIBUTING.md §7.1](../CONTRIBUTING.md#71-informações-não-públicas)).
-- O e-mail de autor e committer de todo commit é o endereço *noreply* do GitHub (`<id>+<usuário>@users.noreply.github.com`), configurado com `git config user.email` no repositório local. A opção **Block command line pushes that expose my email** fica ativada nas configurações de e-mail da conta GitHub.
+- O e-mail de autor e committer de todo commit é o endereço _noreply_ do GitHub (`<id>+<usuário>@users.noreply.github.com`), configurado com `git config user.email` no repositório local. A opção **Block command line pushes that expose my email** fica ativada nas configurações de e-mail da conta GitHub.
 - `.env`, credenciais, tokens, chaves privadas e arquivos locais ficam fora do versionamento (`.gitignore`).
 - O repositório mantém um `.env.example` com os nomes das variáveis e valores vazios ou fictícios.
 - Dependências novas têm licença verificada e necessidade justificada no Pull Request.

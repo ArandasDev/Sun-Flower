@@ -4,9 +4,9 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 
 ## Estado atual
 
-| Fase atual | Situação |
-|---|---|
-| **Fase 0 — Base do repositório** | Não iniciada. O repositório contém apenas documentação. |
+| Fase atual                       | Situação                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| **Fase 0 — Base do repositório** | Em andamento: projeto TypeScript e CI em revisão; falta importar o ruleset da `main`. |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -67,13 +67,13 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Decisões pendentes:**
 
-| Decisão | Recomendação |
-|---|---|
-| Banco de dados | SQLite, pois o bot atende um único servidor; migrações versionadas. |
-| Associação de permissões aos cargos do Discord | Tabela configurável que associa cada permissão a um ou mais cargos do servidor. |
-| Semântica de entrega do Event Bus | Consumidores executados de forma assíncrona e isolada; a falha de um consumidor é registrada e não afeta os demais. |
-| Biblioteca de logs | pino. |
-| Validação de manifesto e configurações | zod. |
+| Decisão                                        | Recomendação                                                                                                        |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Banco de dados                                 | SQLite, pois o bot atende um único servidor; migrações versionadas.                                                 |
+| Associação de permissões aos cargos do Discord | Tabela configurável que associa cada permissão a um ou mais cargos do servidor.                                     |
+| Semântica de entrega do Event Bus              | Consumidores executados de forma assíncrona e isolada; a falha de um consumidor é registrada e não afeta os demais. |
+| Biblioteca de logs                             | pino.                                                                                                               |
+| Validação de manifesto e configurações         | zod.                                                                                                                |
 
 **Critérios de conclusão:**
 
@@ -105,10 +105,10 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Decisões pendentes:**
 
-| Decisão | Recomendação |
-|---|---|
-| Fonte de detecção de phishing | Lista de domínios mantida localmente e atualizável, sem dependência obrigatória de serviço externo. |
-| Ações automáticas na configuração inicial | Desativadas: o módulo apenas registra e alerta até a administração ativá-las. |
+| Decisão                                   | Recomendação                                                                                        |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Fonte de detecção de phishing             | Lista de domínios mantida localmente e atualizável, sem dependência obrigatória de serviço externo. |
+| Ações automáticas na configuração inicial | Desativadas: o módulo apenas registra e alerta até a administração ativá-las.                       |
 
 **Critérios de conclusão:**
 
@@ -135,11 +135,11 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Decisões pendentes:**
 
-| Decisão | Recomendação |
-|---|---|
+| Decisão                | Recomendação                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
 | Autenticação do painel | Login com Discord (OAuth2), permitido apenas a membros do servidor com permissão administrativa. |
-| Framework do painel | Decidir na spec da fase. |
-| Hospedagem do painel | Mesmo processo do bot, servindo a API e o painel. |
+| Framework do painel    | Decidir na spec da fase.                                                                         |
+| Hospedagem do painel   | Mesmo processo do bot, servindo a API e o painel.                                                |
 
 **Critérios de conclusão:**
 
@@ -182,9 +182,9 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Decisões pendentes:**
 
-| Decisão | Recomendação |
-|---|---|
-| Fontes de áudio | Decidir na spec da fase, verificando os termos de uso de cada fonte. |
+| Decisão                 | Recomendação                                                            |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Fontes de áudio         | Decidir na spec da fase, verificando os termos de uso de cada fonte.    |
 | Mecanismo de reprodução | Lavalink, para manter o processamento de áudio fora do processo do bot. |
 
 **Critérios de conclusão:**
