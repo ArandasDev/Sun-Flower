@@ -9,8 +9,15 @@ export interface ResolvedOrder {
  * Orders modules so dependencies come first (Kahn's algorithm). Ties are broken by
  * alphabetical id, so the result is deterministic. Modules with a missing dependency,
  * in a cycle, or depending on a failed module are reported in `failed` with the reason.
+ * `failedIds` names modules that failed before resolution (e.g. an invalid manifest): a
+ * dependency on one of them is reported as failed rather than missing. They are not added
+ * to `failed` themselves.
  */
-export function resolveOrder(manifests: readonly ModuleManifest[]): ResolvedOrder {
+export function resolveOrder(
+  manifests: readonly ModuleManifest[],
+  failedIds: Iterable<string> = [],
+): ResolvedOrder {
+  const failedBefore = new Set(failedIds);
   const deps = new Map<string, string[]>();
   for (const manifest of manifests) {
     deps.set(manifest.id, [...new Set(manifest.dependencies)].sort());
@@ -35,7 +42,13 @@ export function resolveOrder(manifests: readonly ModuleManifest[]): ResolvedOrde
 
   for (const id of ids) {
     const missing = (deps.get(id) ?? []).find((dep) => !deps.has(dep));
-    if (missing !== undefined) failed.set(id, `missing dependency "${missing}"`);
+    if (missing === undefined) continue;
+    failed.set(
+      id,
+      failedBefore.has(missing)
+        ? `dependency "${missing}" failed`
+        : `missing dependency "${missing}"`,
+    );
   }
   propagate();
 

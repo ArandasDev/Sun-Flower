@@ -109,10 +109,13 @@ export class ModuleRegistry {
       this.#deps.logger.warn({ modulesDir }, 'no modules found');
     }
     const manifests: ModuleManifest[] = [];
+    const invalid = new Set<string>();
     for (const entry of discovered) {
       const key = entry.manifest?.id ?? entry.directoryName;
       this.#statuses.set(key, { state: 'DISCOVERED' });
       if (entry.manifest === undefined) {
+        invalid.add(entry.directoryName);
+        if (entry.rawId !== undefined) invalid.add(entry.rawId);
         this.#fail(key, 'validation', entry.errors.join('; '));
         continue;
       }
@@ -125,13 +128,17 @@ export class ModuleRegistry {
       manifests.push(entry.manifest);
     }
 
-    const { order, failed } = resolveOrder(manifests);
+    const { order, failed } = resolveOrder(manifests, invalid);
     for (const [id, reason] of failed) this.#fail(id, 'dependencies', reason);
 
     for (const id of order) {
       const record = this.#record(id);
       try {
-        const loaded = await loadModule(record.directory, record.manifest.entrypoint);
+        const loaded = await withTimeout(
+          () => loadModule(record.directory, record.manifest.entrypoint),
+          this.#stepTimeoutMs,
+          `module "${id}" import`,
+        );
         record.instance = loaded.instance;
         if (loaded.configSchema !== undefined) record.configSchema = loaded.configSchema;
       } catch (error) {
@@ -192,6 +199,8 @@ export class ModuleRegistry {
           this.#fail(id, 'dispose', describe(error));
         }
       }
+      // stop() and dispose() may still subscribe while the module is active; drop those too.
+      record.events?.unsubscribeAll();
     }
     this.#phase = 'stopped';
   }
@@ -264,6 +273,7 @@ export class ModuleRegistry {
         } catch (disposeError) {
           this.#logDisposeFailure(id, disposeError);
         }
+        events.unsubscribeAll();
         return;
       }
       this.#transition(id, next);
@@ -319,9 +329,12 @@ export class ModuleRegistry {
       record.rejectedCommand ??= describe(error);
       throw error;
     }
-    const { name } = command;
+    // A frozen copy: later changes to the module's own object never reach commands().
+    // Bound so a handle written as a method keeps its `this`.
+    const { name, description } = command;
+    const handle = command.handle.bind(command);
     this.#commandOwners.set(name, id);
-    record.commands.set(name, command);
+    record.commands.set(name, Object.freeze({ name, description, handle }));
   }
 
   /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */

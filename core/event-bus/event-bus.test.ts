@@ -148,7 +148,8 @@ describe('EventBus', () => {
     expect(deliveries).toBe(3);
     const warns = logger.calls.filter((c) => c.level === 'warn');
     expect(warns).toHaveLength(1);
-    expect(warns[0]?.obj).toMatchObject({ type: 'loop.tick' });
+    expect(warns[0]?.obj).toMatchObject({ event: 'loop.tick' });
+    expect(warns[0]?.obj).not.toHaveProperty('type');
   });
 
   it('stops delivering after unsubscribeAll, only for that module', async () => {
@@ -196,5 +197,35 @@ describe('EventBus', () => {
     handle.publish('chain.a', {});
     await bus.idle();
     expect(seen).toEqual(['a', 'b']);
+  });
+
+  it('idle resolves even when the logger throws while reporting a handler failure', async () => {
+    const throwingLogger: Logger = {
+      ...createRecordingLogger(),
+      error: () => {
+        throw new Error('logger unavailable');
+      },
+    };
+    const bus = new EventBus(throwingLogger, { handlerTimeoutMs: 20 });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      bus.forModule(consumer).subscribe('producer.item.created', () => {
+        throw new Error('handler failed');
+      });
+      bus.forModule(producer).publish('producer.item.created', {});
+      const outcome = await Promise.race([
+        bus.idle().then(() => 'idle'),
+        new Promise((resolve) => setTimeout(() => resolve('hung'), 200)),
+      ]);
+      expect(outcome).toBe('idle');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });

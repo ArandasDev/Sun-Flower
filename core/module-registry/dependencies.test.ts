@@ -58,6 +58,14 @@ describe('resolveOrder', () => {
     expect(r.failed.get('d')).toBe('dependency "c" failed');
   });
 
+  it('reports a dependency on an externally failed id as failed, not missing', () => {
+    const r = resolveOrder([m('a', ['bad']), m('b', ['a']), m('c', ['ghost'])], ['bad']);
+    expect(r.failed.get('a')).toBe('dependency "bad" failed');
+    expect(r.failed.get('b')).toBe('dependency "a" failed');
+    expect(r.failed.get('c')).toBe('missing dependency "ghost"');
+    expect(r.failed.has('bad')).toBe(false);
+  });
+
   it('tolerates a duplicated dependency', () => {
     expect(resolveOrder([m('b', ['a', 'a']), m('a')]).order).toEqual(['a', 'b']);
   });

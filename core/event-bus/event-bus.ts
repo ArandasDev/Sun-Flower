@@ -96,7 +96,7 @@ export class EventBus {
     const depth = this.depthStorage.getStore()?.depth ?? 0;
     if (depth >= this.maxDepth) {
       this.logger.warn(
-        { module: manifest.id, type, depth, maxDepth: this.maxDepth },
+        { module: manifest.id, event: type, depth, maxDepth: this.maxDepth },
         'event dropped: maximum depth exceeded',
       );
       return;
@@ -118,9 +118,13 @@ export class EventBus {
   private schedule(subscription: Subscription, event: SunFlowerEvent, depth: number): void {
     const task: Promise<void> = new Promise<void>((resolve) => {
       setImmediate(() => {
+        // Settles on rejection too (e.g. a throwing logger), so idle() never hangs and
+        // no rejection escapes unhandled.
         void this.depthStorage
           .run({ depth }, () => this.deliver(subscription, event))
-          .then(resolve);
+          .then(resolve, () => {
+            resolve();
+          });
       });
     }).finally(() => {
       this.pending.delete(task);

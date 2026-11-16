@@ -6,6 +6,8 @@ import { validateManifest } from './manifest.ts';
 export interface DiscoveredModule {
   readonly directory: string;
   readonly directoryName: string;
+  /** The `id` found in manifest.json when it is a string, even if the manifest is invalid. */
+  rawId?: string;
   manifest?: ModuleManifest;
   errors: string[];
 }
@@ -53,7 +55,10 @@ export function discoverModules(modulesDir: string, coreApiVersion: string): Dis
     else entry.errors.push(...result.errors);
 
     const id = rawId(raw);
-    if (id !== undefined) ids.set(id, [...(ids.get(id) ?? []), entry]);
+    if (id !== undefined) {
+      entry.rawId = id;
+      ids.set(id, [...(ids.get(id) ?? []), entry]);
+    }
   }
 
   for (const [id, owners] of ids) {

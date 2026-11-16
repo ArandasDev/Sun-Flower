@@ -293,6 +293,72 @@ describe('ModuleRegistry', () => {
     expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
   });
 
+  it('fails a module whose import never settles and still loads the others', async () => {
+    writeModule('hang', {
+      rawSource: 'await new Promise(() => {});\nexport default () => ({});\n',
+    });
+    writeModule('b');
+    const registry = createRegistry(20);
+    await registry.load();
+    expect(registry.status().get('hang')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
+    expect(registry.status().get('hang')?.error).toMatch(/import timed out/);
+    await registry.start();
+    expect(stateOf(registry, 'b')).toBe('RUNNING');
+  });
+
+  it('fails a module whose factory throws', async () => {
+    writeModule('a', {
+      rawSource: "export default () => { throw new Error('factory exploded'); };\n",
+    });
+    writeModule('b');
+    const registry = createRegistry();
+    await registry.load();
+    expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
+    expect(registry.status().get('a')?.error).toMatch(/factory exploded/);
+    await registry.start();
+    expect(stateOf(registry, 'b')).toBe('RUNNING');
+  });
+
+  it('fails a module whose factory returns an object without the lifecycle methods', async () => {
+    writeModule('a', {
+      rawSource: 'export default () => ({ async register() {}, async start() {} });\n',
+    });
+    const registry = createRegistry();
+    await registry.load();
+    expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
+    expect(registry.status().get('a')?.error).toMatch(/register, initialize, start, stop, dispose/);
+  });
+
+  it('stores a frozen copy of each command, not the module object', async () => {
+    const key = JSON.stringify(`${callsKey}_command`);
+    writeModule('a', {
+      rawSource: `export default () => ({
+  async register(ctx) {
+    const command = { name: 'hello', description: 'Original', handle: async () => {} };
+    globalThis[${key}] = command;
+    ctx.commands.register(command);
+  },
+  async initialize() {}, async start() {}, async stop() {}, async dispose() {},
+});
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const original = (globalThis as unknown as Record<string, Record<string, unknown>>)[
+      `${callsKey}_command`
+    ];
+    Reflect.deleteProperty(globalThis, `${callsKey}_command`);
+    if (original === undefined) throw new Error('fixture did not expose its command');
+    original.description = 'Mutated';
+    original.name = 'renamed';
+    const stored = registry.commands().get('hello');
+    expect(stored?.description).toBe('Original');
+    expect(stored?.name).toBe('hello');
+    expect(stored).not.toBe(original);
+    expect(Object.isFrozen(stored)).toBe(true);
+  });
+
   it('fails the second module registering the same command name', async () => {
     writeModule('a', { commands: ['hello'] });
     writeModule('b', { commands: ['hello'] });
@@ -381,6 +447,16 @@ describe('ModuleRegistry', () => {
     expect(stateOf(registry, 'good')).toBe('VALIDATED');
   });
 
+  it('reports a failed dependency, not a missing one, for a dependent of an invalid manifest', async () => {
+    writeModule('bad', { manifest: { version: 'not-a-version' } });
+    writeModule('a', { dependencies: ['bad'] });
+    const registry = createRegistry();
+    await registry.load();
+    expect(registry.status().get('bad')).toMatchObject({ state: 'FAILED', failedAt: 'validation' });
+    expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'dependencies' });
+    expect(registry.status().get('a')?.error).toBe('dependency "bad" failed');
+  });
+
   it('marks modules with a missing dependency FAILED', async () => {
     writeModule('a', { dependencies: ['ghost'] });
     const registry = createRegistry();
@@ -453,10 +529,16 @@ describe('ModuleRegistry', () => {
       'b:start',
       'b:unsubscribeAll',
       'b:dispose',
+      'b:unsubscribeAll',
     ]);
     const before = calls().length;
     await registry.stop();
-    expect(calls().slice(before)).toEqual(['a:unsubscribeAll', 'a:stop', 'a:dispose']);
+    expect(calls().slice(before)).toEqual([
+      'a:unsubscribeAll',
+      'a:stop',
+      'a:dispose',
+      'a:unsubscribeAll',
+    ]);
   });
 
   it('ignores a subscribe made after the module failed by timeout', async () => {
@@ -503,6 +585,48 @@ export default () => ({
         (call) => call.level === 'warn' && (call.obj as { module?: string }).module === 'late',
       ),
     ).toBe(true);
+  });
+
+  it('drops subscriptions a module makes during stop()', async () => {
+    const key = JSON.stringify(callsKey);
+    writeModule('a', {
+      manifest: { events: { subscribes: ['pub.thing.happened'], publishes: [] } },
+      rawSource: `const calls = (globalThis[${key}] ??= []);
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {}, async start() {},
+    async stop() {
+      context.events.subscribe('pub.thing.happened', () => { calls.push('a:received'); });
+      calls.push('a:subscribed');
+    },
+    async dispose() {},
+  };
+};
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    await registry.stop();
+    expect(calls()).toContain('a:subscribed');
+
+    const publisher = bus.forModule({
+      id: 'pub',
+      name: 'pub',
+      description: 'pub',
+      version: '1.0.0',
+      apiVersion: '1.0.0',
+      entrypoint: 'index.ts',
+      dependencies: [],
+      permissions: [],
+      enabledByDefault: true,
+      events: { subscribes: [], publishes: ['pub.thing.happened'] },
+    });
+    publisher.publish('pub.thing.happened', {});
+    await bus.idle();
+    expect(calls()).not.toContain('a:received');
   });
 
   it('ignores a publish made after stop()', async () => {
