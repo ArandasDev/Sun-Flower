@@ -12,14 +12,14 @@ Estas regras valem igualmente para pessoas desenvolvedoras e agentes de intelig�
 
 Leia, nesta ordem:
 
-| Documento | Conteúdo |
-|---|---|
-| [`README.md`](README.md) | O que é o projeto e seu estado atual. |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Fases, fase atual e próxima entrega. |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Visão arquitetural e domínios funcionais. |
-| [`docs/MODULES.md`](docs/MODULES.md) | Contrato técnico dos módulos. |
-| [`docs/GIT.md`](docs/GIT.md) | Branches, commits, Pull Requests, versões e releases. |
-| [`docs/decisions/`](docs/decisions/) | Decisões já tomadas e seus motivos. |
+| Documento                                      | Conteúdo                                              |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| [`README.md`](README.md)                       | O que é o projeto e seu estado atual.                 |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md)           | Fases, fase atual e próxima entrega.                  |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Visão arquitetural e domínios funcionais.             |
+| [`docs/MODULES.md`](docs/MODULES.md)           | Contrato técnico dos módulos.                         |
+| [`docs/GIT.md`](docs/GIT.md)                   | Branches, commits, Pull Requests, versões e releases. |
+| [`docs/decisions/`](docs/decisions/)           | Decisões já tomadas e seus motivos.                   |
 
 Uma contribuição que contrarie uma decisão registrada em `docs/decisions/` precisa primeiro de uma nova decisão que a substitua.
 
@@ -57,7 +57,7 @@ Toda contribuição de código inclui:
 
 Os tipos de teste exigidos de cada módulo estão em [MODULES.md §14](docs/MODULES.md#14-testes).
 
-Verificações obrigatórias antes de abrir um Pull Request: **testes, lint e checagem de tipos**. Os comandos exatos são definidos na Fase 0 do [ROADMAP](docs/ROADMAP.md) e documentados no [README](README.md).
+Verificação obrigatória antes de abrir um Pull Request: **`npm run check`**, que executa formatação, lint, checagem de tipos e testes. É o mesmo comando executado pela CI. Os comandos individuais estão no [README](README.md#desenvolvimento).
 
 Um teste só é declarado aprovado se foi efetivamente executado. Quando um teste não puder ser executado, isso é dito explicitamente no Pull Request, com o motivo.
 
@@ -65,16 +65,16 @@ Um teste só é declarado aprovado se foi efetivamente executado. Quando um test
 
 Atualize no mesmo Pull Request o documento correspondente à alteração:
 
-| Alteração | Documento |
-|---|---|
-| Visão geral, domínios ou princípios arquiteturais | `docs/ARCHITECTURE.md` |
-| Contrato de módulo, manifesto, eventos, permissões | `docs/MODULES.md` |
-| Regras de Git, versão ou release | `docs/GIT.md` |
-| Regras de colaboração | `CONTRIBUTING.md` |
-| Escopo, ordem ou conclusão de fases | `docs/ROADMAP.md` |
-| Uso, instalação ou configuração | `README.md` |
-| Funcionamento de um módulo | `modules/<id>/README.md` |
-| Qualquer alteração relevante para quem usa o projeto | `CHANGELOG.md` |
+| Alteração                                            | Documento                |
+| ---------------------------------------------------- | ------------------------ |
+| Visão geral, domínios ou princípios arquiteturais    | `docs/ARCHITECTURE.md`   |
+| Contrato de módulo, manifesto, eventos, permissões   | `docs/MODULES.md`        |
+| Regras de Git, versão ou release                     | `docs/GIT.md`            |
+| Regras de colaboração                                | `CONTRIBUTING.md`        |
+| Escopo, ordem ou conclusão de fases                  | `docs/ROADMAP.md`        |
+| Uso, instalação ou configuração                      | `README.md`              |
+| Funcionamento de um módulo                           | `modules/<id>/README.md` |
+| Qualquer alteração relevante para quem usa o projeto | `CHANGELOG.md`           |
 
 ### 6.1. Registros de decisão
 
@@ -101,17 +101,17 @@ O repositório é **público**. Tudo o que entra nele (arquivos, mensagens de co
 
 As informações abaixo nunca entram no repositório, em nenhum desses lugares:
 
-| Categoria | Exemplos |
-|---|---|
-| Identificadores do Discord | IDs de servidor, canal, cargo, usuário, mensagem ou aplicação. |
-| Credenciais | Tokens, senhas, chaves de API, client secrets, webhooks. |
-| Dados pessoais | E-mails, nomes reais, telefones, endereços, nomes de usuário de membros. |
-| Infraestrutura | IPs, hostnames internos, URLs privadas, caminhos locais da máquina de desenvolvimento. |
-| Conteúdo do servidor | Mensagens, nomes de canais ou cargos privados, dados de membros. |
+| Categoria                  | Exemplos                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Identificadores do Discord | IDs de servidor, canal, cargo, usuário, mensagem ou aplicação.                         |
+| Credenciais                | Tokens, senhas, chaves de API, client secrets, webhooks.                               |
+| Dados pessoais             | E-mails, nomes reais, telefones, endereços, nomes de usuário de membros.               |
+| Infraestrutura             | IPs, hostnames internos, URLs privadas, caminhos locais da máquina de desenvolvimento. |
+| Conteúdo do servidor       | Mensagens, nomes de canais ou cargos privados, dados de membros.                       |
 
 Esses valores ficam somente no `.env` local ou no ambiente de execução. Documentação, exemplos e testes usam o nome da variável de ambiente (`DISCORD_GUILD_ID`) ou valores fictícios claramente falsos (`000000000000000000`).
 
-Commits usam como e-mail de autor o endereço *noreply* do GitHub ([GIT.md §8](docs/GIT.md#8-higiene-do-repositório)).
+Commits usam como e-mail de autor o endereço _noreply_ do GitHub ([GIT.md §8](docs/GIT.md#8-higiene-do-repositório)).
 
 ### 7.2. Verificação de vazamento antes do Pull Request
 
@@ -169,4 +169,4 @@ Estas diretrizes são revisadas ao fim da Fase 1 do [ROADMAP](docs/ROADMAP.md), 
 
 **Sun Flower Development Team**
 
-*Contribuir é construir de maneira consistente, organizada e sustentável.*
+_Contribuir é construir de maneira consistente, organizada e sustentável._

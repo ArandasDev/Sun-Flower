@@ -14,8 +14,8 @@ Ele não foi projetado para operar em múltiplos servidores. Consequentemente:
 - Se `DISCORD_GUILD_ID` estiver ausente, a aplicação não inicia.
 - Eventos, comandos e interações originados de qualquer outro servidor deverão ser ignorados.
 - Caso o bot seja adicionado a outro servidor, ele deverá registrar a ocorrência e sair desse servidor.
-- Os comandos deverão ser registrados no escopo do servidor (*guild commands*), e não globalmente.
-- A arquitetura não deverá implementar isolamento multi-servidor (*multi-tenancy*): configurações, regras e dados pertencem a esse único servidor.
+- Os comandos deverão ser registrados no escopo do servidor (_guild commands_), e não globalmente.
+- A arquitetura não deverá implementar isolamento multi-servidor (_multi-tenancy_): configurações, regras e dados pertencem a esse único servidor.
 
 Sua arquitetura deve permitir que o sistema evolua continuamente, incorporando novos módulos e integrações sem comprometer os componentes existentes.
 
@@ -25,11 +25,11 @@ O projeto tem como princípio central a construção de um ecossistema de funcio
 
 ### 1.2. Decisões Fundamentais
 
-| Decisão | Registro |
-|---|---|
+| Decisão                                                                                         | Registro                                   |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | Arquitetura **Modular Monolith**: um único processo, módulos com domínios e contratos isolados. | [0001](decisions/0001-modular-monolith.md) |
-| Stack **TypeScript + Node.js**, com `discord.js` para a integração com o Discord. | [0002](decisions/0002-typescript-node.md) |
-| Atuação em **um único servidor Discord**. | [0003](decisions/0003-single-guild.md) |
+| Stack **TypeScript + Node.js**, com `discord.js` para a integração com o Discord.               | [0002](decisions/0002-typescript-node.md)  |
+| Atuação em **um único servidor Discord**.                                                       | [0003](decisions/0003-single-guild.md)     |
 
 Decisões ainda não tomadas estão listadas, com a fase em que serão resolvidas, no [ROADMAP](ROADMAP.md).
 
@@ -52,13 +52,13 @@ O Sun Flower será organizado em módulos independentes, agrupados conforme suas
 
 Cada domínio funcional corresponde a um componente com identificador fixo:
 
-| Domínio | Componente | Tipo |
-|---|---|---|
-| Moderação e Segurança (3.1) | `moderation` | Módulo |
-| Funcionalidades Sociais (3.2) | `social` | Módulo |
-| Sistema Musical (3.3) | `music` | Módulo |
-| Painel Administrativo (3.4) | `dashboard` | Interface |
-| Operações administrativas (equipe, cargos, histórico) | `administration` | Módulo |
+| Domínio                                               | Componente       | Tipo      |
+| ----------------------------------------------------- | ---------------- | --------- |
+| Moderação e Segurança (3.1)                           | `moderation`     | Módulo    |
+| Funcionalidades Sociais (3.2)                         | `social`         | Módulo    |
+| Sistema Musical (3.3)                                 | `music`          | Módulo    |
+| Painel Administrativo (3.4)                           | `dashboard`      | Interface |
+| Operações administrativas (equipe, cargos, histórico) | `administration` | Módulo    |
 
 O **painel** é uma interface, assim como o Discord: ele não contém regras de negócio e opera os módulos pela API do Core. As operações administrativas que ele exibe (gestão de equipe, cargos e histórico) pertencem ao módulo `administration`. A ativação de módulos, as configurações e os logs são serviços do Core.
 
@@ -105,7 +105,7 @@ Responsável por oferecer ferramentas de interação e conveniência para os mem
 
 **Funcionalidades previstas:**
 
-- Lista de desejos (*Wishlist*).
+- Lista de desejos (_Wishlist_).
 - Compartilhamento de interesses entre amigos.
 - Controle de visibilidade das informações.
 - Configuração de listas públicas, privadas ou restritas.
@@ -159,7 +159,7 @@ O painel deverá funcionar como uma camada de gerenciamento independente da inte
 
 - Gerenciamento de usuários.
 - Visão geral do servidor (canais, cargos e estado de conexão do bot).
-- Administração de membros da equipe (*Staff*).
+- Administração de membros da equipe (_Staff_).
 - Controle de cargos e permissões.
 - Gerenciamento de comandos.
 - Ativação e desativação de módulos.
@@ -244,7 +244,7 @@ Todos os módulos deverão respeitar um modelo centralizado de identidade, auten
 - Registro de atividades sensíveis.
 - Controle de acesso às APIs.
 - Proteção contra execução indevida de comandos.
-- Limitação de requisições (*Rate Limiting*).
+- Limitação de requisições (_Rate Limiting_).
 
 Nenhum módulo deverá assumir que um usuário possui autorização apenas por conseguir acessar uma determinada interface.
 
