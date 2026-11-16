@@ -31,13 +31,14 @@ Preencha o `.env` com os valores reais. Ele não é versionado e nunca deve ser 
 
 | Comando                | Faz                                                                              |
 | ---------------------- | -------------------------------------------------------------------------------- |
-| `npm run build`        | Compila para `dist/`.                                                            |
 | `npm run typecheck`    | Checa os tipos sem gerar arquivos.                                               |
 | `npm run lint`         | Executa o ESLint.                                                                |
 | `npm run format`       | Formata todos os arquivos com o Prettier.                                        |
 | `npm run format:check` | Verifica a formatação sem alterar arquivos.                                      |
 | `npm test`             | Executa os testes com o Vitest.                                                  |
 | `npm run check`        | Executa `format:check`, `lint`, `typecheck` e `test`, parando na primeira falha. |
+
+Os comandos `npm start` e `npm run staff` chegam com a interface Discord.
 
 `npm run check` é obrigatório antes de abrir um Pull Request e é o que a CI executa.
 
