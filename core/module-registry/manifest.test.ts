@@ -56,6 +56,16 @@ describe('validateManifest', () => {
       /event/,
     ],
     ['non-object manifest', 'text', /manifest/],
+    ['entrypoint escaping with ..', { ...base, entrypoint: '../x.ts' }, /entrypoint/],
+    [
+      'entrypoint escaping after normalising',
+      { ...base, entrypoint: 'a/../../x.ts' },
+      /entrypoint/,
+    ],
+    ['absolute POSIX entrypoint', { ...base, entrypoint: '/abs/x.ts' }, /entrypoint/],
+    ['Windows drive entrypoint', { ...base, entrypoint: 'C:\\x.ts' }, /entrypoint/],
+    ['Windows drive entrypoint with slash', { ...base, entrypoint: 'C:/x.ts' }, /entrypoint/],
+    ['UNC entrypoint', { ...base, entrypoint: '\\\\server\\x.ts' }, /entrypoint/],
   ])('rejects %s', (_, raw, pattern) => {
     const result = validateManifest(raw, 'ping', '1.0.0');
     expect(result.ok).toBe(false);
@@ -65,6 +75,20 @@ describe('validateManifest', () => {
   it('allows subscribing to events of other modules', () => {
     const raw = { ...base, events: { subscribes: ['other.x.created'], publishes: [] } };
     expect(validateManifest(raw, 'ping', '1.0.0').ok).toBe(true);
+  });
+
+  it('accepts a nested relative entrypoint', () => {
+    expect(validateManifest({ ...base, entrypoint: 'src/index.ts' }, 'ping', '1.0.0').ok).toBe(
+      true,
+    );
+  });
+
+  it('defaults subscribes to [] when only publishes is given', () => {
+    const raw = { ...minimal, events: { publishes: ['ping.item.created'] } };
+    expect(validateManifest(raw, 'ping', '1.0.0')).toMatchObject({
+      ok: true,
+      manifest: { events: { subscribes: [], publishes: ['ping.item.created'] } },
+    });
   });
 
   it('applies defaults', () => {

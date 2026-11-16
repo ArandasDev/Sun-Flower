@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { z } from 'zod';
 import type { ModuleManifest } from '../../shared/contracts/module.ts';
 import { isApiCompatible } from '../../shared/utilities/semver.ts';
@@ -6,13 +7,21 @@ const MODULE_ID = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const THREE_SEGMENTS = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
 
+function isConfinedPath(value: string): boolean {
+  const unified = value.replaceAll('\\', '/');
+  if (unified.startsWith('/') || /^[A-Za-z]:/.test(unified)) return false;
+  return !path.posix.normalize(unified).split('/').includes('..');
+}
+
 const manifestSchema = z.strictObject({
   id: z.string().regex(MODULE_ID, 'id must be kebab-case'),
   name: z.string().min(1),
   description: z.string().min(1),
   version: z.string().regex(SEMVER, 'version must be SemVer (MAJOR.MINOR.PATCH)'),
   apiVersion: z.string().regex(SEMVER, 'apiVersion must be SemVer (MAJOR.MINOR.PATCH)'),
-  entrypoint: z.string().min(1),
+  entrypoint: z.string().min(1).refine(isConfinedPath, {
+    message: 'entrypoint must be a relative path inside the module directory',
+  }),
   dependencies: z.array(z.string().regex(MODULE_ID, 'dependency must be a module id')),
   permissions: z.array(
     z.string().regex(THREE_SEGMENTS, 'permission must have the format module.resource.action'),
