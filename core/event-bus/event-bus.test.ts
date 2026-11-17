@@ -135,6 +135,44 @@ describe('EventBus', () => {
     }).toThrow(UndeclaredEventError);
   });
 
+  it('publishFromCore delivers discord.* to declared subscribers with source core', async () => {
+    const { bus } = setup();
+    const listener = manifest('listener', ['discord.message.created'], []);
+    const bystander = manifest('bystander', ['producer.item.created'], []);
+    const received: SunFlowerEvent[] = [];
+    const other: SunFlowerEvent[] = [];
+    bus.forModule(listener).subscribe('discord.message.created', (e) => {
+      received.push(e);
+    });
+    bus.forModule(bystander).subscribe('producer.item.created', (e) => {
+      other.push(e);
+    });
+    bus.publishFromCore('discord.message.created', { n: 1 }, { channelId: 'c1' });
+    bus.publishFromCore('discord.message.created', { n: 2 });
+    expect(received).toEqual([]);
+    await bus.idle();
+    expect(received).toHaveLength(2);
+    expect(received[0]).toMatchObject({
+      type: 'discord.message.created',
+      version: 1,
+      source: 'core',
+      context: { channelId: 'c1' },
+      payload: { n: 1 },
+    });
+    expect(received[1]?.context).toEqual({});
+    expect(other).toEqual([]);
+  });
+
+  it('publishFromCore rejects other prefixes', () => {
+    const { bus } = setup();
+    expect(() => {
+      bus.publishFromCore('producer.item.created', {});
+    }).toThrow(UndeclaredEventError);
+    expect(() => {
+      bus.publishFromCore('discordx.message.created', {});
+    }).toThrow(/Module "core"/);
+  });
+
   it('drops events beyond the maximum depth', async () => {
     const { bus, logger } = setup({ maxDepth: 3 });
     const loop = manifest('loop', ['loop.tick'], ['loop.tick']);

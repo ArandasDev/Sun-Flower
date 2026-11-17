@@ -15,8 +15,12 @@ export function createLogger(options: CreateLoggerOptions): Logger {
       base: { service: 'sun-flower' },
       redact: {
         // pino has no recursive wildcard: only these fixed depths are covered.
-        // token: depth 0-2; authorization: depth 0-1, plus headers.authorization at depth 1-2.
+        // token and content: depth 0-2; authorization: depth 0-1, plus headers.authorization
+        // at depth 1-2.
         paths: [
+          'content',
+          '*.content',
+          '*.*.content',
           'token',
           '*.token',
           '*.*.token',

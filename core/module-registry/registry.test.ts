@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { ModuleContext } from '../../shared/contracts/module.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
@@ -135,6 +136,19 @@ function writeModule(id: string, options: FixtureOptions = {}): string {
   return directory;
 }
 
+const OK: GuildActionResult = { ok: true };
+const fakeGuild: GuildActions = {
+  deleteMessage: () => Promise.resolve(OK),
+  timeout: () => Promise.resolve(OK),
+  removeTimeout: () => Promise.resolve(OK),
+  kick: () => Promise.resolve(OK),
+  ban: () => Promise.resolve(OK),
+  unban: () => Promise.resolve(OK),
+  sendMessage: () => Promise.resolve(OK),
+  sendDirectMessage: () => Promise.resolve(OK),
+  getMemberRoleIds: () => Promise.resolve([]),
+};
+
 function createRegistry(stepTimeoutMs = 50): ModuleRegistry {
   return new ModuleRegistry({
     modulesDir,
@@ -142,8 +156,15 @@ function createRegistry(stepTimeoutMs = 50): ModuleRegistry {
     events: bus,
     permissions: new PermissionService(db),
     config,
+    db,
+    guild: fakeGuild,
     stepTimeoutMs,
   });
+}
+
+function writeMigration(directory: string, file: string, sql: string): void {
+  fs.mkdirSync(path.join(directory, 'migrations'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'migrations', file), sql);
 }
 
 function stateOf(registry: ModuleRegistry, id: string): string | undefined {
@@ -778,6 +799,146 @@ export default () => {
     await expect(registry.stop()).resolves.toBeUndefined();
     expect(stateOf(registry, 'a')).toBe('DISPOSED');
     expect(calls()).toEqual(['a:register', 'a:initialize', 'a:start', 'a:stop', 'a:dispose']);
+  });
+});
+
+describe('ModuleRegistry wiring', () => {
+  function recorder(): string {
+    return `const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);`;
+  }
+
+  const VALID_SCHEMA = `export const configSchema = { safeParse: (value) => ({ success: true, data: { greeting: 'hi', ...value } }) };`;
+
+  it('applies module migrations before register()', async () => {
+    const directory = writeModule('a', {
+      rawSource: `${recorder()}
+export default () => ({
+  async register(ctx) {
+    ctx.storage.run('INSERT INTO a_items (label) VALUES (?)', ['first']);
+    const row = ctx.storage.get('SELECT COUNT(*) AS n FROM a_items');
+    calls.push('a:rows:' + row.n);
+  },
+  async initialize() {},
+  async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+    writeMigration(
+      directory,
+      '0001-init.sql',
+      'CREATE TABLE a_items (id INTEGER PRIMARY KEY, label TEXT NOT NULL);',
+    );
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(stateOf(registry, 'a')).toBe('RUNNING');
+    expect(calls()).toEqual(['a:rows:1']);
+    await registry.stop();
+  });
+
+  it('fails only the module whose migration is invalid', async () => {
+    const bad = writeModule('bad');
+    writeMigration(bad, '0001-init.sql', 'CREATE TABLE other_items (id INTEGER PRIMARY KEY);');
+    writeModule('good');
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('bad')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
+    expect(registry.status().get('bad')?.error).toMatch(/module bad migration 0001-init failed/);
+    expect(calls()).not.toContain('bad:register');
+    expect(stateOf(registry, 'good')).toBe('RUNNING');
+    await registry.stop();
+  });
+
+  it('config.set updates config.get immediately', async () => {
+    writeModule('a', {
+      rawSource: `${recorder()}
+${VALID_SCHEMA}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {
+      context.config.set({ greeting: 'hello' });
+      calls.push('a:config:' + JSON.stringify(context.config.get()));
+    },
+    async start() {},
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(stateOf(registry, 'a')).toBe('RUNNING');
+    expect(calls()).toEqual(['a:config:{"greeting":"hello"}']);
+    const row = db.prepare('SELECT settings FROM module_config WHERE module_id = ?').get('a') as
+      { settings: string } | undefined;
+    expect(JSON.parse(row?.settings ?? 'null')).toEqual({ greeting: 'hello' });
+    await registry.stop();
+  });
+
+  it('config.set before initialize throws', async () => {
+    writeModule('a', {
+      rawSource: `${recorder()}
+${VALID_SCHEMA}
+export default () => ({
+  async register(ctx) {
+    try {
+      ctx.config.set({ greeting: 'hello' });
+      calls.push('a:set:ok');
+    } catch (error) {
+      calls.push('a:set:' + error.message);
+    }
+  },
+  async initialize() {},
+  async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(calls()).toEqual(['a:set:Settings of module "a" are only available from initialize()']);
+    await registry.stop();
+  });
+
+  it('guild is gated by the manifest capabilities', async () => {
+    const source = (id: string): string => `${recorder()}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {},
+    async start() {
+      try {
+        const result = await context.guild.kick('111111111111111111', 'test');
+        calls.push(${JSON.stringify(id)} + ':kick:' + JSON.stringify(result));
+      } catch (error) {
+        calls.push(${JSON.stringify(id)} + ':kick:' + error.name);
+      }
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`;
+    writeModule('plain', { rawSource: source('plain') });
+    writeModule('mod', {
+      rawSource: source('mod'),
+      manifest: { capabilities: ['guild.moderate'] },
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect([...calls()].sort()).toEqual(['mod:kick:{"ok":true}', 'plain:kick:CapabilityError']);
+    await registry.stop();
   });
 });
 

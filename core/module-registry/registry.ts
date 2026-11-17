@@ -1,3 +1,5 @@
+import path from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
@@ -9,11 +11,13 @@ import {
   type ModuleManifest,
   type SunFlowerModule,
 } from '../../shared/contracts/module.ts';
-import type { ModuleStorage } from '../../shared/contracts/storage.ts';
 import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
+import { createModuleGuild } from '../guild/module-guild.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
 import type { PermissionService } from '../permissions/permission-service.ts';
+import { applyModuleMigrations } from '../storage/module-migrations.ts';
+import { createModuleStorage } from '../storage/module-storage.ts';
 import { resolveOrder } from './dependencies.ts';
 import { discoverModules } from './discovery.ts';
 import { loadModule } from './entrypoint.ts';
@@ -48,6 +52,10 @@ export interface ModuleRegistryDeps {
   readonly events: EventBus;
   readonly permissions: PermissionService;
   readonly config: ModuleConfigStore;
+  /** The Core database; module migrations and storage run on it. */
+  readonly db: DatabaseSync;
+  /** The Discord port; each module receives it gated by its manifest capabilities. */
+  readonly guild: GuildActions;
   readonly coreApiVersion?: string;
   readonly stepTimeoutMs?: number;
 }
@@ -64,15 +72,6 @@ interface ModuleRecord {
 }
 
 type Phase = 'new' | 'loading' | 'loaded' | 'starting' | 'started' | 'stopping' | 'stopped';
-
-/** Placeholder until the Core wires the real service (replaced in a later task). */
-function notWired<T extends object>(): T {
-  return new Proxy({} as T, {
-    get: () => {
-      throw new Error('not wired');
-    },
-  });
-}
 
 /** Freezes plain data (objects and arrays) at every depth. */
 function deepFreeze<T>(value: T): T {
@@ -264,6 +263,7 @@ export class ModuleRegistry {
       [
         'register',
         async () => {
+          applyModuleMigrations(this.#deps.db, id, path.join(record.directory, 'migrations'));
           await instance.register(context);
           if (record.rejectedCommand !== undefined) {
             throw new CommandRegistrationError(record.rejectedCommand);
@@ -303,6 +303,8 @@ export class ModuleRegistry {
 
   #createContext(record: ModuleRecord, events: ModuleEvents): ModuleContext {
     const { id } = record.manifest;
+    const settingsUnavailable = (): Error =>
+      new Error(`Settings of module "${id}" are only available from initialize()`);
     return Object.freeze({
       moduleId: id,
       logger: this.#deps.logger.child({ module: id }),
@@ -317,17 +319,22 @@ export class ModuleRegistry {
       permissions: this.#deps.permissions.forModule(record.manifest),
       config: Object.freeze({
         get: <T>(): T => {
-          if (record.settings === undefined) {
-            throw new Error(`Settings of module "${id}" are only available from initialize()`);
-          }
+          if (record.settings === undefined) throw settingsUnavailable();
           return record.settings.value as T;
         },
-        set: () => {
-          throw new Error('not wired');
+        set: (partial: Record<string, unknown>) => {
+          if (record.settings === undefined) throw settingsUnavailable();
+          const value = this.#deps.config.updateSettings(id, record.configSchema, partial);
+          record.settings = { value };
         },
       }),
-      guild: notWired<GuildActions>(),
-      storage: notWired<ModuleStorage>(),
+      guild: createModuleGuild({
+        manifest: record.manifest,
+        port: this.#deps.guild,
+        isDeveloper: (userId) => this.#deps.permissions.isDeveloper(userId),
+        logger: this.#deps.logger,
+      }),
+      storage: createModuleStorage(this.#deps.db),
       commands: Object.freeze({
         register: (command: CommandDefinition) => {
           this.#registerCommand(record, command);
