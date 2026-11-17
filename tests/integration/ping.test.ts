@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { startCore } from '../../core/application/core.ts';
 import { validateManifest } from '../../core/module-registry/manifest.ts';
 import { dispatchCommand, type RawInteraction } from '../../interfaces/discord/commands.ts';
-import { createRecordingLogger } from '../../interfaces/discord/test-logger.ts';
+import { createRecordingLogger } from '../helpers/recording-logger.ts';
 import { CORE_API_VERSION } from '../../shared/contracts/module.ts';
 
 const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));

@@ -1,42 +1,19 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Logger } from '../../shared/contracts/logger.ts';
+import {
+  createRecordingLogger,
+  type RecordingLogger,
+} from '../../tests/helpers/recording-logger.ts';
 import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
 import { runStaff, STAFF_USAGE } from './staff.ts';
 
-interface LogCall {
-  readonly level: string;
-  readonly obj: object | string;
-  readonly msg: string | undefined;
-}
-
-function createRecordingLogger(): Logger & { readonly calls: LogCall[] } {
-  const calls: LogCall[] = [];
-  const record =
-    (level: string) =>
-    (obj: object | string, msg?: string): void => {
-      calls.push({ level, obj, msg });
-    };
-  const logger: Logger & { readonly calls: LogCall[] } = {
-    calls,
-    trace: record('trace'),
-    debug: record('debug'),
-    info: record('info'),
-    warn: record('warn'),
-    error: record('error'),
-    fatal: record('fatal'),
-    child: () => logger,
-  };
-  return logger;
-}
-
 const USER = '000000000000000000';
 const OTHER = '111111111111111111';
 
 let db: DatabaseSync;
-let logger: ReturnType<typeof createRecordingLogger>;
+let logger: RecordingLogger;
 let out: string[];
 let deps: Parameters<typeof runStaff>[1];
 
@@ -111,14 +88,14 @@ describe('runStaff', () => {
     runStaff(['remove', USER], deps);
     runStaff(['remove', USER], deps);
     runStaff(['add', 'abc'], deps);
-    const infos = logger.calls.filter((call) => call.level === 'info');
+    const infos = logger.entries.filter((call) => call.level === 'info');
     expect(infos.map((call) => (call.obj as { action?: string }).action)).toEqual([
       'add',
       'add',
       'remove',
       'remove',
     ]);
-    expect(JSON.stringify(logger.calls)).not.toContain(USER);
-    expect(JSON.stringify(logger.calls)).not.toContain('abc');
+    expect(JSON.stringify(logger.entries)).not.toContain(USER);
+    expect(JSON.stringify(logger.entries)).not.toContain('abc');
   });
 });

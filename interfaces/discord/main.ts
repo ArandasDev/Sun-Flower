@@ -117,19 +117,15 @@ export async function main(): Promise<void> {
       await core.stop();
     }
   };
-  installShutdownHandlers(process, shutdown, logger);
+  const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
   wireClient(client, core, environment.guildId, logger);
 
   try {
     await client.login(environment.discordToken);
   } catch (error) {
-    logger.error(errorSummary(error), 'Falha no login do Discord.');
-    try {
-      await shutdown();
-    } catch (shutdownError) {
-      logger.error({ error: errorMessage(shutdownError) }, 'shutdown failed');
-    }
-    process.exitCode = 1;
+    logger.error(errorSummary(error), 'Discord login failed.');
+    // Same once-only path as the signals: a concurrent SIGINT cannot rerun shutdown or exit 0.
+    shutdownHandle.trigger(1);
   }
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isAllowedInteraction, leaveUnauthorizedGuilds } from './guild-guard.ts';
-import { createRecordingLogger } from './test-logger.ts';
+import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
 
 const allowed = '000000000000000000';
 const other = '111111111111111111';

@@ -1,35 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Logger } from '../../shared/contracts/logger.ts';
+import {
+  createRecordingLogger,
+  type RecordingLogger,
+} from '../../tests/helpers/recording-logger.ts';
 import { installShutdownHandlers } from './shutdown.ts';
-
-interface Entry {
-  readonly level: string;
-  readonly obj: object | string;
-}
-
-type RecordingLogger = Logger & { readonly entries: Entry[] };
-
-function createRecordingLogger(): RecordingLogger {
-  const entries: Entry[] = [];
-  const record =
-    (level: string) =>
-    (obj: object | string): void => {
-      entries.push({ level, obj });
-    };
-  const logger: RecordingLogger = {
-    entries,
-    trace: record('trace'),
-    debug: record('debug'),
-    info: record('info'),
-    warn: record('warn'),
-    error: record('error'),
-    fatal: record('fatal'),
-    child: () => logger,
-  };
-  return logger;
-}
 
 class FakeProcess extends EventEmitter {
   readonly exitCodes: number[] = [];
@@ -50,6 +26,10 @@ let logger: RecordingLogger;
 beforeEach(() => {
   proc = new FakeProcess();
   logger = createRecordingLogger();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('installShutdownHandlers', () => {
@@ -131,5 +111,87 @@ describe('installShutdownHandlers', () => {
     const errors = logger.entries.filter((e) => e.level === 'error');
     expect(errors).toHaveLength(1);
     expect(errors[0]?.obj).toMatchObject({ error: 'stop failed' });
+  });
+
+  it('logs a second fatal error at error level without running shutdown again', async () => {
+    let finish: () => void = () => {};
+    const shutdown = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    installShutdownHandlers(proc, shutdown, logger);
+
+    proc.emit('SIGTERM');
+    proc.emit('uncaughtException', new Error('late'));
+    proc.emit('unhandledRejection', 'later');
+    finish();
+    await settle();
+
+    expect(shutdown).toHaveBeenCalledTimes(1);
+    expect(proc.exitCodes).toEqual([0]);
+    expect(logger.entries.filter((e) => e.level === 'fatal')).toEqual([]);
+    const errors = logger.entries.filter((e) => e.level === 'error');
+    expect(errors.map((e) => e.obj)).toEqual([
+      expect.objectContaining({ event: 'uncaughtException', error: 'late' }),
+      expect.objectContaining({ event: 'unhandledRejection', error: 'later' }),
+    ]);
+  });
+
+  it('starts the same once-only path through trigger with the given exit code', async () => {
+    const shutdown = vi.fn(async () => {});
+    const handle = installShutdownHandlers(proc, shutdown, logger);
+
+    handle.trigger(1);
+    proc.emit('SIGINT');
+    handle.trigger(0);
+    await settle();
+
+    expect(shutdown).toHaveBeenCalledTimes(1);
+    expect(proc.exitCodes).toEqual([1]);
+  });
+
+  it('exits 1 after the deadline when shutdown never settles', async () => {
+    vi.useFakeTimers();
+    const shutdown = vi.fn(() => new Promise<void>(() => {}));
+    installShutdownHandlers(proc, shutdown, logger);
+
+    proc.emit('SIGINT');
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(proc.exitCodes).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(proc.exitCodes).toEqual([1]);
+    expect(logger.entries.filter((e) => e.level === 'error').map((e) => e.msg)).toEqual([
+      'shutdown timed out',
+    ]);
+    proc.emit('SIGTERM');
+    expect(shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses an injected deadline', async () => {
+    vi.useFakeTimers();
+    const shutdown = vi.fn(() => new Promise<void>(() => {}));
+    installShutdownHandlers(proc, shutdown, logger, { timeoutMs: 100 });
+
+    proc.emit('SIGTERM');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(proc.exitCodes).toEqual([1]);
+  });
+
+  it('clears the deadline when shutdown settles normally', async () => {
+    vi.useFakeTimers();
+    const shutdown = vi.fn(async () => {});
+    installShutdownHandlers(proc, shutdown, logger);
+
+    proc.emit('SIGINT');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(proc.exitCodes).toEqual([0]);
+    expect(vi.getTimerCount()).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(proc.exitCodes).toEqual([0]);
+    expect(logger.entries.filter((e) => e.level === 'error')).toEqual([]);
   });
 });

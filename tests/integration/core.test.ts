@@ -4,21 +4,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startCore } from '../../core/application/core.ts';
-import type { Logger } from '../../shared/contracts/logger.ts';
-
-function createSilentLogger(): Logger {
-  const noop = (): void => {};
-  const logger: Logger = {
-    trace: noop,
-    debug: noop,
-    info: noop,
-    warn: noop,
-    error: noop,
-    fatal: noop,
-    child: () => logger,
-  };
-  return logger;
-}
+import { dispatchCommand, type RawInteraction } from '../../interfaces/discord/commands.ts';
+import { createRecordingLogger } from '../helpers/recording-logger.ts';
 
 const GOOD_SOURCE = `
 export default () => ({
@@ -27,6 +14,22 @@ export default () => ({
   },
   async initialize() {},
   async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`;
+
+const FAILS_ON_START_SOURCE = `
+export default () => ({
+  async register(ctx) {
+    ctx.commands.register({ name: 'flaky', description: 'Flaky command', handle: async (i) => {
+      await i.reply('should not run');
+    } });
+  },
+  async initialize() {},
+  async start() {
+    throw new Error('start failed');
+  },
   async stop() {},
   async dispose() {},
 });
@@ -49,13 +52,13 @@ function manifest(id: string, dependencies: string[] = []): Record<string, unkno
 
 let tempDir: string;
 let modulesDir: string;
-const logger = createSilentLogger();
+const logger = createRecordingLogger();
 
-function writeModule(id: string, content: Record<string, unknown>): void {
+function writeModule(id: string, content: Record<string, unknown>, source = GOOD_SOURCE): void {
   const directory = path.join(modulesDir, id);
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(content));
-  fs.writeFileSync(path.join(directory, 'index.ts'), GOOD_SOURCE);
+  fs.writeFileSync(path.join(directory, 'index.ts'), source);
 }
 
 function closedDatabases(spy: { mock: { contexts: unknown[] } }): DatabaseSync[] {
@@ -122,5 +125,30 @@ describe('startCore', () => {
     ).rejects.toThrow();
     expect(close).toHaveBeenCalledTimes(1);
     expect(closedDatabases(close)[0]?.isOpen).toBe(false);
+  });
+
+  it('answers a command of a module that failed in start() as unavailable', async () => {
+    writeModule('flaky', manifest('flaky'), FAILS_ON_START_SOURCE);
+    const core = await startCore({ dbPath: ':memory:', modulesDir, logger, stepTimeoutMs: 1000 });
+    try {
+      expect(core.status().get('flaky')?.state).toBe('FAILED');
+      const replies: { content: string; ephemeral: boolean }[] = [];
+      const raw: RawInteraction = {
+        commandName: 'flaky',
+        userId: '111111111111111111',
+        roleIds: [],
+        guildId: '000000000000000000',
+        reply: async (content, ephemeral) => {
+          await Promise.resolve();
+          replies.push({ content, ephemeral });
+        },
+        deferReply: async () => {},
+        editReply: async () => {},
+      };
+      await dispatchCommand(raw, core.commands(), logger);
+      expect(replies).toEqual([{ content: 'Comando indisponível.', ephemeral: true }]);
+    } finally {
+      await core.stop();
+    }
   });
 });

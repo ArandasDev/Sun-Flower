@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommandDefinition, CommandInteraction } from '../../shared/contracts/commands.ts';
 import { dispatchCommand, syncCommands, type RawInteraction } from './commands.ts';
-import { createRecordingLogger } from './test-logger.ts';
+import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
 
 const userId = '000000000000000000';
 const roleId = '111111111111111111';

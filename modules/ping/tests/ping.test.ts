@@ -1,28 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CommandDefinition } from '../../../shared/contracts/commands.ts';
-import type { Logger } from '../../../shared/contracts/logger.ts';
 import type { ModuleContext } from '../../../shared/contracts/module.ts';
+import { createRecordingLogger } from '../../../tests/helpers/recording-logger.ts';
 import createPing from '../index.ts';
-
-function silentLogger(): Logger {
-  const noop = (): void => {};
-  const logger: Logger = {
-    trace: noop,
-    debug: noop,
-    info: noop,
-    warn: noop,
-    error: noop,
-    fatal: noop,
-    child: () => logger,
-  };
-  return logger;
-}
 
 function fakeContext(registered: CommandDefinition[]): ModuleContext {
   return {
     moduleId: 'ping',
-    logger: silentLogger(),
+    logger: createRecordingLogger(),
     events: { publish: () => {}, subscribe: () => {} },
     permissions: { check: () => false },
     config: { get: <T>() => ({}) as T },
