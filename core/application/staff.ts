@@ -61,7 +61,8 @@ function main(): void {
     process.exitCode = 1;
     return;
   }
-  const logger = createLogger({ level: environment.logLevel });
+  // Logs go to stderr so stdout carries only the lines meant for the person.
+  const logger = createLogger({ level: environment.logLevel, destination: process.stderr });
   const db = openDatabase(environment.dbPath);
   try {
     runMigrations(db, MIGRATIONS_DIR);

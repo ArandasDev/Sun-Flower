@@ -7,6 +7,9 @@ import {
 
 import type { RawInteraction } from './commands.ts';
 
+/** Command replies never ping anyone, whatever text a module sends. */
+const NO_MENTIONS = { parse: [] };
+
 export function createDiscordClient(): Client {
   return new Client({ intents: [GatewayIntentBits.Guilds] });
 }
@@ -29,13 +32,17 @@ export function toRawInteraction(interaction: ChatInputCommandInteraction): RawI
     roleIds,
     guildId: interaction.guildId,
     reply: async (content, ephemeral) => {
-      await interaction.reply(ephemeral ? { content, flags: MessageFlags.Ephemeral } : { content });
+      await interaction.reply(
+        ephemeral
+          ? { content, flags: MessageFlags.Ephemeral, allowedMentions: NO_MENTIONS }
+          : { content, allowedMentions: NO_MENTIONS },
+      );
     },
     deferReply: async () => {
       await interaction.deferReply();
     },
     editReply: async (content) => {
-      await interaction.editReply({ content });
+      await interaction.editReply({ content, allowedMentions: NO_MENTIONS });
     },
   };
 }

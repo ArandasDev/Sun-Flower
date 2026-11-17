@@ -49,7 +49,7 @@ describe('toRawInteraction', () => {
     expect(toRawInteraction(fakeInteraction(null).interaction).roleIds).toEqual([]);
   });
 
-  it('maps replies to discord.js calls with ephemeral flags', async () => {
+  it('maps replies to discord.js calls with ephemeral flags and no mentions', async () => {
     const { calls, interaction } = fakeInteraction(null);
     const raw = toRawInteraction(interaction);
     await raw.reply('a', true);
@@ -57,11 +57,12 @@ describe('toRawInteraction', () => {
     await raw.deferReply();
     await raw.editReply('c');
 
+    const noMentions = { parse: [] };
     expect(calls).toEqual([
-      { reply: { content: 'a', flags: MessageFlags.Ephemeral } },
-      { reply: { content: 'b' } },
+      { reply: { content: 'a', flags: MessageFlags.Ephemeral, allowedMentions: noMentions } },
+      { reply: { content: 'b', allowedMentions: noMentions } },
       'deferReply',
-      { editReply: { content: 'c' } },
+      { editReply: { content: 'c', allowedMentions: noMentions } },
     ]);
   });
 });
