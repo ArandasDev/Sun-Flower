@@ -73,6 +73,20 @@ describe('validateManifest', () => {
     expect((result as { errors: string[] }).errors.join(' ')).toMatch(pattern);
   });
 
+  it('rejects a module publishing a discord.* event', () => {
+    const raw = {
+      ...base,
+      id: 'moderation',
+      permissions: [],
+      events: { subscribes: [], publishes: ['discord.message.created'] },
+    };
+    const result = validateManifest(raw, 'moderation', '1.0.0');
+    expect(result.ok).toBe(false);
+    expect((result as { errors: string[] }).errors.join(' ')).toMatch(
+      /published event "discord.message.created" must start with "moderation."/,
+    );
+  });
+
   it('rejects the reserved id "core"', () => {
     const raw = { ...minimal, id: 'core' };
     const result = validateManifest(raw, 'core', '1.0.0');

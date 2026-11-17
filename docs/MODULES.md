@@ -143,10 +143,20 @@ Esse arquivo será responsável por declarar sua identidade, versão, compatibil
 | Campo               | Tipo     | Valor padrão | Regra                                                                                      |
 | ------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------ |
 | `enabledByDefault`  | boolean  | `false`      | Se o módulo é ativado na primeira execução, antes de qualquer configuração administrativa. |
+| `capabilities`      | string[] | `[]`         | Capacidades do serviço `guild` que o módulo usa (ver abaixo).                              |
 | `events.subscribes` | string[] | `[]`         | Eventos que o módulo consome.                                                              |
 | `events.publishes`  | string[] | `[]`         | Eventos que o módulo publica.                                                              |
 
 Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
+
+**Capacidades (`capabilities`).** O serviço `guild` do contexto só executa ações no servidor que o manifesto declarou. Valores aceitos:
+
+| Capacidade       | Libera                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `guild.moderate` | `deleteMessage`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban` e `getMemberRoleIds`. |
+| `guild.message`  | `sendMessage` e `sendDirectMessage`.                                                      |
+
+Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens.
 
 ### 4.4. Validação
 
@@ -203,7 +213,7 @@ O manifesto não faz parte da interface: o `manifest.json` do módulo é a fonte
 
 Todos os métodos deverão possuir comportamento previsível e tratamento adequado de erros.
 
-O método `dispose()` deverá ser seguro mesmo após uma inicialização parcialmente concluída.
+O método `dispose()` deverá ser seguro mesmo após uma inicialização parcialmente concluída. Ele pode ser chamado mesmo que `register()` nunca tenha sido executado (por exemplo, quando a migração do módulo falha), portanto não deve presumir que o contexto foi recebido nem que recursos foram criados.
 
 ## 6. Ciclo de Vida
 
@@ -366,7 +376,7 @@ Exemplo:
 | `context`   | Ids do Discord relacionados ao evento (`userId`, `channelId`); cada campo só aparece quando se aplica.                                           |
 | `payload`   | Dados específicos do evento, documentados no `README.md` do módulo que o publica.                                                                |
 
-Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id.
+Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id. O prefixo `discord.` é reservado à interface do Discord: um manifesto que declare publicar `discord.*` é recusado. Os módulos apenas consomem esses eventos (`discord.message.created`, `discord.message.updated`), declarando-os em `events.subscribes`.
 
 ### 7.3. Regras de comunicação
 
@@ -412,6 +422,12 @@ Exemplo:
 - Versionamento e migração de configurações quando necessário.
 
 Alterações de configuração não deverão exigir reinicialização completa da aplicação, quando puderem ser aplicadas com segurança.
+
+**Alteração em tempo de execução.** `context.config.set(partial)` mescla `partial` às configurações salvas do módulo, valida o resultado pelo `configSchema` e só então persiste; uma configuração inválida é recusada e nada é gravado. `context.config.get()` passa a devolver o novo valor. O módulo sem `configSchema` não pode usar `set`.
+
+### Opções de comando
+
+Um `CommandDefinition` pode declarar `options`, tanto no comando quanto em cada subcomando. Cada opção tem `name`, `description`, `type` (`string`, `integer`, `boolean`, `user`, `channel` ou `role`) e, opcionalmente, `required`, `minValue` e `maxValue` (inteiros), `maxLength` (texto) e `choices`. `choices` vale somente para opções `string`: é uma lista de textos em que o nome de cada escolha é igual ao valor. O handler lê os valores por `interaction.options` (`getString`, `getInteger`, `getBoolean`, `getUser`, `getChannel`, `getRole`).
 
 ## 9. Permissões
 
@@ -481,6 +497,17 @@ Entretanto, o acesso à persistência deverá ocorrer por meio de abstrações e
 Um módulo não deverá consultar diretamente tabelas ou estruturas internas pertencentes a outro módulo.
 
 Quando existir necessidade de compartilhar informações, deverão ser utilizados contratos explícitos.
+
+### Serviço `storage` e migrações de módulo
+
+O módulo acessa o banco pelo serviço `context.storage`, com `run`, `get`, `all` e `transaction` (SQL parametrizado; transações não se aninham).
+
+As tabelas do módulo ficam em migrações SQL no diretório `migrations/` do próprio módulo, com arquivos numerados em sequência (`0001-nome.sql`, `0002-nome.sql`, ...). O Core as aplica em ordem, cada uma em uma transação, antes de `register()`, e registra as versões aplicadas. Regras:
+
+- Todo objeto criado, alterado ou removido (tabela, índice, visão ou gatilho) deve se chamar `<id do módulo>_...`, sem qualificar o esquema.
+- `ATTACH`, `DETACH`, `PRAGMA` e `VACUUM` são proibidos.
+- Uma migração inválida ou com falha marca o módulo como `FAILED`, e os demais seguem normalmente.
+- Migrações já aplicadas não são editadas: mudanças entram em uma nova migração.
 
 ## 11. Isolamento e Tolerância a Falhas
 

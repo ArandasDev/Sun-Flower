@@ -45,6 +45,11 @@ export interface GrantRecord {
   readonly grantedAt: string;
 }
 
+/** Whether `permission` has the `<module>.<resource>.<action>` format. */
+export function isValidPermission(permission: string): boolean {
+  return PERMISSION.test(permission);
+}
+
 function assertSnowflake(id: string): void {
   if (!SNOWFLAKE.test(id)) throw new InvalidSnowflakeError();
 }

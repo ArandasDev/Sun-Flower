@@ -58,6 +58,7 @@ modules/moderation/
   ```ts
   interface DiscordMessagePayload {
     readonly messageId: string;
+    readonly messageUrl: string;
     readonly channelId: string;
     readonly authorId: string;
     readonly authorRoleIds: readonly string[];
@@ -142,6 +143,7 @@ interface CommandOption {
   readonly minValue?: number; // integer
   readonly maxValue?: number; // integer
   readonly maxLength?: number; // string
+  readonly choices?: readonly string[]; // somente 'string'; o nome de cada escolha é igual ao valor
 }
 
 interface Subcommand {
