@@ -72,6 +72,22 @@ describe('validateModuleMigration', () => {
     bad('VACUUM;');
   });
 
+  it('checks quoted names written right after the keyword', () => {
+    bad('CREATE TABLE moderation_a (id INTEGER); DROP TABLE"developers";');
+    bad('CREATE TABLE"developers"(id INTEGER);');
+    bad('CREATE TABLE moderation_a (id INTEGER); DROP TABLE[developers];');
+    bad('ALTER TABLE moderation_a RENAME TO"developers2";');
+    bad('ALTER TABLE moderation_a RENAME TO[developers2];');
+    bad('CREATE INDEX"moderation_x"ON"developers"(a);');
+    bad('CREATE INDEX moderation_x ON`developers`(a);');
+    bad('CREATE TABLE`developers`(id INTEGER);');
+    bad('CREATE TABLE "moderation_a"."x" (id INTEGER);');
+    ok('CREATE TABLE"moderation_a"(id INTEGER);');
+    ok('CREATE INDEX"moderation_x"ON"moderation_a"(id);');
+    ok('CREATE TABLE `moderation_a``b` (id INTEGER);');
+    bad('CREATE TABLE `moderation_a``; DROP TABLE developers; --` (id INTEGER); DROP TABLE x;');
+  });
+
   it('ignores comments and string literals', () => {
     ok('-- CREATE TABLE x\nCREATE TABLE moderation_a (id INTEGER);');
     ok('/* CREATE TABLE x */ CREATE TABLE moderation_a (id INTEGER);');
