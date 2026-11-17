@@ -28,7 +28,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Configuração: validação das variáveis de ambiente e da configuração de cada módulo pelo `configSchema`.
   - Logs estruturados com pino, sem token nem IDs do Discord.
   - Banco SQLite embutido (`SUNFLOWER_DB_PATH`) com migrações versionadas.
-  - Encerramento controlado em `SIGINT`/`SIGTERM` e registro `fatal` com código 1 em erros não tratados.
+  - Encerramento controlado em `SIGINT`/`SIGTERM`, com prazo de 15 segundos (código 1 se for excedido), e registro `fatal` com código 1 em erros não tratados.
 - Interface Discord: atuação exclusiva no servidor `DISCORD_GUILD_ID` (sai de outros servidores e ignora suas interações e as mensagens diretas), sincronização dos comandos dos módulos no servidor, adiamento automático de respostas lentas, erros sem detalhes internos e respostas sem menções. Iniciada por `npm start`.
 - Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
 - Módulo `ping`: comando `/ping`, que responde `Pong!`.
