@@ -1,7 +1,12 @@
-import { MessageFlags, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  GatewayIntentBits,
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type Message,
+} from 'discord.js';
 import { describe, expect, it } from 'vitest';
 
-import { toRawInteraction } from './client.ts';
+import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 
 const guildId = '000000000000000000';
 const roleId = '111111111111111111';
@@ -92,5 +97,76 @@ describe('toRawInteraction', () => {
     expect(raw.options.getChannel('c')).toBe('222222222222222222');
     expect(raw.options.getRole('r')).toBe(roleId);
     expect(raw.options.getRole('x')).toBeUndefined();
+  });
+});
+
+describe('createDiscordClient', () => {
+  it('requests the guild, message, content and member intents', () => {
+    const client = createDiscordClient();
+    for (const bit of [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildMembers,
+    ]) {
+      expect(client.options.intents.has(bit)).toBe(true);
+    }
+    void client.destroy();
+  });
+});
+
+describe('toRawMessage', () => {
+  function fakeMessage(overrides: Record<string, unknown> = {}): Message {
+    const fake = {
+      guildId,
+      id: '111111111111111111',
+      url: 'https://example.test/m',
+      channelId: '222222222222222222',
+      author: { id: '333333333333333333', bot: false, createdAt: new Date('2025-01-01T00:00:00Z') },
+      webhookId: null,
+      content: 'hi',
+      attachments: { size: 0 },
+      embeds: [],
+      stickers: { size: 0 },
+      member: {
+        joinedAt: new Date('2026-01-01T00:00:00Z'),
+        roles: {
+          cache: new Map([
+            [guildId, {}],
+            [roleId, {}],
+          ]),
+        },
+      },
+      ...overrides,
+    };
+    // Structural test double: only the members toRawMessage reads are provided.
+    return fake as unknown as Message;
+  }
+
+  it('maps a plain guild message', () => {
+    expect(toRawMessage(fakeMessage())).toEqual({
+      guildId,
+      messageId: '111111111111111111',
+      messageUrl: 'https://example.test/m',
+      channelId: '222222222222222222',
+      authorId: '333333333333333333',
+      authorIsBot: false,
+      isWebhook: false,
+      content: 'hi',
+      hasNonTextParts: false,
+      authorRoleIds: [roleId],
+      authorJoinedAt: '2026-01-01T00:00:00.000Z',
+      authorAccountCreatedAt: '2025-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('handles a missing member, webhooks and non-text parts', () => {
+    const raw = toRawMessage(fakeMessage({ member: null, webhookId: roleId }));
+    expect(raw.authorRoleIds).toEqual([]);
+    expect(raw.authorJoinedAt).toBeNull();
+    expect(raw.isWebhook).toBe(true);
+    expect(toRawMessage(fakeMessage({ attachments: { size: 1 } })).hasNonTextParts).toBe(true);
+    expect(toRawMessage(fakeMessage({ embeds: [{}] })).hasNonTextParts).toBe(true);
+    expect(toRawMessage(fakeMessage({ stickers: { size: 2 } })).hasNonTextParts).toBe(true);
   });
 });

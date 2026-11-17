@@ -3,15 +3,24 @@ import {
   GatewayIntentBits,
   MessageFlags,
   type ChatInputCommandInteraction,
+  type Message,
 } from 'discord.js';
 
 import type { RawInteraction } from './commands.ts';
+import type { RawMessage } from './messages.ts';
 
 /** Command replies never ping anyone, whatever text a module sends. */
 const NO_MENTIONS = { parse: [] };
 
 export function createDiscordClient(): Client {
-  return new Client({ intents: [GatewayIntentBits.Guilds] });
+  return new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildMembers,
+    ],
+  });
 }
 
 /** Thin adapter from a discord.js interaction to the transport-neutral RawInteraction. */
@@ -55,5 +64,27 @@ export function toRawInteraction(interaction: ChatInputCommandInteraction): RawI
     editReply: async (content) => {
       await interaction.editReply({ content, allowedMentions: NO_MENTIONS });
     },
+  };
+}
+
+/** Thin adapter from a discord.js message to the transport-neutral RawMessage. */
+export function toRawMessage(message: Message): RawMessage {
+  const member = message.member;
+  return {
+    guildId: message.guildId,
+    messageId: message.id,
+    messageUrl: message.url,
+    channelId: message.channelId,
+    authorId: message.author.id,
+    authorIsBot: message.author.bot,
+    isWebhook: message.webhookId !== null,
+    content: message.content,
+    hasNonTextParts:
+      message.attachments.size > 0 || message.embeds.length > 0 || message.stickers.size > 0,
+    // The @everyone role shares the guild's ID; it is not a real role assignment.
+    authorRoleIds:
+      member === null ? [] : [...member.roles.cache.keys()].filter((id) => id !== message.guildId),
+    authorJoinedAt: member?.joinedAt?.toISOString() ?? null,
+    authorAccountCreatedAt: message.author.createdAt.toISOString(),
   };
 }

@@ -1,14 +1,20 @@
 import { fileURLToPath } from 'node:url';
-import { Events, type Client, type Guild, type Interaction } from 'discord.js';
+import { Events, type Client, type Guild, type Interaction, type Message } from 'discord.js';
 
 import { startCore, type CoreHandle } from '../../core/application/core.ts';
 import { installShutdownHandlers } from '../../core/application/shutdown.ts';
 import { EnvironmentError, loadEnvironment } from '../../core/configuration/environment.ts';
 import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
-import { createDiscordClient, toRawInteraction } from './client.ts';
+import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
 import { isAllowedInteraction } from './guild-guard.ts';
+import {
+  ContentIntentMonitor,
+  guardHandler,
+  handleMessageCreate,
+  handleMessageUpdate,
+} from './messages.ts';
 
 export const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
 
@@ -66,6 +72,29 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
 
   client.on(Events.GuildCreate, (guild: Guild) => {
     if (guild.id === guildId) enqueue(sync);
+  });
+
+  const messageDeps = {
+    guildId,
+    monitor: new ContentIntentMonitor(logger),
+    publish: (type: string, payload: unknown, context: { userId: string; channelId: string }) => {
+      core.publishCoreEvent(type, payload, context);
+    },
+  };
+
+  client.on(Events.MessageCreate, (message: Message) => {
+    guardHandler(logger, () => {
+      handleMessageCreate(toRawMessage(message), messageDeps);
+    });
+  });
+
+  // A partial new message has no content to analyse; a partial old one means the change is unknown.
+  client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+    if (newMessage.partial) return;
+    guardHandler(logger, () => {
+      const oldContent = oldMessage.partial ? null : oldMessage.content;
+      handleMessageUpdate(oldContent, toRawMessage(newMessage), messageDeps);
+    });
   });
 
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
