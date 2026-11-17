@@ -65,6 +65,7 @@ export function assertValidCommand(command: CommandDefinition): void {
 }
 
 const MAX_PER_LEVEL = 25;
+const MAX_STRING_LENGTH = 6000;
 const OPTION_TYPES: ReadonlySet<string> = new Set([
   'string',
   'integer',
@@ -139,8 +140,13 @@ function assertOption(option: unknown, path: string): asserts option is Record<s
   if (option.maxLength !== undefined) {
     if (option.type !== 'string') fail(path, 'maxLength is only allowed on string options');
     const { maxLength } = option;
-    if (typeof maxLength !== 'number' || !Number.isInteger(maxLength) || maxLength < 1) {
-      fail(path, 'maxLength must be a positive integer');
+    if (
+      typeof maxLength !== 'number' ||
+      !Number.isInteger(maxLength) ||
+      maxLength < 1 ||
+      maxLength > MAX_STRING_LENGTH
+    ) {
+      fail(path, `maxLength must be an integer from 1 to ${String(MAX_STRING_LENGTH)}`);
     }
   }
   if (option.choices !== undefined) {
@@ -194,13 +200,23 @@ function assertCommandOptions(command: CommandDefinition): void {
   if (options !== undefined) assertOptions(options, `command "${name}"`);
   const loose =
     subcommands === undefined ? [] : assertSubcommands(subcommands, `command "${name}"`);
-  if (groups === undefined) return;
-  const groupList = assertList(groups, `command "${name}"`, 'groups');
+  const groupList = groups === undefined ? [] : assertList(groups, `command "${name}"`, 'groups');
+  if (subcommands === undefined && groups === undefined) return;
+  // Discord counts loose subcommands and groups together at the top level.
+  const topLevel = loose.length + groupList.length;
+  if (topLevel === 0) fail(`command "${name}"`, 'subcommands and groups must not both be empty');
+  if (topLevel > MAX_PER_LEVEL) {
+    fail(
+      `command "${name}"`,
+      `at most ${String(MAX_PER_LEVEL)} subcommands and groups are allowed`,
+    );
+  }
   for (const group of groupList) {
     const groupName = (group as { name?: unknown } | null)?.name;
     const groupPath = `command "${name}" group "${String(groupName)}"`;
     assertNamed(group, groupPath);
-    assertSubcommands(group.subcommands, groupPath);
+    const groupSubcommands = assertSubcommands(group.subcommands, groupPath);
+    if (groupSubcommands.length === 0) fail(groupPath, 'a group needs at least one subcommand');
   }
   assertUniqueNames([...loose, ...groupList], `command "${name}"`, 'group or subcommand');
 }

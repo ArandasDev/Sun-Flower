@@ -85,6 +85,42 @@ describe('assertValidCommand with options', () => {
       groups: [{ name: 'g', description: 'G', subcommands: many(26, (i) => sub(`s${String(i)}`)) }],
     });
   });
+  it('rejects more than 25 loose subcommands and groups together', () => {
+    const group = (name: string) => ({ name, description: 'G', subcommands: [sub('s')] });
+    rejects({
+      subcommands: many(13, (i) => sub(`s${String(i)}`)),
+      groups: many(13, (i) => group(`g${String(i)}`)),
+    });
+    expect(() => {
+      assertValidCommand(
+        make({
+          subcommands: many(12, (i) => sub(`s${String(i)}`)),
+          groups: many(13, (i) => group(`g${String(i)}`)),
+        }),
+      );
+    }).not.toThrow();
+  });
+  it('rejects a group without subcommands', () => {
+    rejects({ groups: [{ name: 'g', description: 'G', subcommands: [] }] });
+  });
+  it('rejects present but empty subcommands and groups', () => {
+    rejects({ subcommands: [] });
+    rejects({ groups: [] });
+    rejects({ subcommands: [], groups: [] });
+  });
+  it('rejects maxLength outside 1..6000', () => {
+    rejects({ options: [opt('a', { maxLength: 0 })] });
+    rejects({ options: [opt('a', { maxLength: 6001 })] });
+    rejects({ options: [opt('a', { maxLength: 1.5 })] });
+    expect(() => {
+      assertValidCommand(make({ options: [opt('a', { maxLength: 6000 })] }));
+    }).not.toThrow();
+  });
+  it('rejects integer bounds that are not safe integers', () => {
+    rejects({ options: [opt('a', { type: 'integer', minValue: 2 ** 53 })] });
+    rejects({ options: [opt('a', { type: 'integer', maxValue: -(2 ** 53) })] });
+    rejects({ options: [opt('a', { type: 'integer', maxValue: 1.5 })] });
+  });
   it('rejects a required option after an optional one', () => {
     rejects({ options: [opt('a'), opt('b', { required: true })] });
   });
