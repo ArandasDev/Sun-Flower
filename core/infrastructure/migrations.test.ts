@@ -123,3 +123,37 @@ describe('openDatabase', () => {
     expect(row.foreign_keys).toBe(1);
   });
 });
+
+describe('runMigrations concurrency', () => {
+  it('does not reapply a migration recorded by another connection in the meantime', () => {
+    write('0001-a.sql', 'CREATE TABLE a (id INTEGER PRIMARY KEY);');
+    const file = path.join(dir, 'race.db');
+    const first = openDatabase(file);
+    const second = openDatabase(file);
+    try {
+      // The second connection reads the list of applied migrations (empty), and the first
+      // connection applies everything before the second one starts its transaction.
+      let raced = false;
+      const racing = {
+        exec: (sql: string) => second.exec(sql),
+        get isTransaction() {
+          return second.isTransaction;
+        },
+        prepare: (sql: string) => {
+          const statement = second.prepare(sql);
+          if (raced || !sql.includes('FROM schema_migrations')) return statement;
+          raced = true;
+          const rows = statement.all();
+          runMigrations(first, dir);
+          return { ...statement, all: () => rows };
+        },
+      } as unknown as DatabaseSync;
+
+      expect(runMigrations(racing, dir)).toEqual([]);
+      expect(applied(second)).toEqual(['0001-a']);
+    } finally {
+      first.close();
+      second.close();
+    }
+  });
+});
