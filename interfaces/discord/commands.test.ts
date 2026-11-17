@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommandDefinition, CommandInteraction } from '../../shared/contracts/commands.ts';
-import { dispatchCommand, syncCommands, type RawInteraction } from './commands.ts';
+import { ApplicationCommandOptionType } from 'discord.js';
+import {
+  dispatchCommand,
+  syncCommands,
+  toDiscordCommandData,
+  type RawInteraction,
+} from './commands.ts';
 import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
 
 const userId = '000000000000000000';
@@ -27,6 +33,17 @@ function fakeInteraction(
     userId,
     roleIds: [roleId],
     guildId: '000000000000000000',
+    channelId: '222222222222222222',
+    subcommandGroup: 'grp',
+    subcommand: 'sub',
+    options: {
+      getString: (n) => (n === 'text' ? 'hello' : undefined),
+      getInteger: () => undefined,
+      getBoolean: () => undefined,
+      getUser: () => undefined,
+      getChannel: () => undefined,
+      getRole: () => undefined,
+    },
     reply: async (content, ephemeral) => {
       await Promise.resolve();
       calls.push({ kind: 'reply', content, ephemeral });
@@ -355,5 +372,112 @@ describe('dispatchCommand', () => {
 
     expect(raw.calls).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('toDiscordCommandData', () => {
+  const handle = async (): Promise<void> => {
+    await Promise.resolve();
+  };
+
+  it('serializes a plain command to exactly name and description', () => {
+    const data = toDiscordCommandData({ name: 'ping', description: 'Pong', handle });
+    expect(JSON.stringify(data)).toBe('{"name":"ping","description":"Pong"}');
+  });
+
+  it('maps options, a group and a loose subcommand with Discord types', () => {
+    const data = toDiscordCommandData({
+      name: 'mod',
+      description: 'Moderation',
+      options: [
+        { name: 'q', description: 'Q', type: 'string', required: true, maxLength: 5 },
+        { name: 'n', description: 'N', type: 'integer', minValue: 1, maxValue: 9 },
+        { name: 'c', description: 'C', type: 'string', choices: ['a', 'b'] },
+        { name: 'u', description: 'U', type: 'user' },
+      ],
+      groups: [
+        {
+          name: 'g',
+          description: 'G',
+          subcommands: [
+            {
+              name: 's1',
+              description: 'S1',
+              options: [
+                { name: 'f', description: 'F', type: 'boolean' },
+                { name: 'ch', description: 'Ch', type: 'channel' },
+                { name: 'r', description: 'R', type: 'role' },
+              ],
+            },
+          ],
+        },
+      ],
+      subcommands: [{ name: 's2', description: 'S2' }],
+      handle,
+    });
+    expect(data).toEqual({
+      name: 'mod',
+      description: 'Moderation',
+      options: [
+        {
+          type: ApplicationCommandOptionType.String,
+          name: 'q',
+          description: 'Q',
+          required: true,
+          max_length: 5,
+        },
+        {
+          type: ApplicationCommandOptionType.Integer,
+          name: 'n',
+          description: 'N',
+          min_value: 1,
+          max_value: 9,
+        },
+        {
+          type: ApplicationCommandOptionType.String,
+          name: 'c',
+          description: 'C',
+          choices: [
+            { name: 'a', value: 'a' },
+            { name: 'b', value: 'b' },
+          ],
+        },
+        { type: ApplicationCommandOptionType.User, name: 'u', description: 'U' },
+        {
+          type: ApplicationCommandOptionType.SubcommandGroup,
+          name: 'g',
+          description: 'G',
+          options: [
+            {
+              type: ApplicationCommandOptionType.Subcommand,
+              name: 's1',
+              description: 'S1',
+              options: [
+                { type: ApplicationCommandOptionType.Boolean, name: 'f', description: 'F' },
+                { type: ApplicationCommandOptionType.Channel, name: 'ch', description: 'Ch' },
+                { type: ApplicationCommandOptionType.Role, name: 'r', description: 'R' },
+              ],
+            },
+          ],
+        },
+        { type: ApplicationCommandOptionType.Subcommand, name: 's2', description: 'S2' },
+      ],
+    });
+  });
+});
+
+describe('dispatchCommand option passthrough', () => {
+  it('hands channel, subcommand and options to the handler', async () => {
+    const logger = createRecordingLogger();
+    const seen: unknown[] = [];
+    await dispatchCommand(
+      fakeInteraction('x'),
+      command('x', async (i) => {
+        await Promise.resolve();
+        seen.push(i.channelId, i.subcommandGroup, i.subcommand, i.options.getString('text'));
+      }),
+      logger,
+    );
+    expect(seen).toEqual(['222222222222222222', 'grp', 'sub', 'hello']);
   });
 });

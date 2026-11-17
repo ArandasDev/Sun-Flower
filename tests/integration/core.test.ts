@@ -156,6 +156,17 @@ describe('startCore', () => {
         commandName: 'ping',
         userId: '111111111111111111',
         roleIds: [],
+        channelId: '222222222222222222',
+        subcommandGroup: undefined,
+        subcommand: undefined,
+        options: {
+          getString: () => undefined,
+          getInteger: () => undefined,
+          getBoolean: () => undefined,
+          getUser: () => undefined,
+          getChannel: () => undefined,
+          getRole: () => undefined,
+        },
         guildId: '000000000000000000',
         reply: async (content, ephemeral) => {
           await Promise.resolve();
@@ -228,6 +239,17 @@ export default () => ({
         commandName: 'flaky',
         userId: '111111111111111111',
         roleIds: [],
+        channelId: '222222222222222222',
+        subcommandGroup: undefined,
+        subcommand: undefined,
+        options: {
+          getString: () => undefined,
+          getInteger: () => undefined,
+          getBoolean: () => undefined,
+          getUser: () => undefined,
+          getChannel: () => undefined,
+          getRole: () => undefined,
+        },
         guildId: '000000000000000000',
         reply: async (content, ephemeral) => {
           await Promise.resolve();

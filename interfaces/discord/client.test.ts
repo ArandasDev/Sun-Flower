@@ -13,6 +13,17 @@ function fakeInteraction(member: unknown) {
     user: { id: roleId },
     member,
     guildId,
+    channelId: '222222222222222222',
+    options: {
+      getSubcommandGroup: () => null,
+      getSubcommand: () => 'add',
+      getString: (n: string) => (n === 's' ? 'txt' : null),
+      getInteger: () => null,
+      getBoolean: (n: string) => (n === 'b' ? false : null),
+      getUser: (n: string) => (n === 'u' ? { id: '333333333333333333' } : null),
+      getChannel: (n: string) => (n === 'c' ? { id: '222222222222222222' } : null),
+      getRole: (n: string) => (n === 'r' ? { id: roleId } : null),
+    },
     reply: async (options: unknown) => {
       await Promise.resolve();
       calls.push({ reply: options });
@@ -64,5 +75,22 @@ describe('toRawInteraction', () => {
       'deferReply',
       { editReply: { content: 'c', allowedMentions: noMentions } },
     ]);
+  });
+
+  it('translates channel, subcommand and option values', () => {
+    const raw = toRawInteraction(fakeInteraction(null).interaction);
+    expect(raw.channelId).toBe('222222222222222222');
+    expect(raw.subcommandGroup).toBeUndefined();
+    expect(raw.subcommand).toBe('add');
+    expect(raw.options.getString('s')).toBe('txt');
+    expect(raw.options.getString('x')).toBeUndefined();
+    expect(raw.options.getInteger('i')).toBeUndefined();
+    expect(raw.options.getBoolean('b')).toBe(false);
+    expect(raw.options.getBoolean('x')).toBeUndefined();
+    expect(raw.options.getUser('u')).toBe('333333333333333333');
+    expect(raw.options.getUser('x')).toBeUndefined();
+    expect(raw.options.getChannel('c')).toBe('222222222222222222');
+    expect(raw.options.getRole('r')).toBe(roleId);
+    expect(raw.options.getRole('x')).toBeUndefined();
   });
 });

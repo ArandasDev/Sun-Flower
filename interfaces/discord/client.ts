@@ -31,6 +31,17 @@ export function toRawInteraction(interaction: ChatInputCommandInteraction): RawI
     userId: interaction.user.id,
     roleIds,
     guildId: interaction.guildId,
+    channelId: interaction.channelId,
+    subcommandGroup: interaction.options.getSubcommandGroup(false) ?? undefined,
+    subcommand: interaction.options.getSubcommand(false) ?? undefined,
+    options: {
+      getString: (name) => interaction.options.getString(name, false) ?? undefined,
+      getInteger: (name) => interaction.options.getInteger(name, false) ?? undefined,
+      getBoolean: (name) => interaction.options.getBoolean(name, false) ?? undefined,
+      getUser: (name) => interaction.options.getUser(name, false)?.id,
+      getChannel: (name) => interaction.options.getChannel(name, false)?.id,
+      getRole: (name) => interaction.options.getRole(name, false)?.id,
+    },
     reply: async (content, ephemeral) => {
       await interaction.reply(
         ephemeral

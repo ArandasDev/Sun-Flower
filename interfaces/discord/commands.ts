@@ -1,7 +1,21 @@
+import {
+  ApplicationCommandOptionType,
+  type APIApplicationCommandBasicOption,
+  type APIApplicationCommandOption,
+  type APIApplicationCommandSubcommandGroupOption,
+  type APIApplicationCommandSubcommandOption,
+  type RESTPostAPIChatInputApplicationCommandsJSONBody,
+} from 'discord.js';
+
 import type {
   CommandDefinition,
   CommandInteraction,
+  CommandOption,
+  CommandOptions,
+  CommandOptionType,
   ReplyOptions,
+  Subcommand,
+  SubcommandGroup,
 } from '../../shared/contracts/commands.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 
@@ -10,8 +24,71 @@ export const ERROR_MESSAGE = 'Ocorreu um erro.';
 export const DEFAULT_DEFER_AFTER_MS = 2500;
 
 export interface CommandTarget {
-  setGuildCommands(commands: { name: string; description: string }[]): Promise<void>;
+  setGuildCommands(commands: RESTPostAPIChatInputApplicationCommandsJSONBody[]): Promise<void>;
   clearGlobalCommands(): Promise<void>;
+}
+
+const OPTION_TYPES = {
+  string: ApplicationCommandOptionType.String,
+  integer: ApplicationCommandOptionType.Integer,
+  boolean: ApplicationCommandOptionType.Boolean,
+  user: ApplicationCommandOptionType.User,
+  channel: ApplicationCommandOptionType.Channel,
+  role: ApplicationCommandOptionType.Role,
+} as const satisfies Record<CommandOptionType, ApplicationCommandOptionType>;
+
+// Discord rejects undefined-valued keys in serialized payloads, so optional fields are
+// only added when present. The cast is confined to this builder.
+function toOption(option: CommandOption): APIApplicationCommandBasicOption {
+  const data: Record<string, unknown> = {
+    type: OPTION_TYPES[option.type],
+    name: option.name,
+    description: option.description,
+  };
+  if (option.required !== undefined) data['required'] = option.required;
+  if (option.minValue !== undefined) data['min_value'] = option.minValue;
+  if (option.maxValue !== undefined) data['max_value'] = option.maxValue;
+  if (option.maxLength !== undefined) data['max_length'] = option.maxLength;
+  if (option.choices !== undefined) {
+    data['choices'] = option.choices.map((value) => ({ name: value, value }));
+  }
+  return data as unknown as APIApplicationCommandBasicOption;
+}
+
+function toSubcommand(sub: Subcommand): APIApplicationCommandSubcommandOption {
+  const data: APIApplicationCommandSubcommandOption = {
+    type: ApplicationCommandOptionType.Subcommand,
+    name: sub.name,
+    description: sub.description,
+  };
+  if (sub.options !== undefined) data.options = sub.options.map(toOption);
+  return data;
+}
+
+function toGroup(group: SubcommandGroup): APIApplicationCommandSubcommandGroupOption {
+  return {
+    type: ApplicationCommandOptionType.SubcommandGroup,
+    name: group.name,
+    description: group.description,
+    options: group.subcommands.map(toSubcommand),
+  };
+}
+
+/** Translates a module command into the Discord registration payload (options, groups, subcommands). */
+export function toDiscordCommandData(
+  command: CommandDefinition,
+): RESTPostAPIChatInputApplicationCommandsJSONBody {
+  const data: RESTPostAPIChatInputApplicationCommandsJSONBody = {
+    name: command.name,
+    description: command.description,
+  };
+  const options: APIApplicationCommandOption[] = [
+    ...(command.options ?? []).map(toOption),
+    ...(command.groups ?? []).map(toGroup),
+    ...(command.subcommands ?? []).map(toSubcommand),
+  ];
+  if (options.length > 0) data.options = options;
+  return data;
 }
 
 /** Replaces the guild command list (even with an empty list) and removes global commands. */
@@ -20,7 +97,7 @@ export async function syncCommands(
   commands: Iterable<CommandDefinition>,
 ): Promise<void> {
   const payload = [...commands]
-    .map(({ name, description }) => ({ name, description }))
+    .map(toDiscordCommandData)
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   await target.setGuildCommands(payload);
   await target.clearGlobalCommands();
@@ -31,6 +108,10 @@ export interface RawInteraction {
   readonly userId: string;
   readonly roleIds: string[];
   readonly guildId: string | null;
+  readonly channelId: string;
+  readonly subcommandGroup: string | undefined;
+  readonly subcommand: string | undefined;
+  readonly options: CommandOptions;
   reply(content: string, ephemeral: boolean): Promise<void>;
   deferReply(): Promise<void>;
   editReply(content: string): Promise<void>;
@@ -100,18 +181,10 @@ export async function dispatchCommand(
 
   const interaction: CommandInteraction = {
     actor: { userId: raw.userId, roleIds: [...raw.roleIds] },
-    // Placeholders: the real translation of Discord options arrives with the options task.
-    channelId: '',
-    subcommandGroup: undefined,
-    subcommand: undefined,
-    options: {
-      getString: () => undefined,
-      getInteger: () => undefined,
-      getBoolean: () => undefined,
-      getUser: () => undefined,
-      getChannel: () => undefined,
-      getRole: () => undefined,
-    },
+    channelId: raw.channelId,
+    subcommandGroup: raw.subcommandGroup,
+    subcommand: raw.subcommand,
+    options: raw.options,
     reply: async (content: string, replyOptions?: ReplyOptions) => {
       if (responded) {
         logger.warn({ command: name }, 'Ignored a second reply from a command handler');
