@@ -68,3 +68,65 @@ describe('ModuleConfigStore', () => {
     expect(() => store.loadSettings('ping', strict)).not.toThrow(/SECRET-VALUE/);
   });
 });
+
+describe('ModuleConfigStore.updateSettings', () => {
+  const rawSettings = (): unknown => {
+    const row = db.prepare('SELECT settings FROM module_config WHERE module_id = ?').get('ping') as
+      { settings: string } | undefined;
+    return row === undefined ? undefined : JSON.parse(row.settings);
+  };
+
+  it('merges top-level keys and returns parsed settings', () => {
+    const two = z.object({ greeting: z.string().default('hi'), level: z.number().default(1) });
+    store.setSettings('ping', { greeting: 'yo' });
+    expect(store.updateSettings('ping', two, { level: 5 })).toEqual({ greeting: 'yo', level: 5 });
+    expect(rawSettings()).toEqual({ greeting: 'yo', level: 5 });
+    expect(store.updateSettings('ping', two, {})).toEqual({ greeting: 'yo', level: 5 });
+  });
+
+  it('applies defaults to the result without storing them', () => {
+    const two = z.object({ greeting: z.string().default('hi'), level: z.number().default(1) });
+    expect(store.updateSettings('ping', two, { level: 3 })).toEqual({ greeting: 'hi', level: 3 });
+    expect(rawSettings()).toEqual({ level: 3 });
+  });
+
+  it('rejects an invalid merge without writing', () => {
+    store.setSettings('ping', { greeting: 'yo' });
+    expect(() => store.updateSettings('ping', schema, { greeting: 424242 })).toThrow(
+      InvalidModuleConfigError,
+    );
+    expect(() => store.updateSettings('ping', schema, { greeting: 424242 })).toThrow(/greeting/);
+    expect(() => store.updateSettings('ping', schema, { greeting: 424242 })).not.toThrow(/424242/);
+    expect(store.loadSettings('ping', schema)).toEqual({ greeting: 'yo' });
+    expect(rawSettings()).toEqual({ greeting: 'yo' });
+  });
+
+  it('throws when the module has no configSchema', () => {
+    expect(() => store.updateSettings('ping', undefined, { greeting: 'yo' })).toThrow(
+      InvalidModuleConfigError,
+    );
+    expect(rawSettings()).toBeUndefined();
+  });
+
+  it('replaces a nested object as a whole', () => {
+    const nested = z.object({
+      thresholds: z.object({
+        confirmed: z.number().optional(),
+        suspicious: z.number().optional(),
+        extra: z.number().optional(),
+      }),
+    });
+    store.setSettings('ping', { thresholds: { confirmed: 80, extra: 7 } });
+    expect(
+      store.updateSettings('ping', nested, { thresholds: { confirmed: 90, suspicious: 40 } }),
+    ).toEqual({ thresholds: { confirmed: 90, suspicious: 40 } });
+    expect(rawSettings()).toEqual({ thresholds: { confirmed: 90, suspicious: 40 } });
+  });
+
+  it('treats non-object stored settings as empty and keeps enabled', () => {
+    store.setEnabled('ping', true);
+    store.setSettings('ping', [1, 2]);
+    expect(store.updateSettings('ping', schema, { greeting: 'yo' })).toEqual({ greeting: 'yo' });
+    expect(store.isEnabled('ping', false)).toBe(true);
+  });
+});

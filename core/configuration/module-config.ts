@@ -48,13 +48,37 @@ export class ModuleConfigStore {
       .prepare('SELECT settings FROM module_config WHERE module_id = ?')
       .get(moduleId) as { settings: string } | undefined;
     const stored: unknown = row === undefined ? {} : JSON.parse(row.settings);
-    const result = schema.safeParse(stored);
-    if (!result.success) {
-      const paths = result.error.issues.map((issue) =>
-        issue.path.length > 0 ? issue.path.map(String).join('.') : '(root)',
-      );
-      throw new InvalidModuleConfigError(moduleId, [...new Set(paths)]);
-    }
-    return result.data;
+    return parseSettings(moduleId, schema, stored);
   }
+
+  updateSettings<T>(
+    moduleId: string,
+    schema: z.ZodType<T> | undefined,
+    partial: Record<string, unknown>,
+  ): T {
+    if (schema === undefined) throw new InvalidModuleConfigError(moduleId, ['(no schema)']);
+    const row = this.#db
+      .prepare('SELECT settings FROM module_config WHERE module_id = ?')
+      .get(moduleId) as { settings: string } | undefined;
+    const parsed: unknown = row === undefined ? {} : JSON.parse(row.settings);
+    const stored =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    const merged = { ...stored, ...partial };
+    const result = parseSettings(moduleId, schema, merged);
+    this.setSettings(moduleId, merged);
+    return result;
+  }
+}
+
+function parseSettings<T>(moduleId: string, schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const paths = result.error.issues.map((issue) =>
+      issue.path.length > 0 ? issue.path.map(String).join('.') : '(root)',
+    );
+    throw new InvalidModuleConfigError(moduleId, [...new Set(paths)]);
+  }
+  return result.data;
 }
