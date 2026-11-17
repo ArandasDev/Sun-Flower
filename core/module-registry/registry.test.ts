@@ -169,6 +169,10 @@ afterEach(() => {
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
+interface NestedFixture {
+  groups: { subcommands: { options: { name: string }[] }[] }[];
+}
+
 describe('ModuleRegistry', () => {
   it('starts modules in dependency order and stops in reverse', async () => {
     writeModule('b', { dependencies: ['a'] });
@@ -358,6 +362,43 @@ describe('ModuleRegistry', () => {
     expect(stored?.name).toBe('hello');
     expect(stored).not.toBe(original);
     expect(Object.isFrozen(stored)).toBe(true);
+  });
+
+  it('keeps options and subcommands in the frozen copy', async () => {
+    const key = JSON.stringify(`${callsKey}_nested`);
+    writeModule('a', {
+      rawSource: `export default () => ({
+  async register(ctx) {
+    const command = {
+      name: 'mod', description: 'Mod',
+      groups: [{ name: 'domain', description: 'Domains', subcommands: [
+        { name: 'add', description: 'Add', options: [{ name: 'domain', description: 'D', type: 'string', required: true }] },
+      ] }],
+      handle: async () => {},
+    };
+    globalThis[${key}] = command;
+    ctx.commands.register(command);
+  },
+  async initialize() {}, async start() {}, async stop() {}, async dispose() {},
+});
+`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const original = (globalThis as unknown as Record<string, NestedFixture | undefined>)[
+      `${callsKey}_nested`
+    ];
+    Reflect.deleteProperty(globalThis, `${callsKey}_nested`);
+    if (original === undefined) throw new Error('fixture did not expose its command');
+    const firstOption = original.groups[0]?.subcommands[0]?.options[0];
+    if (firstOption === undefined) throw new Error('fixture is missing its option');
+    firstOption.name = 'mutated';
+    const stored = registry.commands().get('mod');
+    const storedOption = stored?.groups?.[0]?.subcommands[0]?.options?.[0];
+    expect(storedOption?.name).toBe('domain');
+    expect(Object.isFrozen(stored?.groups)).toBe(true);
+    expect(Object.isFrozen(storedOption)).toBe(true);
   });
 
   it('fails the second module registering the same command name', async () => {

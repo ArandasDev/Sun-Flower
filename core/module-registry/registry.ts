@@ -74,6 +74,15 @@ function notWired<T extends object>(): T {
   });
 }
 
+/** Freezes plain data (objects and arrays) at every depth. */
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -347,10 +356,17 @@ export class ModuleRegistry {
     }
     // A frozen copy: later changes to the module's own object never reach commands().
     // Bound so a handle written as a method keeps its `this`.
-    const { name, description } = command;
+    const { name, description, options, subcommands, groups } = command;
     const handle = command.handle.bind(command);
+    const data = structuredClone({
+      name,
+      description,
+      ...(options === undefined ? {} : { options }),
+      ...(subcommands === undefined ? {} : { subcommands }),
+      ...(groups === undefined ? {} : { groups }),
+    });
     this.#commandOwners.set(name, id);
-    record.commands.set(name, Object.freeze({ name, description, handle }));
+    record.commands.set(name, Object.freeze({ ...deepFreeze(data), handle }));
   }
 
   /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */
