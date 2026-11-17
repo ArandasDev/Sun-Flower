@@ -98,12 +98,12 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - Revisão e reversão de ações pela equipe.
 - Regras configuráveis pela administração.
 
-**Decisões pendentes:**
+**Decisões:** resolvidas em [0011](decisions/0011-discord-events.md) (eventos do Discord no Event Bus), [0012](decisions/0012-guild-actions.md) (ações no servidor por capacidades), [0013](decisions/0013-module-storage.md) (persistência dos módulos), [0014](decisions/0014-command-options-and-runtime-config.md) (opções de comando e configuração em tempo de execução) e [0015](decisions/0015-phishing-policy.md) (detecção de phishing local e ações automáticas ativas).
 
-| Decisão                                   | Recomendação                                                                                        |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Fonte de detecção de phishing             | Lista de domínios mantida localmente e atualizável, sem dependência obrigatória de serviço externo. |
-| Ações automáticas na configuração inicial | Desativadas: o módulo apenas registra e alerta até a administração ativá-las.                       |
+**Etapas:**
+
+1. Phishing e ações manuais: spec [2026-11-17-fase-2-moderacao-phishing.md](specs/2026-11-17-fase-2-moderacao-phishing.md).
+2. Spam e flood: spec própria, antes da release.
 
 **Critérios de conclusão:**
 

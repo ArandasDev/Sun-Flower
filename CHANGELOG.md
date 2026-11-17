@@ -32,6 +32,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Interface Discord: atuação exclusiva no servidor `DISCORD_GUILD_ID` (ignora interações de outros servidores e as mensagens diretas, sem sair dos servidores — decisão 0010), sincronização dos comandos dos módulos no servidor, adiamento automático de respostas lentas, erros sem detalhes internos e respostas sem menções. Iniciada por `npm start`.
 - Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
 - Módulo `ping`: comando `/ping`, que responde `Pong!`.
+- Registros de decisão 0011 a 0015 (eventos do Discord no Event Bus, ações no servidor por capacidades, persistência dos módulos, opções de comando e configuração em tempo de execução, detecção de phishing) e spec da Fase 2, etapa 1 (moderação contra phishing).
 
 ### Changed
 

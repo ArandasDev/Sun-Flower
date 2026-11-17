@@ -16,15 +16,20 @@ Cada assunto tem um único documento responsável. Quando dois documentos tratam
 
 ## Registros de decisão
 
-| Nº                                                  | Decisão                                            | Status                                      |
-| --------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |
-| [0001](decisions/0001-modular-monolith.md)          | Arquitetura Modular Monolith                       | Aceita                                      |
-| [0002](decisions/0002-typescript-node.md)           | TypeScript + Node.js                               | Aceita                                      |
-| [0003](decisions/0003-single-guild.md)              | Atuação em um único servidor Discord               | Aceita; regra de saída substituída por 0010 |
-| [0004](decisions/0004-tooling.md)                   | Ferramentas de desenvolvimento                     | Aceita                                      |
-| [0005](decisions/0005-runtime-and-persistence.md)   | TypeScript executado diretamente e SQLite embutido | Aceita                                      |
-| [0006](decisions/0006-permission-model.md)          | Desenvolvedores do bot e cargos do servidor        | Aceita                                      |
-| [0007](decisions/0007-event-bus-delivery.md)        | Semântica de entrega do Event Bus                  | Aceita                                      |
-| [0008](decisions/0008-logging-and-validation.md)    | Logs com pino e validação com zod                  | Aceita                                      |
-| [0009](decisions/0009-api-version-compatibility.md) | Compatibilidade do contrato por SemVer completo    | Aceita                                      |
-| [0010](decisions/0010-stay-in-other-guilds.md)      | O bot não sai de outros servidores                 | Aceita                                      |
+| Nº                                                           | Decisão                                               | Status                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------- | ------------------------------------------- |
+| [0001](decisions/0001-modular-monolith.md)                   | Arquitetura Modular Monolith                          | Aceita                                      |
+| [0002](decisions/0002-typescript-node.md)                    | TypeScript + Node.js                                  | Aceita                                      |
+| [0003](decisions/0003-single-guild.md)                       | Atuação em um único servidor Discord                  | Aceita; regra de saída substituída por 0010 |
+| [0004](decisions/0004-tooling.md)                            | Ferramentas de desenvolvimento                        | Aceita                                      |
+| [0005](decisions/0005-runtime-and-persistence.md)            | TypeScript executado diretamente e SQLite embutido    | Aceita                                      |
+| [0006](decisions/0006-permission-model.md)                   | Desenvolvedores do bot e cargos do servidor           | Aceita                                      |
+| [0007](decisions/0007-event-bus-delivery.md)                 | Semântica de entrega do Event Bus                     | Aceita                                      |
+| [0008](decisions/0008-logging-and-validation.md)             | Logs com pino e validação com zod                     | Aceita                                      |
+| [0009](decisions/0009-api-version-compatibility.md)          | Compatibilidade do contrato por SemVer completo       | Aceita                                      |
+| [0010](decisions/0010-stay-in-other-guilds.md)               | O bot não sai de outros servidores                    | Aceita                                      |
+| [0011](decisions/0011-discord-events.md)                     | Eventos do Discord no Event Bus                       | Aceita                                      |
+| [0012](decisions/0012-guild-actions.md)                      | Ações no servidor por capacidades declaradas          | Aceita                                      |
+| [0013](decisions/0013-module-storage.md)                     | Persistência dos módulos                              | Aceita                                      |
+| [0014](decisions/0014-command-options-and-runtime-config.md) | Opções de comando e configuração em tempo de execução | Aceita                                      |
+| [0015](decisions/0015-phishing-policy.md)                    | Detecção de phishing e ações automáticas iniciais     | Aceita                                      |
