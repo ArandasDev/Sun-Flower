@@ -6,6 +6,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ## [Unreleased]
 
+### Atenção: ação necessária antes de atualizar
+
+- O bot passa a solicitar os intents privilegiados **Server Members** e **Message Content**. Ative-os no Discord Developer Portal (**Bot → Privileged Gateway Intents**) antes de atualizar; sem isso o login falha com `DisallowedIntents`.
+
 ### Added
 
 - Documentação inicial do projeto:

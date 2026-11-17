@@ -156,7 +156,7 @@ Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 | `guild.moderate` | `deleteMessage`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`. |
 | `guild.message`  | `sendMessage`.                                                                                                 |
 
-Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso.
+Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
 
 ### 4.4. Validação
 
