@@ -43,6 +43,35 @@ describe('validateModuleMigration', () => {
     bad('CREATE TRIGGER moderation_t AFTER INSERT ON developers BEGIN SELECT 1; END;');
   });
 
+  it('rejects statements hidden behind quoted identifiers', () => {
+    bad('CREATE TABLE "moderation_--" (id INTEGER); DROP TABLE developers;');
+    bad('CREATE TABLE "moderation_\'" (id INTEGER); DROP TABLE developers; --\'');
+    bad('CREATE TABLE [moderation_/*] (id INTEGER); PRAGMA foreign_keys = OFF; --*/');
+  });
+
+  it('accepts a quoted identifier containing comment markers when nothing else is wrong', () => {
+    ok('CREATE TABLE "moderation_a--b" (id INTEGER);');
+    ok('CREATE TABLE [moderation_a/*b] (id INTEGER); CREATE TABLE moderation_c (id INTEGER);');
+    bad('CREATE TABLE "moderation_a--b" (id INTEGER); DROP TABLE developers;');
+  });
+
+  it('rejects unterminated quotes and comments', () => {
+    bad('CREATE TABLE "moderation_a (id INTEGER);');
+    bad("INSERT INTO moderation_a (v) VALUES ('x);");
+    bad('CREATE TABLE moderation_a (id INTEGER); /* open');
+  });
+
+  it('checks the RENAME TO target', () => {
+    bad('ALTER TABLE moderation_a RENAME TO developers2;');
+    ok('ALTER TABLE moderation_a RENAME TO moderation_b;');
+    ok('ALTER TABLE moderation_a RENAME COLUMN x TO y;');
+  });
+
+  it('rejects VACUUM', () => {
+    bad("VACUUM INTO 'x';");
+    bad('VACUUM;');
+  });
+
   it('ignores comments and string literals', () => {
     ok('-- CREATE TABLE x\nCREATE TABLE moderation_a (id INTEGER);');
     ok('/* CREATE TABLE x */ CREATE TABLE moderation_a (id INTEGER);');

@@ -20,59 +20,118 @@ export class ModuleMigrationError extends Error {
   }
 }
 
-const NAME = String.raw`([^\s(;]+)`;
+const QUOTED = String.raw`"[^"]*"|\x60[^\x60]*\x60|\[[^\]]*\]`;
+const NAME = String.raw`((?:${QUOTED}|[^\s(;"\x60\[])+)`;
 const DECLARED_NAME = new RegExp(
   String.raw`\b(?:CREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:UNIQUE\s+)?(?:VIRTUAL\s+)?(?:TABLE|INDEX|VIEW|TRIGGER)(?:\s+IF\s+NOT\s+EXISTS)?` +
     String.raw`|DROP\s+(?:TABLE|INDEX|VIEW|TRIGGER)(?:\s+IF\s+EXISTS)?|ALTER\s+TABLE)\s+` +
     NAME,
   'gi',
 );
+const RENAME_TARGET = new RegExp(
+  String.raw`\bALTER\s+TABLE\s+(?:${QUOTED}|[^\s(;"\x60\[])+\s+RENAME\s+TO\s+` + NAME,
+  'gi',
+);
 const INDEX_TARGET = new RegExp(
-  String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+[^\s(;]+\s+ON\s+` + NAME,
+  String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:${QUOTED}|[^\s(;"\x60\[])+\s+ON\s+` +
+    NAME,
   'gi',
 );
 const TRIGGER_TARGET = new RegExp(
-  String.raw`\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER(?:\s+IF\s+NOT\s+EXISTS)?\s+[^\s(;]+[\s\S]*?\bON\s+` +
+  String.raw`\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER(?:\s+IF\s+NOT\s+EXISTS)?\s+(?:${QUOTED}|[^\s(;"\x60\[])+[\s\S]*?\bON\s+` +
     NAME,
   'gi',
 );
 
-/** Removes comments and the contents of string literals so they are never scanned. */
-function stripNoise(sql: string): string {
-  return sql.replace(/--[^\n]*|\/\*[\s\S]*?\*\/|'(?:[^']|'')*'/g, (match) =>
-    match.startsWith("'") ? "''" : ' ',
-  );
+/**
+ * One left-to-right pass that understands quoted identifiers, string literals and
+ * comments, so a marker inside one never changes how the rest is read.
+ * Comments become a space and string contents are emptied; quoted identifiers are kept
+ * (their names are checked). Returns `code` (identifiers kept, for name checks), `masked`
+ * (identifier contents replaced, for keyword checks) and any unterminated construct.
+ */
+function tokenize(sql: string): { code: string; masked: string; unterminated: string | undefined } {
+  const closers: Record<string, string> = { '"': '"', '`': '`', '[': ']', "'": "'" };
+  let code = '';
+  let masked = '';
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql.charAt(i);
+    if (ch === '-' && sql.charAt(i + 1) === '-') {
+      const end = sql.indexOf('\n', i);
+      i = end === -1 ? sql.length : end;
+      code += ' ';
+      masked += ' ';
+    } else if (ch === '/' && sql.charAt(i + 1) === '*') {
+      const end = sql.indexOf('*/', i + 2);
+      if (end === -1) return { code, masked, unterminated: 'comment' };
+      i = end + 2;
+      code += ' ';
+      masked += ' ';
+    } else if (ch in closers) {
+      const closer = closers[ch] ?? ch;
+      let j = i + 1;
+      for (;;) {
+        const end = sql.indexOf(closer, j);
+        if (end === -1) {
+          return { code, masked, unterminated: ch === "'" ? 'string literal' : 'identifier' };
+        }
+        // Doubled quote is an escape inside "..." and '...' (not in [...] or `...`).
+        if (closer !== ']' && closer !== '`' && sql.charAt(end + 1) === closer) {
+          j = end + 2;
+          continue;
+        }
+        j = end + 1;
+        break;
+      }
+      if (ch === "'") {
+        code += "''";
+        masked += "''";
+      } else {
+        code += sql.slice(i, j);
+        masked += `${ch}_${closer}`;
+      }
+      i = j;
+    } else {
+      code += ch;
+      masked += ch;
+      i += 1;
+    }
+  }
+  return { code, masked, unterminated: undefined };
 }
 
 function unquote(name: string): string {
-  return name.replace(/^["`[]/, '').replace(/["`\]]$/, '');
+  return name.replace(/^["`[]/, '');
 }
 
 /**
  * Defense in depth over code review, not a SQL parser: every table, index, view and
- * trigger a module creates, drops or alters must be named `<moduleId>_...`.
+ * trigger a module creates, drops, alters or renames to must be named `<moduleId>_...`.
  * Returns the list of problems; empty when valid.
  */
 export function validateModuleMigration(moduleId: string, sql: string): string[] {
-  const clean = stripNoise(sql);
+  const { code, masked, unterminated } = tokenize(sql);
+  if (unterminated !== undefined) return [`unterminated ${unterminated}`];
   const problems: string[] = [];
 
   const forbidden = new Set<string>();
-  for (const match of clean.matchAll(/\b(ATTACH|DETACH|PRAGMA)\b/gi)) {
+  for (const match of masked.matchAll(/\b(ATTACH|DETACH|PRAGMA|VACUUM)\b/gi)) {
     forbidden.add((match[1] ?? '').toUpperCase());
   }
   for (const keyword of forbidden) problems.push(`${keyword} is not allowed`);
 
   const prefix = `${moduleId}_`.toLowerCase();
   const names = new Set<string>();
-  for (const pattern of [DECLARED_NAME, INDEX_TARGET, TRIGGER_TARGET]) {
-    for (const match of clean.matchAll(pattern)) names.add(unquote(match[1] ?? ''));
+  for (const pattern of [DECLARED_NAME, RENAME_TARGET, INDEX_TARGET, TRIGGER_TARGET]) {
+    for (const match of code.matchAll(pattern)) names.add(match[1] ?? '');
   }
   for (const name of names) {
-    if (name.includes('.')) {
-      problems.push(`name "${name}" must not be schema-qualified`);
-    } else if (!name.toLowerCase().startsWith(prefix)) {
-      problems.push(`name "${name}" must start with "${prefix}"`);
+    const outsideQuotes = name.replace(new RegExp(QUOTED, 'g'), 'q');
+    if (outsideQuotes.includes('.')) {
+      problems.push(`name ${name} must not be schema-qualified`);
+    } else if (!unquote(name).toLowerCase().startsWith(prefix)) {
+      problems.push(`name ${name} must start with "${prefix}"`);
     }
   }
   return problems;
