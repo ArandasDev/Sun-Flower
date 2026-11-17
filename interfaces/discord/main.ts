@@ -8,7 +8,7 @@ import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { createDiscordClient, toRawInteraction } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
-import { isAllowedInteraction, leaveUnauthorizedGuilds } from './guild-guard.ts';
+import { isAllowedInteraction } from './guild-guard.ts';
 
 export const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
 
@@ -27,7 +27,7 @@ function errorSummary(error: unknown): { name: string; code?: string | number } 
 
 /** Connects the Core to the Discord client. Nothing here logs the token or any Discord ID. */
 function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): void {
-  // Guild checks and command syncs run one at a time, in the order the events arrive.
+  // Command syncs run one at a time, in the order the events arrive.
   let queue = Promise.resolve();
   const enqueue = (task: () => Promise<void>): void => {
     queue = queue.then(task).catch((error: unknown) => {
@@ -54,25 +54,18 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     logger.info({ commands: commands.length }, 'discord commands synced');
   };
 
-  const guard = async (): Promise<boolean> => {
-    const present = await leaveUnauthorizedGuilds(client.guilds.cache.values(), guildId, logger);
-    if (!present) logger.error('the bot is not in the configured guild; waiting to be added');
-    return present;
-  };
-
+  // The bot stays in other guilds and ignores them (decision 0010); it only syncs its own guild.
   client.once(Events.ClientReady, () => {
     logger.info('discord client ready');
-    enqueue(async () => {
-      if (await guard()) await sync();
-    });
+    if (!client.guilds.cache.has(guildId)) {
+      logger.error('the bot is not in the configured guild; waiting to be added');
+      return;
+    }
+    enqueue(sync);
   });
 
   client.on(Events.GuildCreate, (guild: Guild) => {
-    const allowed = guild.id === guildId;
-    enqueue(async () => {
-      await guard();
-      if (allowed) await sync();
-    });
+    if (guild.id === guildId) enqueue(sync);
   });
 
   client.on(Events.InteractionCreate, (interaction: Interaction) => {

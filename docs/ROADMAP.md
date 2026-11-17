@@ -73,7 +73,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 **Critérios de conclusão:**
 
 - [ ] O bot conecta ao servidor e `/ping` responde.
-- [ ] O bot ignora eventos de outro servidor e sai dele quando adicionado.
+- [ ] O bot ignora interações de outro servidor e de mensagens diretas ([decisão 0010](decisions/0010-stay-in-other-guilds.md)).
 - [ ] Um módulo com manifesto inválido não é iniciado, e os demais continuam funcionando.
 - [ ] Uma dependência circular é rejeitada.
 - [ ] Uma operação sem permissão é negada.
