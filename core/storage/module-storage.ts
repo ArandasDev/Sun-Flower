@@ -2,6 +2,14 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { ModuleStorage, SqlValue } from '../../shared/contracts/storage.ts';
 
+function isThenable(value: unknown): boolean {
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
 export function createModuleStorage(db: DatabaseSync): ModuleStorage {
   const bind = (params: readonly SqlValue[] | undefined): SqlValue[] => [...(params ?? [])];
 
@@ -21,6 +29,8 @@ export function createModuleStorage(db: DatabaseSync): ModuleStorage {
       db.exec('BEGIN IMMEDIATE');
       try {
         const result = fn();
+        // An async callback would commit before its awaited work ran: refuse it.
+        if (isThenable(result)) throw new Error('transaction callback must be synchronous');
         db.exec('COMMIT');
         return result;
       } catch (error) {

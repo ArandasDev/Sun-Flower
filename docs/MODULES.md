@@ -151,12 +151,12 @@ Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 
 **Capacidades (`capabilities`).** O serviço `guild` do contexto só executa ações no servidor que o manifesto declarou. Valores aceitos:
 
-| Capacidade       | Libera                                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `guild.moderate` | `deleteMessage`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban` e `getMemberRoleIds`. |
-| `guild.message`  | `sendMessage` e `sendDirectMessage`.                                                      |
+| Capacidade       | Libera                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| `guild.moderate` | `deleteMessage`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`. |
+| `guild.message`  | `sendMessage`.                                                                                                 |
 
-Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens.
+Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso.
 
 ### 4.4. Validação
 
@@ -371,7 +371,7 @@ Exemplo:
 | `id`        | UUID v4 único por evento.                                                                                                                        |
 | `type`      | Nome do evento no formato `<origem>.<entidade>.<ação>`, com a ação no passado (`created`, `detected`, `executed`).                               |
 | `version`   | Inteiro que identifica a versão do formato de `payload` daquele `type`. Começa em `1` e é incrementado a cada alteração incompatível do payload. |
-| `source`    | Id do módulo ou da interface que publicou o evento (`moderation`, `discord`).                                                                    |
+| `source`    | Quem publicou o evento: o id do módulo ou da interface (`moderation`, `discord`), ou `core` para os eventos do Core.                             |
 | `timestamp` | Data e hora em ISO 8601, em UTC.                                                                                                                 |
 | `context`   | Ids do Discord relacionados ao evento (`userId`, `channelId`); cada campo só aparece quando se aplica.                                           |
 | `payload`   | Dados específicos do evento, documentados no `README.md` do módulo que o publica.                                                                |
@@ -500,12 +500,14 @@ Quando existir necessidade de compartilhar informações, deverão ser utilizado
 
 ### Serviço `storage` e migrações de módulo
 
-O módulo acessa o banco pelo serviço `context.storage`, com `run`, `get`, `all` e `transaction` (SQL parametrizado; transações não se aninham).
+O módulo acessa o banco pelo serviço `context.storage`, com `run`, `get`, `all` e `transaction` (SQL parametrizado; transações não se aninham). A função passada a `transaction` deve ser síncrona: uma função `async` é recusada com erro e a transação é desfeita. Depois que o módulo fica `FAILED` ou `STOPPED`, `run`, `transaction` e `config.set` lançam erro; as leituras (`get`, `all`) continuam permitidas.
 
 As tabelas do módulo ficam em migrações SQL no diretório `migrations/` do próprio módulo, com arquivos numerados em sequência (`0001-nome.sql`, `0002-nome.sql`, ...). O Core as aplica em ordem, cada uma em uma transação, antes de `register()`, e registra as versões aplicadas. Regras:
 
-- Todo objeto criado, alterado ou removido (tabela, índice, visão ou gatilho) deve se chamar `<id do módulo>_...`, sem qualificar o esquema.
-- `ATTACH`, `DETACH`, `PRAGMA` e `VACUUM` são proibidos.
+- Todo objeto criado, alterado ou removido (tabela, índice, visão ou gatilho) deve se chamar `<id do módulo>_...`, sem qualificar o esquema. Para um id com hífen, o nome precisa de aspas (por exemplo, `"anti-spam_cases"`).
+- As tabelas do Core (`developers`, `permission_grants`, `module_config`, `schema_migrations`, `module_migrations`) e os nomes `sqlite_*` são sempre recusados, mesmo quando coincidem com o prefixo do módulo.
+- `ATTACH`, `DETACH`, `PRAGMA` e `VACUUM` são proibidos, assim como o controle de transação (`BEGIN`, `COMMIT`, `END`, `ROLLBACK`, `SAVEPOINT`, `RELEASE`), pois o Core já executa cada migração em uma transação. `BEGIN`, `END` e `RAISE(ROLLBACK, ...)` dentro do corpo de um gatilho continuam aceitos.
+- O validador confere os nomes apenas nas instruções DDL (`CREATE`, `DROP`, `ALTER`, `RENAME TO` e o alvo `ON` de índices e gatilhos). DML, corpos de gatilho e `CREATE ... AS SELECT` são verificados na revisão de código ([decisão 0013](decisions/0013-module-storage.md)).
 - Uma migração inválida ou com falha marca o módulo como `FAILED`, e os demais seguem normalmente.
 - Migrações já aplicadas não são editadas: mudanças entram em uma nova migração.
 

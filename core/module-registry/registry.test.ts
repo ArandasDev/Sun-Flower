@@ -940,6 +940,82 @@ export default () => {
     expect([...calls()].sort()).toEqual(['mod:kick:{"ok":true}', 'plain:kick:CapabilityError']);
     await registry.stop();
   });
+
+  describe('services of a module that is no longer active', () => {
+    const contextKey = (): string => `${callsKey}_context`;
+    const writeServicesModule = (throwInStart: boolean): void => {
+      const directory = writeModule('a', {
+        manifest: { capabilities: ['guild.moderate'] },
+        rawSource: `${VALID_SCHEMA}
+export default () => ({
+  async register(ctx) { globalThis[${JSON.stringify(contextKey())}] = ctx; },
+  async initialize() {},
+  async start() { ${throwInStart ? "throw new Error('start failed');" : ''} },
+  async stop() {},
+  async dispose() {},
+});
+`,
+      });
+      writeMigration(directory, '0001-init.sql', 'CREATE TABLE a_items (id INTEGER PRIMARY KEY);');
+    };
+    const takeContext = (): ModuleContext => {
+      const record = globalThis as unknown as Record<string, ModuleContext | undefined>;
+      const context = record[contextKey()];
+      Reflect.deleteProperty(globalThis, contextKey());
+      if (context === undefined) throw new Error('context not captured');
+      return context;
+    };
+    const expectRefused = async (context: ModuleContext): Promise<void> => {
+      const timeout = vi.spyOn(fakeGuild, 'timeout');
+      const roles = vi.spyOn(fakeGuild, 'getMemberRoleIds');
+      try {
+        await expect(context.guild.timeout('111111111111111111', 60_000, 'test')).resolves.toEqual({
+          ok: false,
+          error: 'failed',
+        });
+        await expect(context.guild.getMemberRoleIds('111111111111111111')).resolves.toBe(undefined);
+        expect(timeout).not.toHaveBeenCalled();
+        expect(roles).not.toHaveBeenCalled();
+      } finally {
+        timeout.mockRestore();
+        roles.mockRestore();
+      }
+      expect(logger.calls).toContainEqual({
+        level: 'warn',
+        obj: { module: 'a', action: 'timeout' },
+        msg: 'guild action refused: module is not active',
+      });
+      const inactive = 'Module "a" is not active';
+      expect(() => {
+        context.config.set({ greeting: 'hello' });
+      }).toThrow(inactive);
+      expect(() => context.storage.run('INSERT INTO a_items (id) VALUES (1)')).toThrow(inactive);
+      expect(() => context.storage.transaction(() => 1)).toThrow(inactive);
+      expect(context.storage.get('SELECT COUNT(*) AS n FROM a_items')).toEqual({ n: 0 });
+    };
+
+    it('refuses guild, config.set and storage writes after the module failed', async () => {
+      writeServicesModule(true);
+      const registry = createRegistry();
+      await registry.load();
+      await registry.start();
+      expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'start' });
+      await expectRefused(takeContext());
+      await registry.stop();
+    });
+
+    it('refuses guild, config.set and storage writes after the module stopped', async () => {
+      writeServicesModule(false);
+      const registry = createRegistry();
+      await registry.load();
+      await registry.start();
+      const context = takeContext();
+      expect(context.storage.run('INSERT INTO a_items (id) VALUES (1)').changes).toBe(1);
+      context.storage.run('DELETE FROM a_items');
+      await registry.stop();
+      await expectRefused(context);
+    });
+  });
 });
 
 describe('resolveEntrypoint', () => {

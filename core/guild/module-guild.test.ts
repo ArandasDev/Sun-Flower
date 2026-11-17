@@ -34,7 +34,11 @@ function fakeLogger(entries: LogEntry[]): Logger {
   return logger;
 }
 
-function setup(capabilities: Capability[], portOverride?: Partial<GuildActions>) {
+function setup(
+  capabilities: Capability[],
+  portOverride?: Partial<GuildActions>,
+  isActive?: () => boolean,
+) {
   const calls: { name: string; args: unknown[] }[] = [];
   const ok: GuildActionResult = { ok: true };
   const record =
@@ -61,6 +65,7 @@ function setup(capabilities: Capability[], portOverride?: Partial<GuildActions>)
     manifest,
     port,
     isDeveloper: (id) => id === dev,
+    isActive: isActive ?? (() => true),
     logger: fakeLogger(entries),
   });
   return { guild, calls, entries };
@@ -186,6 +191,46 @@ describe('createModuleGuild', () => {
         msg: 'guild action failed unexpectedly',
       },
     ]);
+  });
+
+  it('converts a throwing getMemberRoleIds into undefined and logs an error', async () => {
+    const { guild, entries } = setup(['guild.moderate'], {
+      getMemberRoleIds: () => Promise.reject(new Error('boom ' + target)),
+    });
+    expect(await guild.getMemberRoleIds(target)).toBeUndefined();
+    expect(entries).toEqual([
+      {
+        level: 'error',
+        obj: { module: 'moderation', action: 'getMemberRoleIds' },
+        msg: 'guild action failed unexpectedly',
+      },
+    ]);
+  });
+
+  it('refuses every action without calling the port while the module is inactive', async () => {
+    const { guild, calls, entries } = setup(
+      ['guild.moderate', 'guild.message'],
+      undefined,
+      () => false,
+    );
+    const failed = { ok: false, error: 'failed' };
+    expect(await guild.deleteMessage(channel, message)).toEqual(failed);
+    expect(await guild.timeout(target, 60_000, 'r')).toEqual(failed);
+    expect(await guild.removeTimeout(target)).toEqual(failed);
+    expect(await guild.kick(target, 'r')).toEqual(failed);
+    expect(await guild.ban(target, 'r', 0)).toEqual(failed);
+    expect(await guild.unban(target)).toEqual(failed);
+    expect(await guild.sendMessage(channel, 'x')).toEqual(failed);
+    expect(await guild.sendDirectMessage(target, 'x')).toEqual(failed);
+    expect(await guild.getMemberRoleIds(target)).toBeUndefined();
+    expect(calls).toHaveLength(0);
+    expect(entries).toHaveLength(9);
+    expect(entries[0]).toEqual({
+      level: 'warn',
+      obj: { module: 'moderation', action: 'deleteMessage' },
+      msg: 'guild action refused: module is not active',
+    });
+    expect(entries.every((entry) => entry.level === 'warn')).toBe(true);
   });
 });
 

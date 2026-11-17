@@ -84,12 +84,47 @@ function tokenize(sql: string): { tokens: Token[]; unterminated?: string } {
 }
 
 const OBJECT_KINDS = new Set(['TABLE', 'INDEX', 'VIEW', 'TRIGGER']);
-const FORBIDDEN = new Set(['ATTACH', 'DETACH', 'PRAGMA', 'VACUUM']);
+const FORBIDDEN = new Set([
+  'ATTACH',
+  'DETACH',
+  'PRAGMA',
+  'VACUUM',
+  // Transaction control: every migration already runs inside the Core's own transaction.
+  'COMMIT',
+  'SAVEPOINT',
+  'RELEASE',
+]);
+/** Refused only as the first word of a statement: they also appear inside trigger bodies. */
+const STATEMENT_START_FORBIDDEN = new Set(['BEGIN', 'END', 'ROLLBACK']);
+
+/**
+ * Tables owned by the Core. A module whose id makes a Core table match its prefix
+ * (`module`, `schema`, `permission`) must still never touch them.
+ * Every new Core table must be added here.
+ */
+export const CORE_TABLES: ReadonlySet<string> = new Set([
+  'developers',
+  'permission_grants',
+  'module_config',
+  'schema_migrations',
+  'module_migrations',
+]);
+
+function isReservedName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return CORE_TABLES.has(lower) || lower.startsWith('sqlite_');
+}
 
 /**
  * Defense in depth over code review, not a SQL parser: every table, index, view and
  * trigger a module creates, drops, alters or renames to must be named `<moduleId>_...`.
+ * Core tables (`CORE_TABLES`) and `sqlite_*` names are refused even when they match the
+ * prefix, and so are transaction-control statements.
  * Works on tokens, so whitespace and quoting style do not matter.
+ *
+ * Scope: only names in DDL are checked (CREATE, DROP, ALTER, RENAME TO and the ON target
+ * of an index or trigger). DML, trigger bodies and `CREATE ... AS SELECT` are reviewed in
+ * code (decision 0013).
  * Returns the list of problems; empty when valid.
  */
 export function validateModuleMigration(moduleId: string, sql: string): string[] {
@@ -117,6 +152,8 @@ export function validateModuleMigration(moduleId: string, sql: string): string[]
     const next = tokens[index + 1];
     if (next?.kind === 'punct' && next.value === '.') {
       problems.push(`name ${token.value} must not be schema-qualified`);
+    } else if (isReservedName(token.value)) {
+      problems.push(`name ${token.value} is reserved by the Core`);
     } else if (!token.value.toLowerCase().startsWith(prefix)) {
       problems.push(`name ${token.value} must start with "${prefix}"`);
     }
@@ -136,15 +173,52 @@ export function validateModuleMigration(moduleId: string, sql: string): string[]
   };
 
   const forbidden = new Set<string>();
+  // A statement starts at the first token or after a `;` at parenthesis depth 0 outside
+  // a trigger body (CREATE TRIGGER ... BEGIN ... END, with CASE ... END nested inside).
+  let atStatementStart = true;
+  let parenDepth = 0;
+  let triggerPending = false;
+  let inTriggerBody = false;
+  let caseDepth = 0;
   for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    const startsStatement = atStatementStart;
+    atStatementStart = false;
+    if (token?.kind === 'punct') {
+      if (token.value === '(') parenDepth += 1;
+      else if (token.value === ')') parenDepth = Math.max(0, parenDepth - 1);
+      else if (token.value === ';' && parenDepth === 0 && !inTriggerBody) {
+        atStatementStart = true;
+        triggerPending = false;
+      }
+      continue;
+    }
     const current = word(i);
     if (FORBIDDEN.has(current)) forbidden.add(current);
+    if (startsStatement && STATEMENT_START_FORBIDDEN.has(current)) forbidden.add(current);
+
+    if (inTriggerBody) {
+      if (current === 'CASE') {
+        caseDepth += 1;
+      } else if (current === 'END') {
+        if (caseDepth > 0) caseDepth -= 1;
+        else inTriggerBody = false;
+      }
+      continue;
+    }
+    if (triggerPending && current === 'BEGIN' && parenDepth === 0) {
+      triggerPending = false;
+      inTriggerBody = true;
+      caseDepth = 0;
+      continue;
+    }
 
     if (current === 'CREATE') {
       let j = i + 1;
       while (['TEMP', 'TEMPORARY', 'UNIQUE', 'VIRTUAL'].includes(word(j))) j += 1;
       const kind = word(j);
       if (!OBJECT_KINDS.has(kind)) continue;
+      if (kind === 'TRIGGER') triggerPending = true;
       j = skipWords(j + 1, 'IF', 'NOT', 'EXISTS');
       const after = checkName(j);
       if (kind === 'INDEX' || kind === 'TRIGGER') checkOnTarget(after);

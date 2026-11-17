@@ -59,4 +59,15 @@ describe('createModuleStorage', () => {
     );
     expect(db.isTransaction).toBe(false);
   });
+
+  it('rejects an async callback and rolls back', () => {
+    expect(() =>
+      storage.transaction(async () => {
+        storage.run('INSERT INTO t_items (name) VALUES (?)', ['a']);
+        await Promise.resolve();
+      }),
+    ).toThrow('transaction callback must be synchronous');
+    expect(storage.all('SELECT name FROM t_items')).toHaveLength(0);
+    expect(db.isTransaction).toBe(false);
+  });
 });

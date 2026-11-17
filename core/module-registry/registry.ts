@@ -5,6 +5,7 @@ import type { CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import type { SqlValue } from '../../shared/contracts/storage.ts';
 import {
   CORE_API_VERSION,
   type ModuleContext,
@@ -32,7 +33,8 @@ import {
 export { CommandRegistrationError, type ModuleState, type ModuleStatus } from './lifecycle.ts';
 
 const DEFAULT_STEP_TIMEOUT_MS = 10_000;
-const EVENT_STATES: ReadonlySet<ModuleState> = new Set([
+/** States in which a module may use events, guild actions, config.set and storage writes. */
+const ACTIVE_STATES: ReadonlySet<ModuleState> = new Set([
   'VALIDATED',
   'REGISTERED',
   'INITIALIZED',
@@ -305,6 +307,11 @@ export class ModuleRegistry {
     const { id } = record.manifest;
     const settingsUnavailable = (): Error =>
       new Error(`Settings of module "${id}" are only available from initialize()`);
+    const isActive = (): boolean => this.#isActive(id);
+    const assertActive = (): void => {
+      if (!isActive()) throw new Error(`Module "${id}" is not active`);
+    };
+    const storage = createModuleStorage(this.#deps.db);
     return Object.freeze({
       moduleId: id,
       logger: this.#deps.logger.child({ module: id }),
@@ -323,6 +330,7 @@ export class ModuleRegistry {
           return record.settings.value as T;
         },
         set: (partial: Record<string, unknown>) => {
+          assertActive();
           if (record.settings === undefined) throw settingsUnavailable();
           const value = this.#deps.config.updateSettings(id, record.configSchema, partial);
           record.settings = { value };
@@ -332,9 +340,23 @@ export class ModuleRegistry {
         manifest: record.manifest,
         port: this.#deps.guild,
         isDeveloper: (userId) => this.#deps.permissions.isDeveloper(userId),
+        isActive,
         logger: this.#deps.logger,
       }),
-      storage: createModuleStorage(this.#deps.db),
+      // Reads stay allowed; writes from a FAILED or STOPPED module are refused.
+      storage: Object.freeze({
+        run: (sql: string, params?: readonly SqlValue[]) => {
+          assertActive();
+          return storage.run(sql, params);
+        },
+        get: <T>(sql: string, params?: readonly SqlValue[]): T | undefined =>
+          storage.get<T>(sql, params),
+        all: <T>(sql: string, params?: readonly SqlValue[]): T[] => storage.all<T>(sql, params),
+        transaction: <T>(fn: () => T): T => {
+          assertActive();
+          return storage.transaction(fn);
+        },
+      }),
       commands: Object.freeze({
         register: (command: CommandDefinition) => {
           this.#registerCommand(record, command);
@@ -376,10 +398,15 @@ export class ModuleRegistry {
     record.commands.set(name, Object.freeze({ ...deepFreeze(data), handle }));
   }
 
+  #isActive(id: string): boolean {
+    const state = this.#statuses.get(id)?.state;
+    return state !== undefined && ACTIVE_STATES.has(state);
+  }
+
   /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */
   #eventsAllowed(id: string, action: 'publish' | 'subscribe', type: string): boolean {
+    if (this.#isActive(id)) return true;
     const state = this.#statuses.get(id)?.state;
-    if (state !== undefined && EVENT_STATES.has(state)) return true;
     this.#deps.logger.warn(
       { module: id, state, event: type },
       `event ${action} ignored: module is not active`,

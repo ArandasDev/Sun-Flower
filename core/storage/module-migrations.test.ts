@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import {
+  CORE_TABLES,
   ModuleMigrationError,
   applyModuleMigrations,
   validateModuleMigration,
@@ -92,6 +93,55 @@ describe('validateModuleMigration', () => {
     ok('-- CREATE TABLE x\nCREATE TABLE moderation_a (id INTEGER);');
     ok('/* CREATE TABLE x */ CREATE TABLE moderation_a (id INTEGER);');
     ok("INSERT INTO moderation_a (v) VALUES ('CREATE TABLE x; PRAGMA y');");
+  });
+
+  it('rejects Core tables even when they match the module prefix', () => {
+    const rejectsAs = (moduleId: string, sql: string): void =>
+      expect(validateModuleMigration(moduleId, sql)).not.toEqual([]);
+    rejectsAs('module', 'DROP TABLE module_config;');
+    rejectsAs('module', 'ALTER TABLE module_migrations RENAME TO module_x;');
+    rejectsAs('module', 'ALTER TABLE module_x RENAME TO MODULE_CONFIG;');
+    rejectsAs(
+      'permission',
+      'CREATE TRIGGER permission_t AFTER INSERT ON permission_grants BEGIN SELECT 1; END;',
+    );
+    rejectsAs('schema', 'DROP TABLE schema_migrations;');
+    rejectsAs('sqlite', 'CREATE TABLE sqlite_x (id INTEGER);');
+    expect(validateModuleMigration('module', 'CREATE TABLE module_cases (id INTEGER);')).toEqual(
+      [],
+    );
+  });
+
+  it('exports the Core table names', () => {
+    expect([...CORE_TABLES].sort()).toEqual([
+      'developers',
+      'module_config',
+      'module_migrations',
+      'permission_grants',
+      'schema_migrations',
+    ]);
+  });
+
+  it('rejects transaction-control statements', () => {
+    bad('COMMIT;');
+    bad('BEGIN; CREATE TABLE moderation_a(x); COMMIT;');
+    bad('CREATE TABLE moderation_a(x); BEGIN TRANSACTION;');
+    bad('CREATE TABLE moderation_a(x); END TRANSACTION;');
+    bad('END;');
+    bad('SAVEPOINT s;');
+    bad('RELEASE s;');
+    bad('ROLLBACK;');
+    bad('CREATE TABLE moderation_a(x); ROLLBACK TO s;');
+  });
+
+  it('accepts BEGIN, END and RAISE(ROLLBACK) inside a trigger', () => {
+    ok(
+      "CREATE TABLE moderation_a (x INTEGER); CREATE TRIGGER moderation_t BEFORE INSERT ON moderation_a FOR EACH ROW WHEN NEW.x < 0 BEGIN SELECT RAISE(ROLLBACK, 'x'); END; CREATE TABLE moderation_b (y INTEGER);",
+    );
+    ok(
+      'CREATE TRIGGER moderation_t AFTER INSERT ON moderation_a BEGIN UPDATE moderation_a SET x = CASE WHEN x > 0 THEN 1 ELSE 0 END; END;',
+    );
+    bad('CREATE TRIGGER moderation_t AFTER INSERT ON moderation_a BEGIN SELECT 1; END; COMMIT;');
   });
 });
 

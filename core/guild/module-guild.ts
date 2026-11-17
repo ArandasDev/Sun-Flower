@@ -33,6 +33,8 @@ export interface ModuleGuildOptions {
   readonly manifest: ModuleManifest;
   readonly port: GuildActions;
   isDeveloper(userId: string): boolean;
+  /** False once the module is FAILED or STOPPED: every action is then refused. */
+  isActive(): boolean;
   readonly logger: Logger;
 }
 
@@ -45,6 +47,13 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
   const isDeveloper = (userId: string): boolean => options.isDeveloper(userId);
   const moduleId = manifest.id;
   const capabilities = new Set<Capability>(manifest.capabilities);
+
+  /** Returns true, and warns, when the module may no longer act. */
+  function refusedAsInactive(action: string): boolean {
+    if (options.isActive()) return false;
+    logger.warn({ module: moduleId, action }, 'guild action refused: module is not active');
+    return true;
+  }
 
   function requireCapability(capability: Capability, action: string): void {
     if (capabilities.has(capability)) return;
@@ -80,12 +89,14 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
 
   return {
     async deleteMessage(channelId, messageId) {
+      if (refusedAsInactive('deleteMessage')) return FAILED;
       requireCapability('guild.moderate', 'deleteMessage');
       return await execute('deleteMessage', undefined, () =>
         port.deleteMessage(channelId, messageId),
       );
     },
     async timeout(userId, durationMs, reason) {
+      if (refusedAsInactive('timeout')) return FAILED;
       requireCapability('guild.moderate', 'timeout');
       if (isDeveloper(userId)) return FORBIDDEN;
       if (!isIntegerInRange(durationMs, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)) {
@@ -95,16 +106,19 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
       return await execute('timeout', clipped, () => port.timeout(userId, durationMs, clipped));
     },
     async removeTimeout(userId) {
+      if (refusedAsInactive('removeTimeout')) return FAILED;
       requireCapability('guild.moderate', 'removeTimeout');
       return await execute('removeTimeout', undefined, () => port.removeTimeout(userId));
     },
     async kick(userId, reason) {
+      if (refusedAsInactive('kick')) return FAILED;
       requireCapability('guild.moderate', 'kick');
       if (isDeveloper(userId)) return FORBIDDEN;
       const clipped = clip(reason);
       return await execute('kick', clipped, () => port.kick(userId, clipped));
     },
     async ban(userId, reason, deleteMessageSeconds) {
+      if (refusedAsInactive('ban')) return FAILED;
       requireCapability('guild.moderate', 'ban');
       if (isDeveloper(userId)) return FORBIDDEN;
       if (!isIntegerInRange(deleteMessageSeconds, 0, MAX_DELETE_MESSAGE_SECONDS)) {
@@ -114,22 +128,34 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
       return await execute('ban', clipped, () => port.ban(userId, clipped, deleteMessageSeconds));
     },
     async unban(userId) {
+      if (refusedAsInactive('unban')) return FAILED;
       requireCapability('guild.moderate', 'unban');
       return await execute('unban', undefined, () => port.unban(userId));
     },
     async sendMessage(channelId, content) {
+      if (refusedAsInactive('sendMessage')) return FAILED;
       requireCapability('guild.message', 'sendMessage');
       return await execute('sendMessage', undefined, () => port.sendMessage(channelId, content));
     },
     async sendDirectMessage(userId, content) {
+      if (refusedAsInactive('sendDirectMessage')) return FAILED;
       requireCapability('guild.moderate', 'sendDirectMessage');
       return await execute('sendDirectMessage', undefined, () =>
         port.sendDirectMessage(userId, content),
       );
     },
     async getMemberRoleIds(userId) {
+      if (refusedAsInactive('getMemberRoleIds')) return undefined;
       requireCapability('guild.moderate', 'getMemberRoleIds');
-      return await port.getMemberRoleIds(userId);
+      try {
+        return await port.getMemberRoleIds(userId);
+      } catch {
+        logger.error(
+          { module: moduleId, action: 'getMemberRoleIds' },
+          'guild action failed unexpectedly',
+        );
+        return undefined;
+      }
     },
   };
 }
