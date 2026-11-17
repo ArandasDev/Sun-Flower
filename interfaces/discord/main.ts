@@ -1,14 +1,21 @@
 import { fileURLToPath } from 'node:url';
-import { Events, type Client, type Guild, type Interaction } from 'discord.js';
+import { Events, type Client, type Guild, type Interaction, type Message } from 'discord.js';
 
 import { startCore, type CoreHandle } from '../../core/application/core.ts';
 import { installShutdownHandlers } from '../../core/application/shutdown.ts';
 import { EnvironmentError, loadEnvironment } from '../../core/configuration/environment.ts';
 import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
-import { createDiscordClient, toRawInteraction } from './client.ts';
+import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
+import { createDiscordGateway, createGuildActions } from './guild-actions.ts';
 import { isAllowedInteraction } from './guild-guard.ts';
+import {
+  ContentIntentMonitor,
+  guardHandler,
+  handleMessageCreate,
+  handleMessageUpdate,
+} from './messages.ts';
 
 export const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
 
@@ -68,6 +75,36 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     if (guild.id === guildId) enqueue(sync);
   });
 
+  const messageDeps = {
+    guildId,
+    monitor: new ContentIntentMonitor(logger),
+    publish: (type: string, payload: unknown, context: { userId: string; channelId: string }) => {
+      core.publishCoreEvent(type, payload, context);
+    },
+  };
+
+  client.on(Events.MessageCreate, (message: Message) => {
+    if (message.guildId !== guildId) return;
+    guardHandler(logger, () => {
+      handleMessageCreate(toRawMessage(message), messageDeps);
+    });
+  });
+
+  // A partial old message means the previous content is unknown (treated as a change). A partial new
+  // message is fetched once; without its content there is nothing to analyse.
+  client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
+    if (newMessage.guildId !== guildId) return;
+    void (async () => {
+      try {
+        const current = newMessage.partial ? await newMessage.fetch() : newMessage;
+        const oldContent = oldMessage.partial ? null : oldMessage.content;
+        handleMessageUpdate(oldContent, toRawMessage(current), messageDeps);
+      } catch (error) {
+        logger.error({ error: errorMessage(error) }, 'discord message event failed');
+      }
+    })();
+  });
+
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
     if (!isAllowedInteraction(interaction, guildId)) return;
@@ -93,21 +130,34 @@ export async function main(): Promise<void> {
   }
 
   const logger = createLogger({ level: environment.logLevel });
+  const client = createDiscordClient();
   let core: CoreHandle;
   try {
-    core = await startCore({ dbPath: environment.dbPath, modulesDir: MODULES_DIR, logger });
+    core = await startCore({
+      dbPath: environment.dbPath,
+      modulesDir: MODULES_DIR,
+      logger,
+      guild: createGuildActions(createDiscordGateway(client, environment.guildId)),
+    });
   } catch (error) {
     logger.fatal({ error: errorMessage(error) }, 'core failed to start');
+    // The client never logged in, so there is nothing to disconnect, only resources to release.
+    try {
+      await client.destroy();
+    } catch (cleanupError) {
+      logger.error({ error: errorMessage(cleanupError) }, 'discord client cleanup failed');
+    }
     process.exitCode = 1;
     return;
   }
 
-  const client = createDiscordClient();
   const shutdown = async (): Promise<void> => {
+    // Stop feeding events, let the modules drain while REST still works, then disconnect.
+    client.removeAllListeners();
     try {
-      await client.destroy();
-    } finally {
       await core.stop();
+    } finally {
+      await client.destroy();
     }
   };
   const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
