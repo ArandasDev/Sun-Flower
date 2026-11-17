@@ -1,7 +1,11 @@
+import path from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
+import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import type { SqlValue } from '../../shared/contracts/storage.ts';
 import {
   CORE_API_VERSION,
   type ModuleContext,
@@ -10,8 +14,11 @@ import {
 } from '../../shared/contracts/module.ts';
 import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
+import { createModuleGuild } from '../guild/module-guild.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
 import type { PermissionService } from '../permissions/permission-service.ts';
+import { applyModuleMigrations } from '../storage/module-migrations.ts';
+import { createModuleStorage } from '../storage/module-storage.ts';
 import { resolveOrder } from './dependencies.ts';
 import { discoverModules } from './discovery.ts';
 import { loadModule } from './entrypoint.ts';
@@ -26,7 +33,8 @@ import {
 export { CommandRegistrationError, type ModuleState, type ModuleStatus } from './lifecycle.ts';
 
 const DEFAULT_STEP_TIMEOUT_MS = 10_000;
-const EVENT_STATES: ReadonlySet<ModuleState> = new Set([
+/** States in which a module may use events, guild actions, config.set and storage writes. */
+const ACTIVE_STATES: ReadonlySet<ModuleState> = new Set([
   'VALIDATED',
   'REGISTERED',
   'INITIALIZED',
@@ -46,6 +54,10 @@ export interface ModuleRegistryDeps {
   readonly events: EventBus;
   readonly permissions: PermissionService;
   readonly config: ModuleConfigStore;
+  /** The Core database; module migrations and storage run on it. */
+  readonly db: DatabaseSync;
+  /** The Discord port; each module receives it gated by its manifest capabilities. */
+  readonly guild: GuildActions;
   readonly coreApiVersion?: string;
   readonly stepTimeoutMs?: number;
 }
@@ -62,6 +74,15 @@ interface ModuleRecord {
 }
 
 type Phase = 'new' | 'loading' | 'loaded' | 'starting' | 'started' | 'stopping' | 'stopped';
+
+/** Freezes plain data (objects and arrays) at every depth. */
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -244,6 +265,7 @@ export class ModuleRegistry {
       [
         'register',
         async () => {
+          applyModuleMigrations(this.#deps.db, id, path.join(record.directory, 'migrations'));
           await instance.register(context);
           if (record.rejectedCommand !== undefined) {
             throw new CommandRegistrationError(record.rejectedCommand);
@@ -283,6 +305,13 @@ export class ModuleRegistry {
 
   #createContext(record: ModuleRecord, events: ModuleEvents): ModuleContext {
     const { id } = record.manifest;
+    const settingsUnavailable = (): Error =>
+      new Error(`Settings of module "${id}" are only available from initialize()`);
+    const isActive = (): boolean => this.#isActive(id);
+    const assertActive = (): void => {
+      if (!isActive()) throw new Error(`Module "${id}" is not active`);
+    };
+    const storage = createModuleStorage(this.#deps.db);
     return Object.freeze({
       moduleId: id,
       logger: this.#deps.logger.child({ module: id }),
@@ -297,10 +326,35 @@ export class ModuleRegistry {
       permissions: this.#deps.permissions.forModule(record.manifest),
       config: Object.freeze({
         get: <T>(): T => {
-          if (record.settings === undefined) {
-            throw new Error(`Settings of module "${id}" are only available from initialize()`);
-          }
+          if (record.settings === undefined) throw settingsUnavailable();
           return record.settings.value as T;
+        },
+        set: (partial: Record<string, unknown>) => {
+          assertActive();
+          if (record.settings === undefined) throw settingsUnavailable();
+          const value = this.#deps.config.updateSettings(id, record.configSchema, partial);
+          record.settings = { value };
+        },
+      }),
+      guild: createModuleGuild({
+        manifest: record.manifest,
+        port: this.#deps.guild,
+        isDeveloper: (userId) => this.#deps.permissions.isDeveloper(userId),
+        isActive,
+        logger: this.#deps.logger,
+      }),
+      // Reads stay allowed; writes from a FAILED or STOPPED module are refused.
+      storage: Object.freeze({
+        run: (sql: string, params?: readonly SqlValue[]) => {
+          assertActive();
+          return storage.run(sql, params);
+        },
+        get: <T>(sql: string, params?: readonly SqlValue[]): T | undefined =>
+          storage.get<T>(sql, params),
+        all: <T>(sql: string, params?: readonly SqlValue[]): T[] => storage.all<T>(sql, params),
+        transaction: <T>(fn: () => T): T => {
+          assertActive();
+          return storage.transaction(fn);
         },
       }),
       commands: Object.freeze({
@@ -331,16 +385,28 @@ export class ModuleRegistry {
     }
     // A frozen copy: later changes to the module's own object never reach commands().
     // Bound so a handle written as a method keeps its `this`.
-    const { name, description } = command;
+    const { name, description, options, subcommands, groups } = command;
     const handle = command.handle.bind(command);
+    const data = structuredClone({
+      name,
+      description,
+      ...(options === undefined ? {} : { options }),
+      ...(subcommands === undefined ? {} : { subcommands }),
+      ...(groups === undefined ? {} : { groups }),
+    });
     this.#commandOwners.set(name, id);
-    record.commands.set(name, Object.freeze({ name, description, handle }));
+    record.commands.set(name, Object.freeze({ ...deepFreeze(data), handle }));
+  }
+
+  #isActive(id: string): boolean {
+    const state = this.#statuses.get(id)?.state;
+    return state !== undefined && ACTIVE_STATES.has(state);
   }
 
   /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */
   #eventsAllowed(id: string, action: 'publish' | 'subscribe', type: string): boolean {
+    if (this.#isActive(id)) return true;
     const state = this.#statuses.get(id)?.state;
-    if (state !== undefined && EVENT_STATES.has(state)) return true;
     this.#deps.logger.warn(
       { module: id, state, event: type },
       `event ${action} ignored: module is not active`,

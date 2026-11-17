@@ -36,19 +36,28 @@ export function runMigrations(db: DatabaseSync, directory: string): string[] {
     const version = file.slice(0, -'.sql'.length);
     if (done.has(version)) continue;
     const sql = fs.readFileSync(path.join(directory, file), 'utf8');
+    let alreadyRecorded: boolean;
     try {
-      db.exec('BEGIN');
-      db.exec(sql);
-      db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
-        version,
-        new Date().toISOString(),
-      );
-      db.exec('COMMIT');
+      // IMMEDIATE takes the write lock first, so another process cannot apply the same
+      // migration between our check and our write.
+      db.exec('BEGIN IMMEDIATE');
+      alreadyRecorded =
+        db.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version) !== undefined;
+      if (alreadyRecorded) {
+        db.exec('COMMIT');
+      } else {
+        db.exec(sql);
+        db.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(
+          version,
+          new Date().toISOString(),
+        );
+        db.exec('COMMIT');
+      }
     } catch (error) {
       if (db.isTransaction) db.exec('ROLLBACK');
       throw new MigrationError(version, error);
     }
-    applied.push(version);
+    if (!alreadyRecorded) applied.push(version);
   }
   return applied;
 }

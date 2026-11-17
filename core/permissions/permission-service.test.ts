@@ -27,6 +27,7 @@ function manifest(overrides: Partial<ModuleManifest> = {}): ModuleManifest {
     entrypoint: 'index.ts',
     dependencies: [],
     permissions: [],
+    capabilities: [],
     enabledByDefault: false,
     events: { subscribes: [], publishes: [] },
     ...overrides,
@@ -156,6 +157,41 @@ describe('PermissionService', () => {
       const scoped = perms.forModule(manifest({ permissions: ['ping.cmd.use'] }));
       expect(scoped.check({ userId: mod, roleIds: [role] }, 'ping.cmd.use')).toBe(true);
       expect(scoped.check({ userId: mod, roleIds: [] }, 'ping.cmd.use')).toBe(false);
+    });
+  });
+
+  describe('hasAnyGrant and listGrants', () => {
+    it('detects grants by prefix on any role', () => {
+      perms.grant('moderation.warn.use', role);
+      expect(perms.hasAnyGrant([mod, role], 'moderation.')).toBe(true);
+      expect(perms.hasAnyGrant([role], 'ping.')).toBe(false);
+      expect(perms.hasAnyGrant([], 'moderation.')).toBe(false);
+    });
+
+    it('does not treat % or _ in the prefix as wildcards', () => {
+      perms.grant('moderation.warn.use', role);
+      expect(perms.hasAnyGrant([role], '%')).toBe(false);
+      expect(perms.hasAnyGrant([role], 'moderation%')).toBe(false);
+      expect(perms.hasAnyGrant([role], 'moderation_')).toBe(false);
+    });
+
+    it('scopes hasAnyGrant to the module prefix', () => {
+      perms.grant('moderation.warn.use', role);
+      const scoped = perms.forModule(manifest({ id: 'moderation' }));
+      expect(scoped.hasAnyGrant([role], 'moderation.')).toBe(true);
+      expect(() => scoped.hasAnyGrant([role], 'ping.')).toThrow(UndeclaredPermissionError);
+    });
+
+    it('lists grants ordered by permission and role', () => {
+      perms.grant('ping.b.use', role);
+      perms.grant('ping.a.use', role);
+      perms.grant('ping.a.use', mod);
+      expect(perms.listGrants().map((g) => [g.permission, g.roleId])).toEqual([
+        ['ping.a.use', mod],
+        ['ping.a.use', role],
+        ['ping.b.use', role],
+      ]);
+      expect(typeof perms.listGrants()[0]?.grantedAt).toBe('string');
     });
   });
 });

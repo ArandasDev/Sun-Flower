@@ -57,18 +57,21 @@ O bot conecta ao Discord e registra os comandos dos módulos no servidor `DISCOR
 
 **Comandos:**
 
-| Comando                        | Faz                                                                              |
-| ------------------------------ | -------------------------------------------------------------------------------- |
-| `npm start`                    | Inicia o bot com as variáveis do `.env`.                                         |
-| `npm run staff -- add <ID>`    | Adiciona um desenvolvedor do bot.                                                |
-| `npm run staff -- remove <ID>` | Remove um desenvolvedor do bot.                                                  |
-| `npm run staff -- list`        | Lista os desenvolvedores do bot.                                                 |
-| `npm run typecheck`            | Checa os tipos sem gerar arquivos.                                               |
-| `npm run lint`                 | Executa o ESLint.                                                                |
-| `npm run format`               | Formata todos os arquivos com o Prettier.                                        |
-| `npm run format:check`         | Verifica a formatação sem alterar arquivos.                                      |
-| `npm test`                     | Executa os testes com o Vitest.                                                  |
-| `npm run check`                | Executa `format:check`, `lint`, `typecheck` e `test`, parando na primeira falha. |
+| Comando                                             | Faz                                                                              |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `npm start`                                         | Inicia o bot com as variáveis do `.env`.                                         |
+| `npm run staff -- add <ID>`                         | Adiciona um desenvolvedor do bot.                                                |
+| `npm run staff -- remove <ID>`                      | Remove um desenvolvedor do bot.                                                  |
+| `npm run staff -- list`                             | Lista os desenvolvedores do bot.                                                 |
+| `npm run staff -- grant <permissão> <ID do cargo>`  | Associa uma permissão de módulo a um cargo do servidor.                          |
+| `npm run staff -- revoke <permissão> <ID do cargo>` | Remove a associação de uma permissão a um cargo.                                 |
+| `npm run staff -- grants`                           | Lista as permissões associadas a cargos.                                         |
+| `npm run typecheck`                                 | Checa os tipos sem gerar arquivos.                                               |
+| `npm run lint`                                      | Executa o ESLint.                                                                |
+| `npm run format`                                    | Formata todos os arquivos com o Prettier.                                        |
+| `npm run format:check`                              | Verifica a formatação sem alterar arquivos.                                      |
+| `npm test`                                          | Executa os testes com o Vitest.                                                  |
+| `npm run check`                                     | Executa `format:check`, `lint`, `typecheck` e `test`, parando na primeira falha. |
 
 `npm run check` é obrigatório antes de abrir um Pull Request e é o que a CI executa.
 

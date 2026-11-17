@@ -100,6 +100,18 @@ export async function dispatchCommand(
 
   const interaction: CommandInteraction = {
     actor: { userId: raw.userId, roleIds: [...raw.roleIds] },
+    // Placeholders: the real translation of Discord options arrives with the options task.
+    channelId: '',
+    subcommandGroup: undefined,
+    subcommand: undefined,
+    options: {
+      getString: () => undefined,
+      getInteger: () => undefined,
+      getBoolean: () => undefined,
+      getUser: () => undefined,
+      getChannel: () => undefined,
+      getRole: () => undefined,
+    },
     reply: async (content: string, replyOptions?: ReplyOptions) => {
       if (responded) {
         logger.warn({ command: name }, 'Ignored a second reply from a command handler');

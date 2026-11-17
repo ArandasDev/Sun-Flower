@@ -64,6 +64,18 @@ describe('createLogger', () => {
     expect(entry).toMatchObject({ a: { b: { token: '[REDACTED]' } } });
   });
 
+  it('redacts content at depth 0 to 2', () => {
+    const entry = logOnce((l) => {
+      l.info({ content: 'zero', a: { content: 'one' }, b: { c: { content: 'two' } } }, 'x');
+    });
+    expect(entry).toMatchObject({
+      content: '[REDACTED]',
+      a: { content: '[REDACTED]' },
+      b: { c: { content: '[REDACTED]' } },
+    });
+    expect(JSON.stringify(entry)).not.toMatch(/zero|one|two/);
+  });
+
   it('redacts tokens in child bindings', () => {
     const entry = logOnce((l) => {
       l.child({ token: 'fake' }).info('x');

@@ -7,6 +7,8 @@ import { withTimeout } from '../infrastructure/timeout.ts';
 
 const DEFAULT_HANDLER_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_DEPTH = 8;
+const CORE_SOURCE = 'core';
+const CORE_EVENT_PREFIX = 'discord.';
 
 export class UndeclaredEventError extends Error {
   constructor(moduleId: string, type: string) {
@@ -84,6 +86,14 @@ export class EventBus {
     }
   }
 
+  /** Publishes a Discord event on behalf of the Core; only `discord.*` types are accepted. */
+  publishFromCore(type: string, payload: unknown, context?: EventContext): void {
+    if (!type.startsWith(CORE_EVENT_PREFIX)) {
+      throw new UndeclaredEventError(CORE_SOURCE, type);
+    }
+    this.dispatch(CORE_SOURCE, type, payload, context);
+  }
+
   private publishFrom(
     manifest: ModuleManifest,
     type: string,
@@ -93,10 +103,19 @@ export class EventBus {
     if (!manifest.events.publishes.includes(type) || !type.startsWith(`${manifest.id}.`)) {
       throw new UndeclaredEventError(manifest.id, type);
     }
+    this.dispatch(manifest.id, type, payload, context);
+  }
+
+  private dispatch(
+    source: string,
+    type: string,
+    payload: unknown,
+    context: EventContext | undefined,
+  ): void {
     const depth = this.depthStorage.getStore()?.depth ?? 0;
     if (depth >= this.maxDepth) {
       this.logger.warn(
-        { module: manifest.id, event: type, depth, maxDepth: this.maxDepth },
+        { module: source, event: type, depth, maxDepth: this.maxDepth },
         'event dropped: maximum depth exceeded',
       );
       return;
@@ -105,7 +124,7 @@ export class EventBus {
       id: randomUUID(),
       type,
       version: 1,
-      source: manifest.id,
+      source,
       timestamp: new Date().toISOString(),
       context: context ?? {},
       payload,

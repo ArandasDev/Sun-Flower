@@ -14,6 +14,7 @@ function manifest(id: string): Record<string, unknown> {
     entrypoint: 'index.ts',
     dependencies: [],
     permissions: [],
+    capabilities: [],
   };
 }
 

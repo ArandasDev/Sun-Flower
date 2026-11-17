@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startCore } from '../../core/application/core.ts';
 import { dispatchCommand, type RawInteraction } from '../../interfaces/discord/commands.ts';
 import { createRecordingLogger } from '../helpers/recording-logger.ts';
+
+const REAL_MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
 
 const GOOD_SOURCE = `
 export default () => ({
@@ -45,6 +48,7 @@ function manifest(id: string, dependencies: string[] = []): Record<string, unkno
     entrypoint: 'index.ts',
     dependencies,
     permissions: [],
+    capabilities: [],
     enabledByDefault: true,
     events: { subscribes: [], publishes: [] },
   };
@@ -125,6 +129,93 @@ describe('startCore', () => {
     ).rejects.toThrow();
     expect(close).toHaveBeenCalledTimes(1);
     expect(closedDatabases(close)[0]?.isOpen).toBe(false);
+  });
+
+  it('keeps ping running and answering with an injected guild port', async () => {
+    const guild = {
+      deleteMessage: vi.fn(),
+      timeout: vi.fn(),
+      removeTimeout: vi.fn(),
+      kick: vi.fn(),
+      ban: vi.fn(),
+      unban: vi.fn(),
+      sendMessage: vi.fn(),
+      sendDirectMessage: vi.fn(),
+      getMemberRoleIds: vi.fn(),
+    };
+    const core = await startCore({
+      dbPath: ':memory:',
+      modulesDir: REAL_MODULES_DIR,
+      logger,
+      guild,
+    });
+    try {
+      expect(core.status().get('ping')?.state).toBe('RUNNING');
+      const replies: { content: string; ephemeral: boolean }[] = [];
+      const raw: RawInteraction = {
+        commandName: 'ping',
+        userId: '111111111111111111',
+        roleIds: [],
+        guildId: '000000000000000000',
+        reply: async (content, ephemeral) => {
+          await Promise.resolve();
+          replies.push({ content, ephemeral });
+        },
+        deferReply: async () => {},
+        editReply: async () => {},
+      };
+      await dispatchCommand(raw, core.commands(), logger);
+      expect(replies).toEqual([{ content: 'Pong!', ephemeral: false }]);
+      for (const action of Object.values(guild)) expect(action).not.toHaveBeenCalled();
+    } finally {
+      await core.stop();
+    }
+  });
+
+  it('delivers core events to subscribed modules and drops them after stop()', async () => {
+    const key = `__sunFlowerCoreEvents_${process.pid}`;
+    const store = globalThis as unknown as Record<string, unknown[] | undefined>;
+    writeModule(
+      'listener',
+      {
+        ...manifest('listener'),
+        events: { subscribes: ['discord.message.created'], publishes: [] },
+      },
+      `
+export default () => ({
+  async register(ctx) {
+    ctx.events.subscribe('discord.message.created', (event) => {
+      (globalThis[${JSON.stringify(key)}] ??= []).push({ source: event.source, payload: event.payload });
+    });
+  },
+  async initialize() {},
+  async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`,
+    );
+    const recording = createRecordingLogger();
+    const core = await startCore({ dbPath: ':memory:', modulesDir, logger: recording });
+    try {
+      core.publishCoreEvent('discord.message.created', { n: 1 });
+      await vi.waitFor(() => {
+        expect(store[key]).toEqual([{ source: 'core', payload: { n: 1 } }]);
+      });
+    } finally {
+      await core.stop();
+    }
+    expect(() => {
+      core.publishCoreEvent('discord.message.created', { n: 2 });
+    }).not.toThrow();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(store[key]).toHaveLength(1);
+    expect(
+      recording.entries.some(
+        (entry) => entry.level === 'warn' && entry.msg === 'core event dropped: core is stopping',
+      ),
+    ).toBe(true);
+    Reflect.deleteProperty(globalThis, key);
   });
 
   it('answers a command of a module that failed in start() as unavailable', async () => {

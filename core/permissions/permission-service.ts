@@ -39,6 +39,17 @@ export interface DeveloperRecord {
   readonly addedAt: string;
 }
 
+export interface GrantRecord {
+  readonly permission: string;
+  readonly roleId: string;
+  readonly grantedAt: string;
+}
+
+/** Whether `permission` has the `<module>.<resource>.<action>` format. */
+export function isValidPermission(permission: string): boolean {
+  return PERMISSION.test(permission);
+}
+
 function assertSnowflake(id: string): void {
   if (!SNOWFLAKE.test(id)) throw new InvalidSnowflakeError();
 }
@@ -102,12 +113,41 @@ export class PermissionService {
     return actor.roleIds.some((roleId) => statement.get(permission, roleId) !== undefined);
   }
 
+  hasAnyGrant(roleIds: readonly string[], prefix: string): boolean {
+    if (roleIds.length === 0) return false;
+    const pattern = `${prefix.replace(/[\\%_]/g, '\\$&')}%`;
+    const statement = this.#db.prepare(
+      'SELECT 1 AS found FROM permission_grants WHERE role_id = ? AND permission LIKE ? ESCAPE ? LIMIT 1',
+    );
+    return roleIds.some((roleId) => statement.get(roleId, pattern, '\\') !== undefined);
+  }
+
+  listGrants(): GrantRecord[] {
+    const rows = this.#db
+      .prepare(
+        'SELECT permission, role_id, granted_at FROM permission_grants ORDER BY permission, role_id',
+      )
+      .all() as { permission: string; role_id: string; granted_at: string }[];
+    return rows.map((row) => ({
+      permission: row.permission,
+      roleId: row.role_id,
+      grantedAt: row.granted_at,
+    }));
+  }
+
   forModule(manifest: ModuleManifest): ModuleContext['permissions'] {
     const declared = new Set(manifest.permissions);
     return {
       check: (actor, permission) => {
         if (!declared.has(permission)) throw new UndeclaredPermissionError(manifest.id, permission);
         return this.check(actor, permission);
+      },
+      isDeveloper: (userId) => this.isDeveloper(userId),
+      hasAnyGrant: (roleIds, prefix) => {
+        if (!prefix.startsWith(`${manifest.id}.`)) {
+          throw new UndeclaredPermissionError(manifest.id, prefix);
+        }
+        return this.hasAnyGrant(roleIds, prefix);
       },
     };
   }

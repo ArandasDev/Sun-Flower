@@ -33,9 +33,16 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
 - Módulo `ping`: comando `/ping`, que responde `Pong!`.
 - Registros de decisão 0011 a 0015 (eventos do Discord no Event Bus, ações no servidor por capacidades, persistência dos módulos, opções de comando e configuração em tempo de execução, detecção de phishing) e spec da Fase 2, etapa 1 (moderação contra phishing).
+- Core da Fase 2, etapa 1:
+  - Eventos `discord.message.created` e `discord.message.updated` publicados pela interface; o prefixo `discord.` é reservado ao Core.
+  - Capacidades `guild.moderate` e `guild.message` no manifesto e serviço `guild` do contexto do módulo (apagar mensagem, castigo, expulsão, banimento, mensagens), com recusa registrada quando a capacidade não foi declarada.
+  - Serviço `storage` e migrações SQL por módulo, com tabelas no prefixo `<id>_`.
+  - Opções de comando (`options`, incluindo `choices` para texto) e `config.set` para alterar configurações em tempo de execução.
+  - `npm run staff -- grant|revoke <permissão> <ID do cargo>` e `grants` para gerenciar as permissões dos cargos, com aviso quando nenhum módulo declara a permissão.
 
 ### Changed
 
+- `CORE_API_VERSION` passa para 1.1.0, de forma aditiva: módulos com `apiVersion` 1.0.0 continuam compatíveis.
 - **BREAKING:** `apiVersion` do manifesto passa a ser a versão SemVer completa do contrato do Core (`"1.0.0"`), com compatibilidade por `MAJOR` igual e `MINOR.PATCH` menor ou igual ao do Core.
 - Permissões em duas camadas: lista de desenvolvedores do bot para as permissões `core.*` e cargos do servidor para as permissões dos módulos; o dono e os administradores do servidor não recebem permissões automáticas.
 - Fase 3 do ROADMAP passa a exigir revisão ofensiva por três subagentes antes da release.
