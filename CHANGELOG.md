@@ -39,6 +39,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Serviço `storage` e migrações SQL por módulo, com tabelas no prefixo `<id>_`.
   - Opções de comando (`options`, incluindo `choices` para texto) e `config.set` para alterar configurações em tempo de execução.
   - `npm run staff -- grant|revoke <permissão> <ID do cargo>` e `grants` para gerenciar as permissões dos cargos, com aviso quando nenhum módulo declara a permissão.
+- Interface Discord da Fase 2: ações no servidor (apagar mensagem, castigo, expulsão, banimento, desbanimento, mensagens no canal e diretas, cargos do membro) com recusa de ações contra o próprio bot, erros mapeados para `forbidden`, `not_found` e `failed`, limite de 10 s por chamada e mensagens sem menções. O README documenta os intents privilegiados e as permissões do convite.
 
 ### Changed
 

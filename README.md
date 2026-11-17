@@ -34,6 +34,10 @@ O `cp .env.example .env` cria o `.env` a partir do modelo. Preencha-o com os val
 
 **Convite do bot:** ao gerar o link de convite no Discord Developer Portal, marque os escopos `bot` e `applications.commands`. Sem `applications.commands`, os comandos de barra não aparecem no servidor.
 
+**Permissões do convite:** além dos escopos, marque as permissões que a moderação usa: `View Channels`, `Send Messages`, `Manage Messages`, `Moderate Members`, `Kick Members` e `Ban Members`. Sem elas, as ações no servidor falham e o bot registra a recusa no log.
+
+**Intents privilegiados:** no Discord Developer Portal, em **Bot → Privileged Gateway Intents**, ative o _Server Members Intent_ e o _Message Content Intent_. O primeiro permite consultar os cargos dos membros; o segundo permite ler o texto das mensagens para a detecção de phishing. Sem o _Message Content Intent_, o bot não analisa as mensagens e avisa no log.
+
 **Primeiro desenvolvedor:** cadastre o seu ID de usuário do Discord como desenvolvedor do bot, o que libera as permissões `core.*`:
 
 ```bash

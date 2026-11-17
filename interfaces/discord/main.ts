@@ -8,6 +8,7 @@ import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
+import { createDiscordGateway, createGuildActions } from './guild-actions.ts';
 import { isAllowedInteraction } from './guild-guard.ts';
 import {
   ContentIntentMonitor,
@@ -122,16 +123,23 @@ export async function main(): Promise<void> {
   }
 
   const logger = createLogger({ level: environment.logLevel });
+  const client = createDiscordClient();
   let core: CoreHandle;
   try {
-    core = await startCore({ dbPath: environment.dbPath, modulesDir: MODULES_DIR, logger });
+    core = await startCore({
+      dbPath: environment.dbPath,
+      modulesDir: MODULES_DIR,
+      logger,
+      guild: createGuildActions(createDiscordGateway(client, environment.guildId)),
+    });
   } catch (error) {
     logger.fatal({ error: errorMessage(error) }, 'core failed to start');
+    // The client never logged in, so there is nothing to disconnect, only resources to release.
+    await client.destroy();
     process.exitCode = 1;
     return;
   }
 
-  const client = createDiscordClient();
   const shutdown = async (): Promise<void> => {
     try {
       await client.destroy();
