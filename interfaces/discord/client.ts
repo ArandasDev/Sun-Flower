@@ -2,6 +2,7 @@ import {
   Client,
   GatewayIntentBits,
   MessageFlags,
+  Partials,
   type ChatInputCommandInteraction,
   type Message,
 } from 'discord.js';
@@ -20,6 +21,8 @@ export function createDiscordClient(): Client {
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMembers,
     ],
+    // Without it discord.js drops edits of messages that are not cached (old ones, or any after a restart).
+    partials: [Partials.Message],
   });
 }
 
@@ -78,9 +81,14 @@ export function toRawMessage(message: Message): RawMessage {
     authorId: message.author.id,
     authorIsBot: message.author.bot,
     isWebhook: message.webhookId !== null,
+    isSystem: message.system,
     content: message.content,
     hasNonTextParts:
-      message.attachments.size > 0 || message.embeds.length > 0 || message.stickers.size > 0,
+      message.attachments.size > 0 ||
+      message.embeds.length > 0 ||
+      message.stickers.size > 0 ||
+      message.poll !== null ||
+      message.messageSnapshots.size > 0,
     // The @everyone role shares the guild's ID; it is not a real role assignment.
     authorRoleIds:
       member === null ? [] : [...member.roles.cache.keys()].filter((id) => id !== message.guildId),

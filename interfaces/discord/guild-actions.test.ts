@@ -97,4 +97,34 @@ describe('createGuildActions', () => {
     const failing = fakeGateway({ memberRoleIds: () => Promise.reject(discordError(10007)) });
     expect(await createGuildActions(failing).getMemberRoleIds(USER)).toBeUndefined();
   });
+
+  it('getMemberRoleIds returns undefined when the lookup times out', async () => {
+    const hanging = fakeGateway({ memberRoleIds: () => new Promise<never>(() => undefined) });
+    const actions = createGuildActions(hanging, { callTimeoutMs: 20 });
+    expect(await actions.getMemberRoleIds(USER)).toBeUndefined();
+  });
+
+  it('passes reason and deleteMessageSeconds to the gateway unchanged', async () => {
+    const setTimeoutSpy = vi.fn(() => Promise.resolve());
+    const kickSpy = vi.fn(() => Promise.resolve());
+    const banSpy = vi.fn(() => Promise.resolve());
+    const actions = createGuildActions(
+      fakeGateway({ setTimeout: setTimeoutSpy, kick: kickSpy, ban: banSpy }),
+    );
+    await actions.timeout(USER, 60_000, 'spam');
+    await actions.kick(USER, 'raid');
+    await actions.ban(USER, 'phishing', 3600);
+    expect(setTimeoutSpy).toHaveBeenCalledWith(USER, 60_000, 'spam');
+    expect(kickSpy).toHaveBeenCalledWith(USER, 'raid');
+    expect(banSpy).toHaveBeenCalledWith(USER, 'phishing', 3600);
+  });
+
+  it('maps a non-numeric error code to failed', async () => {
+    const error = Object.assign(new Error('x'), { code: 'GuildChannelUnowned' });
+    const gateway = fakeGateway({ send: () => Promise.reject(error) });
+    expect(await createGuildActions(gateway).sendMessage(CHANNEL, 'x')).toEqual({
+      ok: false,
+      error: 'failed',
+    });
+  });
 });

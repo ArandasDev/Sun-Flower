@@ -14,8 +14,10 @@ export interface RawMessage {
   readonly authorId: string;
   readonly authorIsBot: boolean;
   readonly isWebhook: boolean;
+  /** Join notices, pins, boosts and other messages Discord generates itself. */
+  readonly isSystem: boolean;
   readonly content: string;
-  /** Attachments, embeds or stickers. */
+  /** Attachments, embeds, stickers, polls or forwarded messages. */
   readonly hasNonTextParts: boolean;
   readonly authorRoleIds: readonly string[];
   readonly authorJoinedAt: string | null;
@@ -36,9 +38,9 @@ export interface MessageHandlerDeps {
 const EMPTY_CONTENT_ERROR =
   'message content is empty: enable the Message Content Intent in the Discord Developer Portal';
 
-/** Only humans in the configured guild are published; DMs, bots and webhooks are not. */
+/** Only humans in the configured guild are published; DMs, bots, webhooks and system messages are not. */
 export function shouldPublish(raw: RawMessage, guildId: string): boolean {
-  return raw.guildId === guildId && !raw.authorIsBot && !raw.isWebhook;
+  return raw.guildId === guildId && !raw.authorIsBot && !raw.isWebhook && !raw.isSystem;
 }
 
 export function toMessagePayload(raw: RawMessage): DiscordMessagePayload {
@@ -75,7 +77,7 @@ export class ContentIntentMonitor {
   }
 
   observe(raw: RawMessage): void {
-    if (this.#done || raw.hasNonTextParts) return;
+    if (this.#done || raw.hasNonTextParts || raw.isSystem) return;
     if (raw.content !== '') {
       this.#done = true;
       return;

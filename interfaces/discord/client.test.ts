@@ -1,6 +1,7 @@
 import {
   GatewayIntentBits,
   MessageFlags,
+  Partials,
   type ChatInputCommandInteraction,
   type Message,
 } from 'discord.js';
@@ -113,6 +114,12 @@ describe('createDiscordClient', () => {
     }
     void client.destroy();
   });
+
+  it('enables the Message partial so edits of uncached messages are delivered', () => {
+    const client = createDiscordClient();
+    expect(client.options.partials).toContain(Partials.Message);
+    void client.destroy();
+  });
 });
 
 describe('toRawMessage', () => {
@@ -128,6 +135,9 @@ describe('toRawMessage', () => {
       attachments: { size: 0 },
       embeds: [],
       stickers: { size: 0 },
+      system: false,
+      poll: null,
+      messageSnapshots: { size: 0 },
       member: {
         joinedAt: new Date('2026-01-01T00:00:00Z'),
         roles: {
@@ -153,6 +163,7 @@ describe('toRawMessage', () => {
       authorIsBot: false,
       isWebhook: false,
       content: 'hi',
+      isSystem: false,
       hasNonTextParts: false,
       authorRoleIds: [roleId],
       authorJoinedAt: '2026-01-01T00:00:00.000Z',
@@ -168,5 +179,11 @@ describe('toRawMessage', () => {
     expect(toRawMessage(fakeMessage({ attachments: { size: 1 } })).hasNonTextParts).toBe(true);
     expect(toRawMessage(fakeMessage({ embeds: [{}] })).hasNonTextParts).toBe(true);
     expect(toRawMessage(fakeMessage({ stickers: { size: 2 } })).hasNonTextParts).toBe(true);
+  });
+
+  it('flags system messages and treats polls and forwards as non-text parts', () => {
+    expect(toRawMessage(fakeMessage({ system: true })).isSystem).toBe(true);
+    expect(toRawMessage(fakeMessage({ poll: {} })).hasNonTextParts).toBe(true);
+    expect(toRawMessage(fakeMessage({ messageSnapshots: { size: 1 } })).hasNonTextParts).toBe(true);
   });
 });

@@ -27,6 +27,7 @@ function raw(overrides: Partial<RawMessage> = {}): RawMessage {
     authorId: '333333333333333333',
     authorIsBot: false,
     isWebhook: false,
+    isSystem: false,
     content: 'hello',
     hasNonTextParts: false,
     authorRoleIds: ['111111111111111111'],
@@ -46,6 +47,7 @@ describe('shouldPublish', () => {
     expect(shouldPublish(raw({ guildId: null }), guildId)).toBe(false);
     expect(shouldPublish(raw({ authorIsBot: true }), guildId)).toBe(false);
     expect(shouldPublish(raw({ isWebhook: true }), guildId)).toBe(false);
+    expect(shouldPublish(raw({ isSystem: true }), guildId)).toBe(false);
   });
 });
 
@@ -96,6 +98,13 @@ describe('ContentIntentMonitor', () => {
     for (let i = 0; i < 5; i += 1) monitor.observe(empty());
     monitor.observe(raw({ content: 'text' }));
     for (let i = 0; i < 30; i += 1) monitor.observe(empty());
+    expect(logger.entries).toHaveLength(0);
+  });
+
+  it('does not count system messages in the sample', () => {
+    const logger = createRecordingLogger();
+    const monitor = new ContentIntentMonitor(logger);
+    for (let i = 0; i < 30; i += 1) monitor.observe(raw({ content: '', isSystem: true }));
     expect(logger.entries).toHaveLength(0);
   });
 

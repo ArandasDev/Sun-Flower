@@ -84,18 +84,25 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
   };
 
   client.on(Events.MessageCreate, (message: Message) => {
+    if (message.guildId !== guildId) return;
     guardHandler(logger, () => {
       handleMessageCreate(toRawMessage(message), messageDeps);
     });
   });
 
-  // A partial new message has no content to analyse; a partial old one means the change is unknown.
+  // A partial old message means the previous content is unknown (treated as a change). A partial new
+  // message is fetched once; without its content there is nothing to analyse.
   client.on(Events.MessageUpdate, (oldMessage, newMessage) => {
-    if (newMessage.partial) return;
-    guardHandler(logger, () => {
-      const oldContent = oldMessage.partial ? null : oldMessage.content;
-      handleMessageUpdate(oldContent, toRawMessage(newMessage), messageDeps);
-    });
+    if (newMessage.guildId !== guildId) return;
+    void (async () => {
+      try {
+        const current = newMessage.partial ? await newMessage.fetch() : newMessage;
+        const oldContent = oldMessage.partial ? null : oldMessage.content;
+        handleMessageUpdate(oldContent, toRawMessage(current), messageDeps);
+      } catch (error) {
+        logger.error({ error: errorMessage(error) }, 'discord message event failed');
+      }
+    })();
   });
 
   client.on(Events.InteractionCreate, (interaction: Interaction) => {
@@ -135,16 +142,22 @@ export async function main(): Promise<void> {
   } catch (error) {
     logger.fatal({ error: errorMessage(error) }, 'core failed to start');
     // The client never logged in, so there is nothing to disconnect, only resources to release.
-    await client.destroy();
+    try {
+      await client.destroy();
+    } catch (cleanupError) {
+      logger.error({ error: errorMessage(cleanupError) }, 'discord client cleanup failed');
+    }
     process.exitCode = 1;
     return;
   }
 
   const shutdown = async (): Promise<void> => {
+    // Stop feeding events, let the modules drain while REST still works, then disconnect.
+    client.removeAllListeners();
     try {
-      await client.destroy();
-    } finally {
       await core.stop();
+    } finally {
+      await client.destroy();
     }
   };
   const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
