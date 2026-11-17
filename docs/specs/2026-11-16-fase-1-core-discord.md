@@ -1,6 +1,6 @@
 # Spec — Fase 1: Core + Discord mínimo
 
-**Status:** Aguardando aprovação
+**Status:** Aprovada em 2026-11-16
 **Fase:** [ROADMAP — Fase 1](../ROADMAP.md#fase-1--core--discord-mínimo)
 **Decisões aplicadas:** [0001](../decisions/0001-modular-monolith.md), [0002](../decisions/0002-typescript-node.md), [0003](../decisions/0003-single-guild.md), [0005](../decisions/0005-runtime-and-persistence.md), [0006](../decisions/0006-permission-model.md), [0007](../decisions/0007-event-bus-delivery.md), [0008](../decisions/0008-logging-and-validation.md), [0009](../decisions/0009-api-version-compatibility.md)
 

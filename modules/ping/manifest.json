@@ -1,0 +1,11 @@
+{
+  "id": "ping",
+  "name": "Ping",
+  "description": "Health check command",
+  "version": "1.0.0",
+  "apiVersion": "1.0.0",
+  "entrypoint": "index.ts",
+  "enabledByDefault": true,
+  "dependencies": [],
+  "permissions": []
+}

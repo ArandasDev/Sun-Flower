@@ -4,9 +4,10 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 
 ## Estado atual
 
-| Fase atual                       | Situação                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------- |
-| **Fase 0 — Base do repositório** | Em andamento: projeto TypeScript e CI em revisão; falta importar o ruleset da `main`. |
+| Fase atual                         | Situação                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fase 0 — Base do repositório**   | Em andamento: projeto TypeScript e CI prontos; falta importar o ruleset da `main` (`.github/rulesets/main.json`).                           |
+| **Fase 1 — Core + Discord mínimo** | Em revisão: Core, interface Discord, comando `staff` e módulo `ping` implementados; falta a verificação manual de `/ping` no servidor real. |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
