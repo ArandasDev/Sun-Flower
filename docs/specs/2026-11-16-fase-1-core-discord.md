@@ -133,7 +133,7 @@ O `userId` é validado (17 a 20 dígitos). Cada alteração é registrada no log
 ## 8. Interface Discord
 
 - `discord.js` 14, intent `Guilds` somente.
-- **Restrição ao servidor:** no `ready` e no `guildCreate`, o bot sai de todo servidor cujo ID não seja `DISCORD_GUILD_ID` e registra a saída. Interações de outros servidores e de mensagens diretas são ignoradas. Se o bot não estiver no servidor configurado, registra um erro e permanece aguardando.
+- **Restrição ao servidor:** interações de outros servidores e de mensagens diretas são ignoradas. O bot não sai de outros servidores ([decisão 0010](../decisions/0010-stay-in-other-guilds.md), que substitui a regra de saída original). Se o bot não estiver no servidor configurado, registra um erro e permanece aguardando.
 - **Comandos:** após o `start` dos módulos, a lista de comandos do servidor é substituída pelos comandos registrados; os comandos globais são removidos. Nome de comando duplicado: o módulo que registrou por último fica `FAILED`.
 - **Despacho:** a interface monta o `Actor` (`userId` e `roleIds` do membro) e chama `handle`. Sem resposta em 2,5 segundos, a interação é adiada (`deferReply`) e a resposta posterior usa `editReply`. Erro no handler: registrado no log; o usuário recebe "Ocorreu um erro." como resposta efêmera, sem detalhes internos.
 

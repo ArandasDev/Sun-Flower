@@ -1,6 +1,6 @@
 # 0003 — Atuação em um único servidor Discord
 
-**Status:** Aceita
+**Status:** Aceita; a regra de saída de outros servidores foi substituída por [0010](0010-stay-in-other-guilds.md)
 **Data:** 2026-11-16
 
 ## Contexto

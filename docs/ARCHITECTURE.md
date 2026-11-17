@@ -13,7 +13,7 @@ Ele não foi projetado para operar em múltiplos servidores. Consequentemente:
 - O ID do servidor é lido da variável de ambiente `DISCORD_GUILD_ID` e nunca escrito diretamente no código.
 - Se `DISCORD_GUILD_ID` estiver ausente, a aplicação não inicia.
 - Eventos, comandos e interações originados de qualquer outro servidor deverão ser ignorados.
-- Caso o bot seja adicionado a outro servidor, ele deverá registrar a ocorrência e sair desse servidor.
+- O bot não sai de outros servidores; ele apenas não responde a nada vindo deles ([decisão 0010](decisions/0010-stay-in-other-guilds.md)).
 - Os comandos deverão ser registrados no escopo do servidor (_guild commands_), e não globalmente.
 - A arquitetura não deverá implementar isolamento multi-servidor (_multi-tenancy_): configurações, regras e dados pertencem a esse único servidor.
 

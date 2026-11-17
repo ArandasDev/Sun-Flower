@@ -46,14 +46,14 @@ Os IDs do Discord (usuários e servidor) ficam somente no banco local (`SUNFLOWE
 
 **Execução:**
 
-> [!WARNING]
-> Ao iniciar, o bot **sai de todos os servidores diferentes de `DISCORD_GUILD_ID`** ([0003](docs/decisions/0003-single-guild.md)). Um valor errado faz o bot deixar servidores onde ele deveria ficar. Confira `DISCORD_GUILD_ID` antes do primeiro `npm start` e teste `/ping` no servidor configurado antes de adicionar o bot a qualquer outro servidor.
+> [!NOTE]
+> O bot só responde no servidor `DISCORD_GUILD_ID` e ignora qualquer outro servidor e as mensagens diretas, sem sair deles ([0010](docs/decisions/0010-stay-in-other-guilds.md)). Se `DISCORD_GUILD_ID` estiver errado, o bot conecta mas não registra comandos e informa no log que não está no servidor configurado.
 
 ```bash
 npm start
 ```
 
-O bot conecta ao Discord, sai de qualquer servidor diferente de `DISCORD_GUILD_ID` e registra os comandos dos módulos nesse servidor. `Ctrl+C` encerra o bot de forma controlada.
+O bot conecta ao Discord e registra os comandos dos módulos no servidor `DISCORD_GUILD_ID`. `Ctrl+C` encerra o bot de forma controlada.
 
 **Comandos:**
 
