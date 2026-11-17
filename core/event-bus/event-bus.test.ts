@@ -40,6 +40,7 @@ function manifest(id: string, subscribes: string[], publishes: string[]): Module
     entrypoint: 'index.ts',
     dependencies: [],
     permissions: [],
+    capabilities: [],
     enabledByDefault: true,
     events: { subscribes, publishes },
   };

@@ -1,8 +1,12 @@
 import type { Actor, CommandDefinition } from './commands.ts';
+import type { GuildActions } from './guild.ts';
 import type { EventContext, EventHandler } from './events.ts';
 import type { Logger } from './logger.ts';
+import type { ModuleStorage } from './storage.ts';
 
-export const CORE_API_VERSION = '1.0.0';
+export const CORE_API_VERSION = '1.1.0';
+
+export type Capability = 'guild.moderate' | 'guild.message';
 
 export interface ModuleManifest {
   readonly id: string;
@@ -13,6 +17,7 @@ export interface ModuleManifest {
   readonly entrypoint: string;
   readonly dependencies: readonly string[];
   readonly permissions: readonly string[];
+  readonly capabilities: readonly Capability[];
   readonly enabledByDefault: boolean;
   readonly events: {
     readonly subscribes: readonly string[];
@@ -27,8 +32,14 @@ export interface ModuleContext {
     publish(type: string, payload: unknown, context?: EventContext): void;
     subscribe(type: string, handler: EventHandler): void;
   };
-  readonly permissions: { check(actor: Actor, permission: string): boolean };
-  readonly config: { get<T>(): T };
+  readonly permissions: {
+    check(actor: Actor, permission: string): boolean;
+    isDeveloper(userId: string): boolean;
+    hasAnyGrant(roleIds: readonly string[], prefix: string): boolean;
+  };
+  readonly config: { get<T>(): T; set(partial: Record<string, unknown>): void };
+  readonly guild: GuildActions;
+  readonly storage: ModuleStorage;
   readonly commands: { register(command: CommandDefinition): void };
 }
 

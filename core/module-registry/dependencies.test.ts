@@ -12,6 +12,7 @@ function m(id: string, dependencies: readonly string[] = []): ModuleManifest {
     entrypoint: 'index.ts',
     dependencies,
     permissions: [],
+    capabilities: [],
     enabledByDefault: false,
     events: { subscribes: [], publishes: [] },
   };

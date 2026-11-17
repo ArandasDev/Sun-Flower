@@ -123,6 +123,7 @@ function writeModule(id: string, options: FixtureOptions = {}): string {
     entrypoint: 'index.ts',
     dependencies: options.dependencies ?? [],
     permissions: [],
+    capabilities: [],
     enabledByDefault: options.enabledByDefault ?? true,
     ...options.manifest,
   };
@@ -574,6 +575,7 @@ export default () => ({
       entrypoint: 'index.ts',
       dependencies: [],
       permissions: [],
+      capabilities: [],
       enabledByDefault: true,
       events: { subscribes: [], publishes: ['pub.thing.happened'] },
     });
@@ -621,6 +623,7 @@ export default () => {
       entrypoint: 'index.ts',
       dependencies: [],
       permissions: [],
+      capabilities: [],
       enabledByDefault: true,
       events: { subscribes: [], publishes: ['pub.thing.happened'] },
     });
@@ -650,6 +653,7 @@ export default () => {
         entrypoint: 'index.ts',
         dependencies: [],
         permissions: [],
+        capabilities: [],
         enabledByDefault: true,
         events: { subscribes: ['a.thing.happened'], publishes: [] },
       })

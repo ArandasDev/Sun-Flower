@@ -109,6 +109,10 @@ export class PermissionService {
         if (!declared.has(permission)) throw new UndeclaredPermissionError(manifest.id, permission);
         return this.check(actor, permission);
       },
+      isDeveloper: (userId) => this.isDeveloper(userId),
+      hasAnyGrant: () => {
+        throw new Error('not wired');
+      },
     };
   }
 }

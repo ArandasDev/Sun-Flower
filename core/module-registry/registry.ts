@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
+import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import {
   CORE_API_VERSION,
@@ -8,6 +9,7 @@ import {
   type ModuleManifest,
   type SunFlowerModule,
 } from '../../shared/contracts/module.ts';
+import type { ModuleStorage } from '../../shared/contracts/storage.ts';
 import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
@@ -62,6 +64,15 @@ interface ModuleRecord {
 }
 
 type Phase = 'new' | 'loading' | 'loaded' | 'starting' | 'started' | 'stopping' | 'stopped';
+
+/** Placeholder until the Core wires the real service (replaced in a later task). */
+function notWired<T extends object>(): T {
+  return new Proxy({} as T, {
+    get: () => {
+      throw new Error('not wired');
+    },
+  });
+}
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -302,7 +313,12 @@ export class ModuleRegistry {
           }
           return record.settings.value as T;
         },
+        set: () => {
+          throw new Error('not wired');
+        },
       }),
+      guild: notWired<GuildActions>(),
+      storage: notWired<ModuleStorage>(),
       commands: Object.freeze({
         register: (command: CommandDefinition) => {
           this.#registerCommand(record, command);

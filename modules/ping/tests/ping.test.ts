@@ -10,8 +10,10 @@ function fakeContext(registered: CommandDefinition[]): ModuleContext {
     moduleId: 'ping',
     logger: createRecordingLogger(),
     events: { publish: () => {}, subscribe: () => {} },
-    permissions: { check: () => false },
-    config: { get: <T>() => ({}) as T },
+    permissions: { check: () => false, isDeveloper: () => false, hasAnyGrant: () => false },
+    config: { get: <T>() => ({}) as T, set: () => {} },
+    guild: {} as ModuleContext['guild'],
+    storage: {} as ModuleContext['storage'],
     commands: {
       register: (command) => {
         registered.push(command);
@@ -35,6 +37,17 @@ describe('ping module', () => {
     const replies: string[] = [];
     await registered[0]?.handle({
       actor: { userId: '000000000000000000', roleIds: [] },
+      channelId: '111111111111111111',
+      subcommandGroup: undefined,
+      subcommand: undefined,
+      options: {
+        getString: () => undefined,
+        getInteger: () => undefined,
+        getBoolean: () => undefined,
+        getUser: () => undefined,
+        getChannel: () => undefined,
+        getRole: () => undefined,
+      },
       reply: async (content) => {
         await Promise.resolve();
         replies.push(content);

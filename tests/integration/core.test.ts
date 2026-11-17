@@ -45,6 +45,7 @@ function manifest(id: string, dependencies: string[] = []): Record<string, unkno
     entrypoint: 'index.ts',
     dependencies,
     permissions: [],
+    capabilities: [],
     enabledByDefault: true,
     events: { subscribes: [], publishes: [] },
   };

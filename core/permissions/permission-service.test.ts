@@ -27,6 +27,7 @@ function manifest(overrides: Partial<ModuleManifest> = {}): ModuleManifest {
     entrypoint: 'index.ts',
     dependencies: [],
     permissions: [],
+    capabilities: [],
     enabledByDefault: false,
     events: { subscribes: [], publishes: [] },
     ...overrides,
