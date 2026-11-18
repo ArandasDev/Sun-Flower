@@ -20,7 +20,7 @@ const PRUNE_INTERVAL_MS = 60_000;
 const MAX_ACTIVITY_AGE_MS = 3_600_000;
 
 /** The longest window any spam rule looks back (detection or deletion), capped at one hour. */
-function activityMaxAgeMs(spam: ModerationConfig['spam']): number {
+export function activityMaxAgeMs(spam: ModerationConfig['spam']): number {
   const windows = [
     spam.flood.seconds * 1000,
     spam.flood.deleteMinutes * 60_000,

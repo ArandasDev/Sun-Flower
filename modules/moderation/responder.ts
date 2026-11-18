@@ -76,6 +76,8 @@ export class Responder {
   private warnedNoAlertChannel = false;
   /** Level of each analysis still between its dedupe check and `cases.create`. */
   private readonly inFlight = new Map<string, Level>();
+  /** Confirmed spam cases per author still between the dedupe check and `cases.create`. */
+  private readonly inFlightSpam = new Map<string, number>();
 
   constructor(deps: ResponderDeps) {
     this.deps = deps;
@@ -148,14 +150,16 @@ export class Responder {
     const spamHits = this.spamHits(payload, kind, config, nowMs);
     if (analysis.level === undefined && spamHits.length === 0) return;
 
-    // Counted before this message's case exists, so the first surge is step 1.
+    // Counted before this message's case exists, so the first surge is step 1. Confirmed spam
+    // cases of the same author still in flight count as actioned, so concurrent cases escalate.
+    const { authorId } = payload;
     const priorActionedSpam =
       spamHits.length === 0
         ? 0
         : cases.countActionedSpamSince(
-            payload.authorId,
+            authorId,
             new Date(nowMs - config.spam.escalation.windowHours * 3_600_000).toISOString(),
-          );
+          ) + (this.inFlightSpam.get(authorId) ?? 0);
     const decision = decide({
       analysis,
       spamHits,
@@ -175,6 +179,8 @@ export class Responder {
     const pending = this.inFlight.get(messageId);
     if (pending !== undefined && rank(pending) >= rank(level)) return;
     this.inFlight.set(messageId, level);
+    const countsAsSpam = spamHits.length > 0 && level === 'confirmed';
+    if (countsAsSpam) this.inFlightSpam.set(authorId, (this.inFlightSpam.get(authorId) ?? 0) + 1);
 
     let newCase: NewCase;
     let caseId: number;
@@ -191,6 +197,11 @@ export class Responder {
     } finally {
       // A higher-level analysis may have replaced the entry; leave that one alone.
       if (this.inFlight.get(messageId) === level) this.inFlight.delete(messageId);
+      if (countsAsSpam) {
+        const remaining = (this.inFlightSpam.get(authorId) ?? 1) - 1;
+        if (remaining > 0) this.inFlightSpam.set(authorId, remaining);
+        else this.inFlightSpam.delete(authorId);
+      }
     }
     this.deps.publish(CASE_CREATED, {
       caseId,
@@ -317,6 +328,9 @@ export class Responder {
       const batches = banDeletes ? [] : this.deletionBatches(payload, decision, nowMs);
       const sentIds = batches.flatMap((batch) => batch.ids);
       requested = sentIds.length;
+      // Forgotten before any await, so a concurrent case of the same author (another rule on a
+      // later message) cannot read and send these IDs again, whatever the batch results.
+      this.deps.activity.forget(payload.authorId, sentIds);
       const punishing = this.punish(
         payload.authorId,
         punishment,
@@ -327,8 +341,6 @@ export class Responder {
         batches.length === 0 ? Promise.resolve(undefined) : this.bulkDelete(batches),
         punishing ?? Promise.resolve<GuildActionResult>({ ok: true }),
       ]);
-      // A later case in the same window must not send these messages again.
-      this.deps.activity.forget(payload.authorId, sentIds);
 
       if (deletion.status === 'fulfilled' && deletion.value !== undefined) {
         outcome = { ...deletion.value };

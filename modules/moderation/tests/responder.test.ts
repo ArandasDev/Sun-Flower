@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DiscordMessagePayload } from '../../../shared/contracts/discord-events.ts';
 import { createFakeGuild } from '../../../tests/helpers/fake-guild.ts';
@@ -653,6 +653,54 @@ describe('Responder spam handling', () => {
     await surge(8, 8, 500, () => ({ authorId: DEVELOPER }));
     expect(guild.calls).toEqual([]);
     expect(cases.listRecent(10)).toEqual([]);
+  });
+
+  describe('concurrent cases of one author', () => {
+    const SAME = 'compre agora mesmo';
+    let releases: (() => void)[];
+
+    /** repeat fires at message 3, mentions at message 7; no await between the handlers. */
+    async function concurrentSurge(): Promise<void> {
+      setSpam({ flood: { enabled: false }, repeat: { limit: 4 }, mentions: { deleteMinutes: 2 } });
+      releases = [];
+      guild.bulkDeleteMessages = (channelId, messageIds) => {
+        guild.calls.push({ action: 'bulkDeleteMessages', args: [channelId, messageIds] });
+        return new Promise((resolve) => {
+          releases.push(() => {
+            resolve({ ok: true, deleted: messageIds.length, individually: 0 });
+          });
+        });
+      };
+      const pending: Promise<void>[] = [];
+      for (let i = 0; i < 8; i++) {
+        const content = i === 7 ? `${SAME} ${MENTIONS}` : SAME;
+        pending.push(r.handle(message(i, { content })));
+        clock += 500;
+      }
+      await vi.waitFor(() => {
+        expect(releases).toHaveLength(2);
+      });
+      for (const release of releases) release();
+      await Promise.all(pending);
+    }
+
+    it('never sends a message ID in two bulk calls', async () => {
+      await concurrentSurge();
+
+      const sent = callsOf('bulkDeleteMessages').flatMap((c) => c.args[1] as string[]);
+      expect(sent).toHaveLength(8);
+      expect(new Set(sent).size).toBe(sent.length);
+      const deleted = cases.listRecent(10).map((c) => Number(c.outcome['deleted']));
+      expect(deleted.reduce((a, b) => a + b, 0)).toBe(8);
+    });
+
+    it('counts an in-flight case for escalation', async () => {
+      await concurrentSurge();
+
+      expect(callsOf('timeout').map((c) => c.args[1])).toEqual([600_000, 3_600_000]);
+      const alerts = callsOf('sendMessage').map((c) => c.args[1] as string);
+      expect(alerts.some((a) => a.includes('(reincidência 2)'))).toBe(true);
+    });
   });
 
   it('never logs message content or IDs', async () => {
