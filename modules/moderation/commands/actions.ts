@@ -70,17 +70,22 @@ async function resolveTarget(
     return undefined;
   }
   const roleIds = await deps.guild.getMemberRoleIds(userId);
-  if (roleIds !== undefined) {
-    const exempt = new Set(deps.config.get<ModerationConfig>().exemptRoleIds);
-    if (
-      roleIds.some((roleId) => exempt.has(roleId)) ||
-      deps.permissions.hasAnyGrant(roleIds, 'moderation.')
-    ) {
-      await interaction.reply(PROTECTED_TARGET, EPHEMERAL);
-      return undefined;
-    }
-  } else if (requireMember) {
+  if (roleIds === undefined) {
+    // The lookup failed: the protections cannot be checked, so fail closed.
+    await interaction.reply(DISCORD_REFUSED('falha'), EPHEMERAL);
+    return undefined;
+  }
+  if (roleIds === null) {
+    if (!requireMember) return { userId, reason };
     await interaction.reply(NOT_A_MEMBER, EPHEMERAL);
+    return undefined;
+  }
+  const exempt = new Set(deps.config.get<ModerationConfig>().exemptRoleIds);
+  if (
+    roleIds.some((roleId) => exempt.has(roleId)) ||
+    deps.permissions.hasAnyGrant(roleIds, 'moderation.')
+  ) {
+    await interaction.reply(PROTECTED_TARGET, EPHEMERAL);
     return undefined;
   }
   return { userId, reason };

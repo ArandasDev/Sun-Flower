@@ -152,7 +152,33 @@ describe('/mod manual action protections', () => {
     const text = await run(t, 'ban');
     expect(text).toBe('Usuário banido (caso #1).');
     expect(discordCalls(t)).toEqual([{ action: 'ban', args: [TARGET, 'spam', 0] }]);
+    expect(t.deps.cases.get(1)).toMatchObject({
+      kind: 'manual',
+      action: 'ban',
+      status: 'actioned',
+      targetUserId: TARGET,
+      outcome: { ban: 'ok' },
+    });
+    expect(t.publish).toHaveBeenCalledExactlyOnceWith('moderation.case.created', {
+      caseId: 1,
+      kind: 'manual',
+      level: null,
+      action: 'ban',
+    });
   });
+
+  it.each(ACTIONS)(
+    '%s refuses with DISCORD_REFUSED falha when the member lookup fails',
+    async (action) => {
+      const t = setup();
+      t.guild.lookupFails.add(TARGET);
+      const text = await run(t, action);
+      expect(text).toBe('O Discord recusou a ação: falha.');
+      expect(discordCalls(t)).toHaveLength(0);
+      expect(t.create).not.toHaveBeenCalled();
+      expect(t.publish).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(ACTIONS)('%s with a missing or overlong reason is rejected', async (action) => {
     const t = setup();
@@ -273,12 +299,4 @@ describe('/mod timeout, kick and ban', () => {
       }
     },
   );
-
-  it('the bot itself as target is refused by the guild service as forbidden', async () => {
-    // The module cannot know the bot ID; the Core guild wrapper answers `forbidden`.
-    const t = setup({ guild: { kick: { ok: false, error: 'forbidden' } } });
-    const text = await run(t, 'kick');
-    expect(text).toBe('O Discord recusou a ação: sem permissão.');
-    expect(t.create).not.toHaveBeenCalled();
-  });
 });

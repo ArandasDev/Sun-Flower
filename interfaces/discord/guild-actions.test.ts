@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGuildActions, type GuildGateway } from './guild-actions.ts';
+import type { Client } from 'discord.js';
+
+import { createDiscordGateway, createGuildActions, type GuildGateway } from './guild-actions.ts';
 
 const BOT = '000000000000000000';
 const USER = '111111111111111111';
@@ -90,11 +92,13 @@ describe('createGuildActions', () => {
     expect(setTimeoutSpy).toHaveBeenCalledWith(USER, null);
   });
 
-  it('getMemberRoleIds returns roles, and undefined on any failure', async () => {
+  it('getMemberRoleIds returns roles, passes null through and gives undefined on failure', async () => {
     expect(await createGuildActions(fakeGateway()).getMemberRoleIds(USER)).toEqual([
       '333333333333333333',
     ]);
-    const failing = fakeGateway({ memberRoleIds: () => Promise.reject(discordError(10007)) });
+    const notMember = fakeGateway({ memberRoleIds: () => Promise.resolve(null) });
+    expect(await createGuildActions(notMember).getMemberRoleIds(USER)).toBeNull();
+    const failing = fakeGateway({ memberRoleIds: () => Promise.reject(discordError(50013)) });
     expect(await createGuildActions(failing).getMemberRoleIds(USER)).toBeUndefined();
   });
 
@@ -126,5 +130,57 @@ describe('createGuildActions', () => {
       ok: false,
       error: 'failed',
     });
+  });
+});
+
+describe('createDiscordGateway memberRoleIds', () => {
+  const GUILD = '444444444444444444';
+
+  function clientWith(fetch: () => Promise<unknown>, guildPresent = true): Client {
+    const guild = { id: GUILD, members: { fetch } };
+    return {
+      guilds: { cache: { get: () => (guildPresent ? guild : undefined) } },
+    } as unknown as Client;
+  }
+
+  it('returns the role IDs without @everyone', async () => {
+    const member = {
+      roles: {
+        cache: new Map([
+          [GUILD, {}],
+          ['333333333333333333', {}],
+        ]),
+      },
+    };
+    const gateway = createDiscordGateway(
+      clientWith(() => Promise.resolve(member)),
+      GUILD,
+    );
+    expect(await gateway.memberRoleIds(USER)).toEqual(['333333333333333333']);
+  });
+
+  it.each([10007, 10013])('returns null for Discord error %i (not a member)', async (code) => {
+    const gateway = createDiscordGateway(
+      clientWith(() => Promise.reject(discordError(code))),
+      GUILD,
+    );
+    expect(await gateway.memberRoleIds(USER)).toBeNull();
+  });
+
+  it('rethrows other errors, which createGuildActions turns into undefined', async () => {
+    const gateway = createDiscordGateway(
+      clientWith(() => Promise.reject(discordError(50013))),
+      GUILD,
+    );
+    await expect(gateway.memberRoleIds(USER)).rejects.toMatchObject({ code: 50013 });
+    expect(await createGuildActions(gateway).getMemberRoleIds(USER)).toBeUndefined();
+  });
+
+  it('gives undefined when the guild is unavailable', async () => {
+    const gateway = createDiscordGateway(
+      clientWith(() => Promise.resolve({}), false),
+      GUILD,
+    );
+    expect(await createGuildActions(gateway).getMemberRoleIds(USER)).toBeUndefined();
   });
 });

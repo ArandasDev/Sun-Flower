@@ -44,7 +44,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Serviço `storage` e migrações SQL por módulo, com tabelas no prefixo `<id>_`.
   - Opções de comando (`options`, incluindo `choices` para texto) e `config.set` para alterar configurações em tempo de execução.
   - `npm run staff -- grant|revoke <permissão> <ID do cargo>` e `grants` para gerenciar as permissões dos cargos, com aviso quando nenhum módulo declara a permissão.
-- Interface Discord da Fase 2: ações no servidor (apagar mensagem, castigo, expulsão, banimento, desbanimento, mensagens no canal e diretas, cargos do membro) com recusa de ações contra o próprio bot, erros mapeados para `forbidden`, `not_found` e `failed`, limite de 10 s por chamada e mensagens sem menções. O README documenta os intents privilegiados e as permissões do convite.
+- Interface Discord da Fase 2: ações no servidor (apagar mensagem, castigo, expulsão, banimento, desbanimento, mensagens no canal e diretas, cargos do membro, com `null` para quem não é membro e `undefined` quando a consulta falha) com recusa de ações contra o próprio bot, erros mapeados para `forbidden`, `not_found` e `failed`, limite de 10 s por chamada e mensagens sem menções. O README documenta os intents privilegiados e as permissões do convite.
 - Módulo `moderation`, detecção de phishing e resposta automática (Fase 2, etapa 1):
   - Extração e normalização de links como num navegador, com marcas protegidas (`discord`, `steam`) e detecção de imitações por esqueleto de caracteres parecidos e distância de edição.
   - Pontuação por sinais (`blocked`, `lookalike`, `masked`, `multiChannel`, `bait`, `massMention`, `newAccount`) com pesos e limites configuráveis, níveis `confirmed` e `suspicious` e isenção de cargos e desenvolvedores do bot.
@@ -55,7 +55,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - `config view | alert-channel | timeout | thresholds | exempt-role` para a configuração em tempo de execução.
   - `domain block | allow | remove | list` para as listas de domínios, com normalização do domínio informado.
   - `case view | list | revert | dismiss` para consultar, reverter (remover timeout, desbanir e, opcionalmente, permitir os domínios do caso, exceto imitações de marcas) e descartar casos.
-  - Ações manuais `warn`, `timeout`, `kick` e `ban`, que gravam um caso `manual`; `warn` envia mensagem direta ao membro. Recusam agir contra a própria pessoa, desenvolvedores do bot, cargos isentos e cargos com permissão `moderation.*`; `warn`, `timeout` e `kick` exigem um membro do servidor. Se o Discord recusar a ação, nenhum caso é gravado.
+  - Ações manuais `warn`, `timeout`, `kick` e `ban`, que gravam um caso `manual`; `warn` envia mensagem direta ao membro. Recusam agir contra a própria pessoa, desenvolvedores do bot, cargos isentos e cargos com permissão `moderation.*`; `warn`, `timeout` e `kick` exigem um membro do servidor. Se o Discord recusar a ação, ou se a consulta dos cargos do alvo falhar, nenhum caso é gravado.
 - README: seção "Moderação" com as permissões a associar e o passo a passo do teste manual no servidor real.
 
 ### Changed

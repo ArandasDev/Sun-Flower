@@ -120,7 +120,7 @@ O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcoman
 - é um desenvolvedor do bot, tem um cargo de `exemptRoleIds` ou tem um cargo com alguma permissão `moderation.*` (`Não é possível agir contra este membro.`);
 - é o próprio bot: o serviço `guild` do Core recusa, e a resposta é `O Discord recusou a ação: sem permissão.`.
 
-`warn`, `timeout` e `kick` exigem que o alvo seja membro do servidor (`Este usuário não é membro do servidor.`); `ban` aceita um usuário que não é membro.
+`warn`, `timeout` e `kick` exigem que o alvo seja membro do servidor (`Este usuário não é membro do servidor.`); `ban` aceita um usuário que não é membro. Se não for possível consultar os cargos do alvo (erro ou demora do Discord), nenhuma das quatro ações é executada: a resposta é `O Discord recusou a ação: falha.` e nenhum caso é gravado.
 
 ## 8. Exemplos de utilização
 

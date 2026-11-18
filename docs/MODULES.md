@@ -158,6 +158,8 @@ Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 
 Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
 
+`getMemberRoleIds(userId)` tem três resultados: a lista de cargos do membro (sem `@everyone`); `null` quando a pessoa não é membro do servidor; `undefined` quando a consulta falhou (erro do Discord, limite de tempo, servidor indisponível ou módulo inativo). Trate `undefined` como "não foi possível verificar", e não como "não é membro": uma proteção que dependa dos cargos deve recusar a ação nesse caso.
+
 ### 4.4. Validação
 
 O Core deverá validar o manifesto antes de inicializar o módulo.

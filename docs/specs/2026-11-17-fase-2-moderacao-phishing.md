@@ -92,7 +92,7 @@ interface GuildActions {
   unban(userId: string): Promise<GuildActionResult>;
   sendMessage(channelId: string, content: string): Promise<GuildActionResult>;
   sendDirectMessage(userId: string, content: string): Promise<GuildActionResult>;
-  getMemberRoleIds(userId: string): Promise<readonly string[] | undefined>;
+  getMemberRoleIds(userId: string): Promise<readonly string[] | null | undefined>;
 }
 ```
 
@@ -106,6 +106,7 @@ interface GuildActions {
 - O `reason` é enviado ao log de auditoria do Discord, truncado em 512 caracteres.
 - Mensagens enviadas usam `allowedMentions: { parse: [] }`.
 - Cada chamada ao Discord tem limite de 10 segundos e devolve `failed` se for excedido.
+- `getMemberRoleIds` devolve os cargos do membro (sem `@everyone`); `null` quando a pessoa não é membro (erros 10007 Unknown Member e 10013 Unknown User do Discord); `undefined` quando a consulta falhou (outro erro, limite de tempo, servidor indisponível ou módulo inativo).
 
 ### 3.3. Serviço `storage` ([0013](../decisions/0013-module-storage.md))
 
@@ -384,20 +385,20 @@ Todas as respostas são efêmeras.
 | `/mod warn <usuário> <motivo>`                                         | `moderation.actions.warn`    |
 | `/mod timeout <usuário> <minutos> <motivo>`                            | `moderation.actions.timeout` |
 | `/mod kick <usuário> <motivo>`                                         | `moderation.actions.kick`    |
-| `/mod ban <usuário> <motivo> [apagar-dias]`                            | `moderation.actions.ban`     |
+| `/mod ban <usuário> <motivo> [delete-days]`                            | `moderation.actions.ban`     |
 
 - `exempt-role` usa uma opção `string` com as escolhas `add` e `remove`.
 - `domain list` mostra no máximo 50 domínios por lista. `case list` mostra os 10 casos mais recentes, do usuário quando informado.
 - `domain block` e `allow` validam o domínio pela mesma normalização de §4.3. Bloquear um domínio permitido o move para a lista de bloqueados, e vice-versa.
 - `warn` grava o caso e tenta `sendDirectMessage` com o motivo. Se a mensagem direta falhar, o caso fica registrado e a resposta informa.
-- `apagar-dias` vai de 0 a 7.
+- `delete-days` vai de 0 a 7.
 
 **Proteções das ações manuais (`warn`, `timeout`, `kick`, `ban`):** a ação é recusada quando o alvo:
 
 - é a própria pessoa que executa o comando;
 - é o bot ou um desenvolvedor do bot (o serviço `guild` também recusa);
 - tem um cargo de `exemptRoleIds`;
-- tem um cargo com alguma permissão `moderation.*` associada. Para isso, o módulo usa `permissions.hasAnyGrant(roleIds, prefix)`, um método novo e somente de leitura, e o serviço `guild` ganha `getMemberRoleIds(userId)`, que devolve `undefined` se a pessoa não for membro.
+- tem um cargo com alguma permissão `moderation.*` associada. Para isso, o módulo usa `permissions.hasAnyGrant(roleIds, prefix)`, um método novo e somente de leitura, e o serviço `guild` ganha `getMemberRoleIds(userId)`, que devolve `null` se a pessoa não for membro e `undefined` se a consulta falhar (§3.2). Se a consulta falhar, a ação é recusada com `O Discord recusou a ação: falha.`, sem chamar o Discord e sem gravar caso.
 
 `timeout` e `kick` exigem que o alvo seja membro. `ban` aceita um usuário que não é membro.
 

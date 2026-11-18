@@ -193,6 +193,14 @@ describe('createModuleGuild', () => {
     ]);
   });
 
+  it('passes a null getMemberRoleIds (not a member) through unchanged', async () => {
+    const { guild, entries } = setup(['guild.moderate'], {
+      getMemberRoleIds: () => Promise.resolve(null),
+    });
+    expect(await guild.getMemberRoleIds(target)).toBeNull();
+    expect(entries).toHaveLength(0);
+  });
+
   it('converts a throwing getMemberRoleIds into undefined and logs an error', async () => {
     const { guild, entries } = setup(['guild.moderate'], {
       getMemberRoleIds: () => Promise.reject(new Error('boom ' + target)),
