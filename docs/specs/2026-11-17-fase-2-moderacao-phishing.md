@@ -252,12 +252,12 @@ interface CommandInteraction {
 ### 4.3. Extração e normalização de links
 
 - Fontes:
-  - URLs com `http://` ou `https://`;
+  - URLs com `http://` ou `https://`, inclusive com host IPv4 literal (o domínio é o IP na forma canônica, por exemplo `https://0x7f.0.0.1/` → `127.0.0.1`);
   - domínios sem esquema com TLD de 2 a 24 letras seguidos ou não de caminho (`golpe.gift/abc`);
   - links markdown `[texto](url)`;
   - URLs entre `<` e `>`;
   - variações com `\` ou espaços em volta do ponto não são reconstruídas (fora do escopo).
-- Normalização: minúsculas, `domainToASCII` de `node:url`, remoção de `www.` e do ponto final. Um domínio que `domainToASCII` não aceita é descartado.
+- Normalização: o host é canonicalizado como num navegador, pelo parser WHATWG (`URL`): minúsculas, IDNA, decodificação de `%`, formas de IPv4, credenciais (`usuário@`) e porta tratadas como o navegador as trata. Depois, remoção de `www.` e do ponto final. Um host que `domainToASCII` de `node:url` não aceita é descartado.
 - Comparação com as listas: o domínio e cada domínio pai, até o segundo nível (`a.b.golpe.com` → `b.golpe.com` → `golpe.com`).
 - No máximo 20 links analisados por mensagem e 4000 caracteres de conteúdo. O resto é ignorado.
 
@@ -269,21 +269,23 @@ interface CommandInteraction {
 | `lookalike`               | 60     | Domínio imita uma marca protegida (abaixo).                                                                |
 | `masked`                  | 40     | Link markdown cujo texto contém um domínio diferente do domínio do link.                                   |
 | `multiChannel`            | 50     | O mesmo domínio, pelo mesmo autor, em `multiChannel.channels` canais dentro de `windowSeconds`.            |
-| `bait`                    | 30     | Algum termo de `baitTerms` na mensagem, junto com um link não permitido.                                   |
+| `bait`                    | 30     | Algum termo de `baitTerms` no texto fora dos links, junto com um link não permitido.                       |
 | `massMention`             | 20     | `@everyone` ou `@here` no texto, junto com um link não permitido.                                          |
 | `newAccount`              | 15     | Conta com menos de `newAccountDays` ou entrada há menos de `newMemberHours`, junto com link não permitido. |
 
 - Cada sinal conta uma vez por mensagem. A pontuação é a soma.
 - Links de domínios permitidos não produzem nenhum sinal e não contam como "link não permitido".
 - Mensagem sem link não permitido tem pontuação 0.
-- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `steam`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos.
+- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `steam`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos e considera só o texto fora dos links (`discord.gift` não conta como `gift`).
 
 **Marcas protegidas:** `discord` (`discord.com`, `discord.gg`, `discordapp.com`, `discordapp.net`, `discord.media`, `discord.new`, `discord.gift`, `discordstatus.com`) e `steam` (`steamcommunity.com`, `steampowered.com`, `steamstatic.com`). Esses domínios formam a lista inicial de permitidos.
 
 **Imitação (`lookalike`):** o domínio não é oficial e:
 
-1. o rótulo principal ou o domínio inteiro, depois de passar por um esqueleto (letras cirílicas e gregas parecidas → latinas, `0→o`, `1→l`, `3→e`, `5→s`, `rn→m`, `vv→w`, sem hífens e pontos), contém o nome da marca; ou
-2. o rótulo principal tem distância de Levenshtein entre 1 e 2 do nome da marca (`dlscord`, `steamcomunity` comparado com `steamcommunity`).
+1. o domínio inteiro, depois de passar por um esqueleto (acentos e diacríticos removidos, letras cirílicas e gregas parecidas → latinas, `0→o`, `1→l`, `3→e`, `5→s`, `rn→m`, `vv→w`, sem hífens e pontos), contém o nome da marca; ou
+2. algum rótulo que não seja o TLD, ou alguma parte desse rótulo separada por hífen, depois do esqueleto e com pelo menos 4 letras, tem distância de Levenshtein entre 1 e 2 de um alvo: o nome da marca ou o rótulo principal de um domínio oficial (`dlscord`, `steamcomunity` comparado com `steamcommunity`).
+
+Alvos de até 5 letras (`steam`) usam só a regra 1: a distância 1 marcaria palavras comuns (`team`, `steel`). Alvos mais longos usam as duas regras. Hosts IPv4 nunca são imitação.
 
 **Níveis:**
 
@@ -295,7 +297,7 @@ interface CommandInteraction {
 
 **Isenções:** autores com algum cargo de `exemptRoleIds` e desenvolvedores do bot não são analisados. Para saber se o autor é desenvolvedor, o módulo usa `permissions.isDeveloper(userId)`, um método novo e somente de leitura do serviço `permissions`.
 
-**Estado da regra de vários canais:** mapa em memória `autor → [(domínio, canal, instante)]`, com no máximo 1000 autores e 50 entradas por autor. As entradas fora da janela são descartadas a cada análise e por uma limpeza a cada 60 segundos. O estado se perde ao reiniciar.
+**Estado da regra de vários canais:** mapa em memória `autor → [(domínio, canal, instante)]`, com no máximo 1000 autores e 50 entradas por autor. Cada par (domínio, canal) ocupa uma única entrada: repetir o domínio no mesmo canal só atualiza o instante, para que mensagens repetidas num canal não empurrem para fora as ocorrências em outros canais. As entradas fora da janela são descartadas a cada análise e por uma limpeza a cada 60 segundos. O estado se perde ao reiniciar.
 
 **Uma mensagem por caso:** se a mesma mensagem já gerou caso (`message_id`), uma edição só cria caso novo se o nível subir.
 
