@@ -19,6 +19,7 @@ O módulo `moderation` precisa apagar mensagens, silenciar, expulsar e banir mem
 - `getMemberRoleIds` tem três resultados: a lista de cargos quando a pessoa é membro; `null` quando o Discord confirma que ela não é membro (Unknown Member ou Unknown User); `undefined` quando a consulta falhou (erro, limite de tempo, servidor indisponível ou módulo inativo). Assim o módulo distingue "não é membro" de "não foi possível verificar" e pode recusar a ação no segundo caso.
 - Falhas do Discord são devolvidas como erros tipados: `forbidden`, `not_found` ou `failed`, sem detalhes internos.
 - Mensagens enviadas pelo bot não notificam ninguém (`allowedMentions` vazio).
+- A exclusão em lote está em [0016](0016-bulk-message-deletion.md).
 
 ## Consequências
 

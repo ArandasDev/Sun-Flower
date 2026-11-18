@@ -12,6 +12,7 @@ function fakeGateway(overrides: Partial<GuildGateway> = {}): GuildGateway {
   return {
     botUserId: () => BOT,
     deleteMessage: vi.fn(() => Promise.resolve()),
+    bulkDelete: vi.fn((_channelId: string, ids: readonly string[]) => Promise.resolve([...ids])),
     setTimeout: vi.fn(() => Promise.resolve()),
     kick: vi.fn(() => Promise.resolve()),
     ban: vi.fn(() => Promise.resolve()),
@@ -139,6 +140,149 @@ describe('createGuildActions', () => {
       ok: false,
       error: 'failed',
     });
+  });
+});
+
+describe('createGuildActions bulkDeleteMessages', () => {
+  const ids = ['1', '2', '3', '4', '5'];
+
+  it('deletes the leftovers one by one after a partial bulk', async () => {
+    const deleteMessage = vi.fn(() => Promise.resolve());
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.resolve(['1', '2', '3']),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: true,
+      deleted: 5,
+      individually: 2,
+    });
+    expect(deleteMessage).toHaveBeenCalledTimes(2);
+    expect(deleteMessage).toHaveBeenCalledWith(CHANNEL, '4');
+    expect(deleteMessage).toHaveBeenCalledWith(CHANNEL, '5');
+  });
+
+  it('falls back to one by one when the bulk call fails', async () => {
+    const deleteMessage = vi.fn(() => Promise.resolve());
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: true,
+      deleted: 5,
+      individually: 5,
+    });
+    expect(deleteMessage).toHaveBeenCalledTimes(5);
+  });
+
+  it('returns forbidden without individual deletions when the bulk call is forbidden', async () => {
+    const deleteMessage = vi.fn(() => Promise.resolve());
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(50013)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: false,
+      error: 'forbidden',
+      deleted: 0,
+    });
+    expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns not_found without fallback when the channel is unknown', async () => {
+    const deleteMessage = vi.fn(() => Promise.resolve());
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(10003)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: false,
+      error: 'not_found',
+      deleted: 0,
+    });
+    expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not call bulkDelete for a single ID', async () => {
+    const bulkDelete = vi.fn(() => Promise.resolve([] as string[]));
+    const gateway = fakeGateway({ bulkDelete });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1'])).toEqual({
+      ok: true,
+      deleted: 1,
+      individually: 1,
+    });
+    expect(bulkDelete).not.toHaveBeenCalled();
+  });
+
+  it('counts an individual not_found as deleted but not as individually', async () => {
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage: (_c, id) =>
+        id === '2' ? Promise.reject(discordError(10008)) : Promise.resolve(),
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1', '2'])).toEqual({
+      ok: true,
+      deleted: 2,
+      individually: 1,
+    });
+  });
+
+  it('returns forbidden when the first individual deletion is forbidden', async () => {
+    const deleteMessage = vi.fn(() => Promise.reject(discordError(50013)));
+    const gateway = fakeGateway({ deleteMessage });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1'])).toEqual({
+      ok: false,
+      error: 'forbidden',
+      deleted: 0,
+    });
+  });
+
+  it('stops on forbidden but reports what was deleted so far', async () => {
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage: (_c, id) =>
+        id === '2' ? Promise.reject(discordError(50013)) : Promise.resolve(),
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1', '2', '3'])).toEqual({
+      ok: true,
+      deleted: 1,
+      individually: 1,
+    });
+  });
+
+  it('returns failed when every individual deletion fails', async () => {
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage: () => Promise.reject(discordError(500)),
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1', '2'])).toEqual({
+      ok: false,
+      error: 'failed',
+      deleted: 0,
+    });
+  });
+
+  it('falls back when the bulk call exceeds callTimeoutMs', async () => {
+    const gateway = fakeGateway({ bulkDelete: () => new Promise<never>(() => undefined) });
+    const actions = createGuildActions(gateway, { callTimeoutMs: 20 });
+    expect(await actions.bulkDeleteMessages(CHANNEL, ['1', '2'])).toEqual({
+      ok: true,
+      deleted: 2,
+      individually: 2,
+    });
+  });
+});
+
+describe('createDiscordGateway bulkDelete', () => {
+  it('bulk-deletes in the text channel, skipping old messages, and returns the deleted IDs', async () => {
+    const bulkDelete = vi.fn(() => Promise.resolve(new Map([['1', {}]])));
+    const channel = { isTextBased: () => true, bulkDelete };
+    const guild = { channels: { cache: { get: () => channel } } };
+    const client = { guilds: { cache: { get: () => guild } } } as unknown as Client;
+    const gateway = createDiscordGateway(client, '444444444444444444');
+    expect(await gateway.bulkDelete(CHANNEL, ['1', '2'])).toEqual(['1']);
+    expect(bulkDelete).toHaveBeenCalledWith(['1', '2'], true);
   });
 });
 

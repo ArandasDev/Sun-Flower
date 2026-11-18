@@ -1,12 +1,19 @@
 import type { Client, Guild } from 'discord.js';
 
 import { withTimeout } from '../../core/infrastructure/timeout.ts';
-import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
+import type {
+  BulkDeleteResult,
+  GuildActionError,
+  GuildActionResult,
+  GuildActions,
+} from '../../shared/contracts/guild.ts';
 
 /** Thin Discord operations; every method throws the discord.js error on failure. */
 export interface GuildGateway {
   botUserId(): string | undefined;
   deleteMessage(channelId: string, messageId: string): Promise<void>;
+  /** IDs removed by the bulk call (messages older than 14 days are skipped, not errors). */
+  bulkDelete(channelId: string, messageIds: readonly string[]): Promise<readonly string[]>;
   setTimeout(userId: string, durationMs: number | null, reason?: string): Promise<void>;
   kick(userId: string, reason: string): Promise<void>;
   ban(userId: string, reason: string, deleteMessageSeconds: number): Promise<void>;
@@ -20,6 +27,7 @@ export interface GuildGateway {
 const DEFAULT_CALL_TIMEOUT_MS = 10_000;
 const MISSING_PERMISSIONS = 50013;
 const NOT_FOUND_CODES: ReadonlySet<number> = new Set([10003, 10007, 10008, 10013, 10026]);
+const UNKNOWN_CHANNEL = 10003;
 const UNKNOWN_MEMBER = 10007;
 const UNKNOWN_USER = 10013;
 
@@ -48,6 +56,61 @@ export function createGuildActions(
     }
   };
 
+  const individually = async (
+    channelId: string,
+    messageIds: readonly string[],
+    alreadyDeleted: number,
+  ): Promise<BulkDeleteResult> => {
+    let deleted = alreadyDeleted;
+    let removedOne = 0;
+    let lastError: GuildActionError = 'failed';
+    for (const id of messageIds) {
+      const result = await run('deleteMessage', () => gateway.deleteMessage(channelId, id));
+      if (result.ok) {
+        deleted++;
+        removedOne++;
+      } else if (result.error === 'not_found') {
+        deleted++;
+        lastError = 'not_found';
+      } else if (result.error === 'forbidden') {
+        if (deleted === 0) return { ok: false, error: 'forbidden', deleted: 0 };
+        break;
+      } else {
+        lastError = 'failed';
+      }
+    }
+    if (deleted === 0) return { ok: false, error: lastError, deleted: 0 };
+    return { ok: true, deleted, individually: removedOne };
+  };
+
+  const bulkDeleteMessages = async (
+    channelId: string,
+    messageIds: readonly string[],
+  ): Promise<BulkDeleteResult> => {
+    if (messageIds.length === 1) return individually(channelId, messageIds, 0);
+    let remaining = messageIds;
+    let bulkDeleted = 0;
+    try {
+      const removed = new Set(
+        await withTimeout(
+          () => gateway.bulkDelete(channelId, messageIds),
+          timeoutMs,
+          'bulkDeleteMessages',
+        ),
+      );
+      bulkDeleted = removed.size;
+      remaining = messageIds.filter((id) => !removed.has(id));
+    } catch (error) {
+      // Permission or channel problems repeat for every message: no per-message fallback.
+      const mapped = toResult(error);
+      const code = (error as { code?: unknown } | null)?.code;
+      if (!mapped.ok && (mapped.error === 'forbidden' || code === UNKNOWN_CHANNEL)) {
+        return { ok: false, error: mapped.error, deleted: 0 };
+      }
+    }
+    return individually(channelId, remaining, bulkDeleted);
+  };
+
   const isSelf = (userId: string): boolean => userId === gateway.botUserId();
   const forbidden: GuildActionResult = { ok: false, error: 'forbidden' };
 
@@ -71,8 +134,7 @@ export function createGuildActions(
       isSelf(userId)
         ? Promise.resolve(forbidden)
         : run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
-    // Temporary stub: replaced by the real implementation in the next task.
-    bulkDeleteMessages: () => Promise.reject(new Error('not implemented')),
+    bulkDeleteMessages,
     getMemberRoleIds: async (userId) => {
       try {
         return await withTimeout(() => gateway.memberRoleIds(userId), timeoutMs, 'memberRoleIds');
@@ -104,6 +166,12 @@ export function createDiscordGateway(client: Client, guildId: string): GuildGate
     deleteMessage: async (channelId, messageId) => {
       const channel = await textChannel(channelId);
       await channel.messages.delete(messageId);
+    },
+    bulkDelete: async (channelId, messageIds) => {
+      const channel = await textChannel(channelId);
+      if (!('bulkDelete' in channel)) throw new Error('channel does not support bulk delete');
+      const removed = await channel.bulkDelete([...messageIds], true);
+      return [...removed.keys()];
     },
     setTimeout: async (userId, durationMs, reason) => {
       const member = await guild().members.fetch(userId);
