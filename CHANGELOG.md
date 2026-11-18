@@ -9,6 +9,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 ### Atenção: ação necessária antes de atualizar
 
 - O bot passa a solicitar os intents privilegiados **Server Members** e **Message Content**. Ative-os no Discord Developer Portal (**Bot → Privileged Gateway Intents**) antes de atualizar; sem isso o login falha com `DisallowedIntents`.
+- O módulo `moderation` começa ativo e age automaticamente: em violação confirmada, apaga a mensagem e aplica timeout sem revisão da equipe. `alertChannelId` e as listas de domínios são gerenciados pelos comandos `/mod`, que chegam no próximo Pull Request. Até lá, defina `alertChannelId` direto na tabela `module_config` ou mantenha o bot desligado.
 
 ### Added
 
@@ -44,12 +45,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Opções de comando (`options`, incluindo `choices` para texto) e `config.set` para alterar configurações em tempo de execução.
   - `npm run staff -- grant|revoke <permissão> <ID do cargo>` e `grants` para gerenciar as permissões dos cargos, com aviso quando nenhum módulo declara a permissão.
 - Interface Discord da Fase 2: ações no servidor (apagar mensagem, castigo, expulsão, banimento, desbanimento, mensagens no canal e diretas, cargos do membro) com recusa de ações contra o próprio bot, erros mapeados para `forbidden`, `not_found` e `failed`, limite de 10 s por chamada e mensagens sem menções. O README documenta os intents privilegiados e as permissões do convite.
-
 - Módulo `moderation`, detecção de phishing e resposta automática (Fase 2, etapa 1):
   - Extração e normalização de links como num navegador, com marcas protegidas (`discord`, `steam`) e detecção de imitações por esqueleto de caracteres parecidos e distância de edição.
   - Pontuação por sinais (`blocked`, `lookalike`, `masked`, `multiChannel`, `bait`, `massMention`, `newAccount`) com pesos e limites configuráveis, níveis `confirmed` e `suspicious` e isenção de cargos e desenvolvedores do bot.
-  - Listas de domínios bloqueados e permitidos, com os domínios oficiais inseridos a cada início, e registro de casos sem o conteúdo das mensagens.
-  - Resposta automática: em `confirmed`, apaga a mensagem e aplica timeout de forma independente; grava o caso, publica `moderation.case.created` e alerta a equipe no canal `alertChannelId`, com o resultado de cada etapa. Em `suspicious`, apenas alerta.
+  - Listas de domínios bloqueados e permitidos, com os domínios oficiais e os domínios conhecidos como seguros (`discord.js.org`, `steamdb.info` e outros) inseridos a cada início, e registro de casos sem o conteúdo das mensagens.
+  - Proteção contra falsos positivos: nomes das marcas não contam como isca, domínios sem esquema só contam com TLD de país ou TLD genérico comum, e links clicáveis são analisados antes dos domínios soltos (até 20 domínios não permitidos por mensagem).
+  - Resposta automática: em `confirmed`, apaga a mensagem e aplica timeout de forma independente; grava o caso, publica `moderation.case.created` e alerta a equipe no canal `alertChannelId`, com o resultado de cada etapa e o link da mensagem quando ela não foi apagada. Em `suspicious`, apenas alerta.
 
 ### Changed
 

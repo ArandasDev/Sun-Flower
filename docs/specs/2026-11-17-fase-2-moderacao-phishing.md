@@ -253,13 +253,14 @@ interface CommandInteraction {
 
 - Fontes:
   - URLs com `http://` ou `https://`, inclusive com host IPv4 literal (o domínio é o IP na forma canônica, por exemplo `https://0x7f.0.0.1/` → `127.0.0.1`);
-  - domínios sem esquema com TLD de 2 a 24 letras seguidos ou não de caminho (`golpe.gift/abc`);
+  - domínios sem esquema seguidos ou não de caminho (`golpe.gift/abc`), só quando o TLD tem exatamente 2 letras ASCII (TLD de país) ou está na lista de TLDs genéricos comuns: `com net org info biz io gg app dev xyz gift link click site online top shop store live tv me co club fun win bet vip pro icu cc ws ru su tk ml ga cf gq buzz monster rest cyou sbs lol pw`. TLDs `xn--` ou Unicode nunca valem sem esquema. Assim `disco.amei` e `disco.tá` não são links, e `golpe.gift` e `dlscord.ru` são. URLs com esquema e links markdown aceitam qualquer TLD válido (WHATWG);
   - links markdown `[texto](url)`;
   - URLs entre `<` e `>`;
   - variações com `\` ou espaços em volta do ponto não são reconstruídas (fora do escopo).
 - Normalização: o host é canonicalizado como num navegador, pelo parser WHATWG (`URL`): minúsculas, IDNA, decodificação de `%`, formas de IPv4, credenciais (`usuário@`) e porta tratadas como o navegador as trata. Depois, remoção de `www.` e do ponto final. Um host que `domainToASCII` de `node:url` não aceita é descartado.
 - Comparação com as listas: o domínio e cada domínio pai, até o segundo nível (`a.b.golpe.com` → `b.golpe.com` → `golpe.com`).
-- No máximo 20 links analisados por mensagem e 4000 caracteres de conteúdo. O resto é ignorado.
+- Ordem e limites: a extração devolve primeiro as fontes clicáveis (links markdown e URLs com esquema, na ordem em que aparecem) e depois os domínios sem esquema, até 50 candidatos. A pontuação descarta os permitidos e analisa no máximo 20 domínios distintos não permitidos. Assim, domínios soltos usados como enchimento não escondem o link real. São lidos no máximo 4000 caracteres de conteúdo; o resto é ignorado.
+- Lista inicial de permitidos: os domínios oficiais das marcas protegidas (§4.4) e os domínios conhecidos como seguros `discord.js.org`, `discordjs.dev`, `steamdb.info`, `steamcharts.com`, `disboard.org` e `discogs.com`. Esses sites legítimos seriam marcados como `lookalike`, mas não são marcas protegidas. Todos são inseridos a cada início como `allow` (`INSERT OR IGNORE`, `added_by` nulo), e a equipe ainda pode bloqueá-los.
 
 ### 4.4. Sinais e pontuação
 
@@ -276,9 +277,9 @@ interface CommandInteraction {
 - Cada sinal conta uma vez por mensagem. A pontuação é a soma.
 - Links de domínios permitidos não produzem nenhum sinal e não contam como "link não permitido".
 - Mensagem sem link não permitido tem pontuação 0.
-- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `steam`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos e considera só o texto fora dos links (`discord.gift` não conta como `gift`).
+- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `steam`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos e considera só o texto fora dos links (`discord.gift` não conta como `gift`). Os nomes das marcas protegidas (`discord`, `steam`) nunca contam como isca, mesmo em `baitTerms`: falar da marca é conversa comum (`compra na steam`). `steam gift` com um link de imitação ainda conta, por `gift`.
 
-**Marcas protegidas:** `discord` (`discord.com`, `discord.gg`, `discordapp.com`, `discordapp.net`, `discord.media`, `discord.new`, `discord.gift`, `discordstatus.com`) e `steam` (`steamcommunity.com`, `steampowered.com`, `steamstatic.com`). Esses domínios formam a lista inicial de permitidos.
+**Marcas protegidas:** `discord` (`discord.com`, `discord.gg`, `discordapp.com`, `discordapp.net`, `discord.media`, `discord.new`, `discord.gift`, `discordstatus.com`) e `steam` (`steamcommunity.com`, `steampowered.com`, `steamstatic.com`, `s.team`). Esses domínios formam a lista inicial de permitidos.
 
 **Imitação (`lookalike`):** o domínio não é oficial e:
 
@@ -359,7 +360,7 @@ Reverter: /mod case revert 12
 ```
 
 - Domínios no alerta vão entre crases, para o Discord não gerar link clicável.
-- Falhas aparecem na linha de ação, por exemplo `timeout não aplicado (sem permissão)`.
+- Falhas aparecem na linha de ação, por exemplo `timeout não aplicado (sem permissão)`. Em `confirmed`, se a mensagem não foi apagada, a linha `Mensagem: <link>` vem logo depois da linha de ação, para a equipe apagá-la à mão.
 - Em `suspicious`, a linha de ação traz o link da mensagem e a sugestão `/mod case dismiss 12` ou `/mod timeout`.
 
 ### 4.7. Comandos `/mod`
@@ -415,15 +416,15 @@ Todas as respostas são efêmeras.
 
 ## 5. Erros
 
-| Situação                                                     | Comportamento                                                                                                            |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Handler de mensagem lança erro ou excede 5 s                 | O Event Bus registra a falha sem conteúdo; a mensagem não é analisada ([0007](../decisions/0007-event-bus-delivery.md)). |
-| Discord recusa uma ação                                      | `GuildActionResult` com o erro; o caso registra o `outcome`, e o alerta ou a resposta informa.                           |
-| Ação manual sem permissão                                    | Resposta efêmera `Você não tem permissão para isso.`; nada é executado.                                                  |
-| Opção inválida (domínio malformado, valor fora do intervalo) | Resposta efêmera com o motivo da validação.                                                                              |
-| Migração do módulo inválida                                  | O módulo vai para `FAILED`; os demais continuam funcionando.                                                             |
-| `config.set` inválido                                        | Resposta efêmera com o campo inválido; nada é gravado.                                                                   |
-| Intent `MessageContent` desligado                            | Erro no log, uma vez, pedindo a ativação (§3.1).                                                                         |
+| Situação                                                     | Comportamento                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Handler de mensagem lança erro ou excede 5 s                 | O Event Bus registra a falha sem conteúdo ([0007](../decisions/0007-event-bus-delivery.md)). Se o handler lançou erro, a mensagem não é analisada; se só excedeu 5 s (Discord lento), a resposta (ações, caso e alerta) ainda termina normalmente. |
+| Discord recusa uma ação                                      | `GuildActionResult` com o erro; o caso registra o `outcome`, e o alerta ou a resposta informa.                                                                                                                                                     |
+| Ação manual sem permissão                                    | Resposta efêmera `Você não tem permissão para isso.`; nada é executado.                                                                                                                                                                            |
+| Opção inválida (domínio malformado, valor fora do intervalo) | Resposta efêmera com o motivo da validação.                                                                                                                                                                                                        |
+| Migração do módulo inválida                                  | O módulo vai para `FAILED`; os demais continuam funcionando.                                                                                                                                                                                       |
+| `config.set` inválido                                        | Resposta efêmera com o campo inválido; nada é gravado.                                                                                                                                                                                             |
+| Intent `MessageContent` desligado                            | Erro no log, uma vez, pedindo a ativação (§3.1).                                                                                                                                                                                                   |
 
 ## 6. Divisão em Pull Requests
 

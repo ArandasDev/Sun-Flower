@@ -9,7 +9,7 @@ Primeiro módulo real do Sun Flower. Detecta phishing em mensagens do servidor, 
 - Análise de toda mensagem criada ou editada no servidor (`discord.message.created` e `discord.message.updated`).
 - Pontuação por sinais de phishing e classificação em dois níveis.
 - Resposta automática, registro de casos em `moderation_cases` e alerta no canal da equipe.
-- Listas de domínios bloqueados e permitidos em `moderation_domains`, com os domínios oficiais das marcas protegidas como lista inicial de permitidos.
+- Listas de domínios bloqueados e permitidos em `moderation_domains`, com os domínios oficiais das marcas protegidas e os domínios conhecidos como seguros (§9.1) como lista inicial de permitidos.
 
 ### 2.1. Sinais e pesos
 
@@ -64,6 +64,8 @@ O módulo exporta `configSchema` (`config.ts`). Todos os campos são opcionais e
 
 Sem `alertChannelId`, os casos são gravados normalmente e o log registra um aviso uma vez por início.
 
+O módulo começa ativo e age automaticamente desde o primeiro início. Até os comandos `/mod` (disponíveis a partir do próximo PR) existirem, `alertChannelId` só pode ser definido direto na tabela `module_config`; sem isso, mantenha o bot desligado ou aceite casos sem alerta.
+
 ## 5. Permissões necessárias
 
 - Capacidades: `guild.moderate` (apagar mensagem, timeout e demais ações) e `guild.message` (enviar o alerta).
@@ -99,26 +101,36 @@ Ação: mensagem apagada, timeout de 60 min
 Reverter: /mod case revert 12
 ```
 
-Falhas aparecem na linha `Ação`, por exemplo `timeout não aplicado (sem permissão)`. Em casos suspeitos, a linha é `Ação: nenhuma`, seguida do link da mensagem e da sugestão `/mod case dismiss 12 ou /mod timeout`.
+Falhas aparecem na linha `Ação`, por exemplo `timeout não aplicado (sem permissão)`. Se a mensagem não foi apagada, o alerta confirmado traz também a linha `Mensagem: <link>`, para a equipe apagá-la à mão. Em casos suspeitos, a linha é `Ação: nenhuma`, seguida do link da mensagem e da sugestão `/mod case dismiss 12 ou /mod timeout`. Os comandos citados no alerta (`/mod case revert`, `/mod case dismiss`, `/mod timeout`) estão disponíveis a partir do próximo PR (comandos /mod).
 
 O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), corta cada domínio em 100 caracteres e nunca passa de 2000 caracteres, o limite do Discord.
 
 ## 9. Limitações conhecidas
 
-- Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo; o bloqueio prevalece.
+- Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo (`/mod domain block`, disponível a partir do próximo PR); o bloqueio prevalece. O mesmo vale para os domínios conhecidos como seguros.
 - O estado da regra de vários canais fica em memória (no máximo 1000 autores e 50 entradas por autor) e se perde ao reiniciar.
 - Variações de link com `\` ou espaços em volta do ponto não são reconstruídas.
+- Links atrás de redirecionadores (`google.com/url?q=…` e semelhantes) não são abertos: só o domínio do redirecionador é analisado, e o link interno passa despercebido.
+- Quando o sinal `multiChannel` confirma um caso, só a mensagem que atingiu o limite é apagada; as mensagens anteriores do mesmo autor continuam no servidor, e as que geraram caso ficam como casos suspeitos abertos.
+- Uma edição de mensagem fora do cache do bot pode chegar sem os cargos do autor; nesse caso não é possível verificar `exemptRoleIds` e a mensagem é analisada normalmente.
 - Quando o Discord demora a responder, o Event Bus pode registrar `event handler failed` depois de 5 s, enquanto a resposta (ações, caso e alerta) ainda termina normalmente.
 
 ### 9.1. Falsos positivos conhecidos
 
-A regra `lookalike` marca alguns domínios legítimos como imitação:
+**Atenção:** `lookalike` (60) somado a uma palavra de isca (`bait`, 30) dá 90 e passa do limite `confirmed` (80). Nesse caso o módulo age automaticamente: apaga a mensagem e aplica timeout, sem revisão prévia da equipe.
+
+Para reduzir esse risco:
+
+- Os nomes das marcas protegidas (`discord`, `steam`) nunca contam como isca, mesmo que estejam em `baitTerms`: `compra na steam` não é isca. Outras palavras continuam contando (`steam gift` conta por `gift`).
+- Domínios sem `http://` ou `https://` só contam como link se o TLD tiver exatamente 2 letras (TLD de país) ou estiver numa lista de TLDs genéricos comuns (`com`, `net`, `org`, `gift`, `xyz`, `ru` e outros; a lista completa está em `detection/links.ts`). Assim `disco.amei` e `disco.tá` não são links. URLs com esquema e links markdown aceitam qualquer TLD válido.
+- A lista inicial de permitidos inclui, além dos domínios oficiais, sites legítimos conhecidos que a regra `lookalike` marcaria: `discord.js.org`, `discordjs.dev`, `steamdb.info`, `steamcharts.com`, `disboard.org` e `discogs.com` (`known-safe.ts`). Eles não são marcas protegidas, e a equipe pode bloqueá-los.
+
+A regra `lookalike` ainda marca alguns domínios legítimos como imitação:
 
 - domínios que contêm `disco`, como `disco-music.com` e `discos.blogspot.com`;
-- `disboard.org` e `discogs.com`;
 - palavras unidas por pontos ou hífens que formam `steam`, como `sales-team.com` e `steamboat.com`.
 
-Sozinho, o sinal `lookalike` (60) só gera alerta de suspeita, sem ação. Para eliminar o falso positivo, permita o domínio com `/mod domain allow <domínio>`.
+Sozinho, o sinal `lookalike` só gera alerta de suspeita, sem ação; com uma palavra de isca, gera ação automática. Para eliminar o falso positivo, permita o domínio com `/mod domain allow <domínio>` (disponível a partir do próximo PR (comandos /mod)).
 
 ## 10. Informações relevantes para manutenção
 
