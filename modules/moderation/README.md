@@ -148,6 +148,10 @@ O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), cort
 - Quando o sinal `multiChannel` confirma um caso, só a mensagem que atingiu o limite é apagada; as mensagens anteriores do mesmo autor continuam no servidor, e as que geraram caso ficam como casos suspeitos abertos.
 - Uma edição de mensagem fora do cache do bot pode chegar sem os cargos do autor; nesse caso não é possível verificar `exemptRoleIds` e a mensagem é analisada normalmente.
 - Quando o Discord demora a responder, o Event Bus pode registrar `event handler failed` depois de 5 s, enquanto a resposta (ações, caso e alerta) ainda termina normalmente.
+- Reverter um caso antigo de `timeout` ou `ban` também remove uma sanção mais recente do mesmo tipo aplicada ao mesmo membro: o Discord guarda um único timeout e um único banimento por pessoa.
+- Uma ação manual que o Discord aplica depois do limite de 10 s é informada como falha e não grava caso. Confira o estado do membro e corrija direto no Discord.
+- A opção do canal de alertas aceita qualquer tipo de canal; escolha um canal de texto.
+- Um caso descartado guarda quem o descartou e quando nas mesmas colunas de reversão (`reverted_by` e `reverted_at`); `case view` mostra `Descarte: descartado por …`.
 
 ### 9.1. Falsos positivos conhecidos
 

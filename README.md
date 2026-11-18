@@ -4,8 +4,8 @@ Bot Discord modular e dedicado, que reúne moderação, funcionalidades sociais,
 
 ## Estado atual
 
-- **Fase 0 — Base do repositório (em andamento).** Projeto TypeScript e CI prontos; falta importar o ruleset da `main` (`.github/rulesets/main.json`) no GitHub.
-- **Fase 1 — Core + Discord mínimo (em revisão).** O Core carrega os módulos, a interface Discord atua só no servidor configurado e o módulo de exemplo `ping` responde a `/ping`.
+- **Fase 0 — Base do repositório (concluída).** Projeto TypeScript, CI e ruleset da `main` ativos.
+- **Fase 1 — Core + Discord mínimo (em revisão).** O Core carrega os módulos, a interface Discord atua só no servidor configurado e o módulo de exemplo `ping` responde a `/ping`; falta a verificação manual de `/ping` no servidor real.
 - **Fase 2 — Moderação (em andamento).** Etapa 1 (phishing e ações manuais) implementada; falta a verificação manual no servidor real ([Moderação](#moderação)). Etapa 2 (spam e flood) pendente.
 
 Veja o [ROADMAP](docs/ROADMAP.md).
