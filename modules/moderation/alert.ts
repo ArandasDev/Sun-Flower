@@ -68,7 +68,10 @@ export function formatAlert(record: CaseRecord, messageUrl: string): string {
     `Sinais: ${signals} = ${String(record.score)}`,
   ];
   if (confirmed) {
-    lines.push(`Ação: ${confirmedAction(record)}`, `Reverter: /mod case revert ${id}`);
+    lines.push(`Ação: ${confirmedAction(record)}`);
+    // The message is still up: give staff the link to remove it by hand.
+    if (record.outcome['delete'] !== 'ok') lines.push(`Mensagem: ${messageUrl}`);
+    lines.push(`Reverter: /mod case revert ${id}`);
   } else {
     lines.push(
       'Ação: nenhuma',

@@ -89,6 +89,28 @@ describe('formatAlert', () => {
     );
   });
 
+  it('adds the message link to a confirmed case whose delete failed', () => {
+    const text = formatAlert(
+      record({ outcome: { delete: 'forbidden', timeout: 'ok' } }),
+      MESSAGE_URL,
+    );
+    expect(text).toBe(
+      [
+        '🚨 Caso #12 — violação confirmada',
+        'Usuário: <@111111111111111111> · Canal: <#222222222222222222>',
+        'Domínios: `dlscord-gift.com`',
+        'Sinais: lookalike (60), bait (30) = 90',
+        'Ação: mensagem não apagada (sem permissão), timeout de 60 min',
+        `Mensagem: ${MESSAGE_URL}`,
+        'Reverter: /mod case revert 12',
+      ].join('\n'),
+    );
+  });
+
+  it('omits the message link when a confirmed delete succeeded', () => {
+    expect(formatAlert(record(), MESSAGE_URL)).not.toContain('Mensagem:');
+  });
+
   it('renders a suspicious case with the message link and suggestions', () => {
     const text = formatAlert(
       record({
