@@ -495,19 +495,131 @@ describe('Responder spam handling', () => {
     });
   });
 
-  it('lets the ban delete the messages when deleteMinutes is above 0', async () => {
+  it('bans with a deletion window and still bulk-deletes the tracked window', async () => {
     setSpam({ flood: { limit: 8, punishment: 'ban', deleteMinutes: 2 } });
     await surge(0, 8);
 
-    expect(callsOf('bulkDeleteMessages')).toEqual([]);
+    expect(callsOf('bulkDeleteMessages')).toEqual([
+      { action: 'bulkDeleteMessages', args: [CHANNEL, ids(0, 8)] },
+    ]);
     expect(callsOf('ban')).toEqual([{ action: 'ban', args: [AUTHOR, 'spam: flood', 120] }]);
     expect(callsOf('timeout')).toEqual([]);
     expect(cases.listRecent(1)[0]).toMatchObject({
       action: 'ban',
       status: 'actioned',
-      outcome: { ban: 'ok' },
+      outcome: { deleted: '8', individually: '0', bulk: 'ok', ban: 'ok' },
       timeoutUntil: null,
     });
+    expect(cases.listRecent(1)[0]?.outcome['fallback']).toBeUndefined();
+  });
+
+  it.each(['forbidden', 'not_found'] as const)(
+    'deletes and falls back to the rule timeout when the escalated ban is refused (%s)',
+    async (error) => {
+      setSpam({
+        flood: { limit: 8, deleteMinutes: 2 },
+        escalation: { steps: [{ kind: 'ban' }] },
+      });
+      build(createFakeGuild({ ban: { ok: false, error } }));
+      await surge(0, 8);
+
+      expect(callsOf('bulkDeleteMessages')).toEqual([
+        { action: 'bulkDeleteMessages', args: [CHANNEL, ids(0, 8)] },
+      ]);
+      expect(callsOf('ban')).toEqual([{ action: 'ban', args: [AUTHOR, 'spam: flood', 120] }]);
+      expect(callsOf('timeout')).toEqual([
+        { action: 'timeout', args: [AUTHOR, 600_000, 'spam: flood'] },
+      ]);
+      expect(cases.listRecent(1)[0]).toMatchObject({
+        action: 'delete_timeout',
+        status: 'actioned',
+        outcome: {
+          deleted: '8',
+          bulk: 'ok',
+          ban: error,
+          fallback: 'timeout',
+          timeout: 'ok',
+        },
+        timeoutUntil: new Date(NOW.getTime() + 3500 + 600_000).toISOString(),
+      });
+      const alert = callsOf('sendMessage')[0]?.args[1] as string;
+      expect(alert).toContain('timeout de 10 min');
+      expect(alert).toContain('banimento não aplicado');
+    },
+  );
+
+  it('falls back to a kick and keeps the case open when the fallback is refused too', async () => {
+    setSpam({
+      flood: { limit: 8, punishment: 'kick' },
+      escalation: { steps: [{ kind: 'ban' }] },
+    });
+    build(
+      createFakeGuild({
+        ban: { ok: false, error: 'forbidden' },
+        kick: { ok: false, error: 'forbidden' },
+      }),
+    );
+    await surge(0, 8);
+
+    expect(callsOf('kick')).toEqual([{ action: 'kick', args: [AUTHOR, 'spam: flood'] }]);
+    expect(cases.listRecent(1)[0]).toMatchObject({
+      action: 'kick',
+      status: 'open',
+      outcome: { ban: 'forbidden', fallback: 'kick', kick: 'forbidden' },
+    });
+  });
+
+  it('does not fall back when the ban failed without a refusal', async () => {
+    setSpam({ flood: { limit: 8 }, escalation: { steps: [{ kind: 'ban' }] } });
+    build(createFakeGuild({ ban: { ok: false, error: 'failed' } }));
+    await surge(0, 8);
+
+    expect(callsOf('timeout')).toEqual([]);
+    expect(cases.listRecent(1)[0]).toMatchObject({ action: 'ban', outcome: { ban: 'failed' } });
+  });
+
+  it('keeps the case actioned when the timeout failed without a refusal', async () => {
+    build(createFakeGuild({ timeout: { ok: false, error: 'failed' } }));
+    await surge(0, 8);
+
+    expect(cases.listRecent(1)[0]).toMatchObject({
+      status: 'actioned',
+      outcome: { timeout: 'failed' },
+      timeoutUntil: new Date(NOW.getTime() + 3500 + 600_000).toISOString(),
+    });
+    clock += 40_000;
+    guild.calls.length = 0;
+    await surge(8, 8);
+    expect(callsOf('timeout')[0]?.args[1]).toBe(3_600_000);
+  });
+
+  it('does not resend a phishing message already deleted in a later spam case', async () => {
+    setSpam({ flood: { limit: 8, deleteMinutes: 2 } });
+    const lists = new DomainStore(ctx.storage);
+    lists.set('golpe.com', 'block', null, NOW.toISOString());
+    await surge(0, 3);
+    await r.handle(message(3, { content: BLOCKED_CONTENT }));
+    clock += 500;
+    expect(callsOf('deleteMessage')).toEqual([{ action: 'deleteMessage', args: [CHANNEL, id(3)] }]);
+    // The forgotten message no longer counts toward flood: 8 more messages are needed.
+    await surge(4, 5);
+
+    const sent = callsOf('bulkDeleteMessages').flatMap((c) => c.args[1] as string[]);
+    expect(sent).toEqual([id(0), id(1), id(2), ...ids(4, 5)]);
+  });
+
+  it('keeps a phishing message tracked when its deletion failed', async () => {
+    setSpam({ flood: { limit: 8, deleteMinutes: 2 } });
+    build(createFakeGuild({ deleteMessage: { ok: false, error: 'forbidden' } }));
+    const lists = new DomainStore(ctx.storage);
+    lists.set('golpe.com', 'block', null, NOW.toISOString());
+    await surge(0, 3);
+    await r.handle(message(3, { content: BLOCKED_CONTENT }));
+    clock += 500;
+    await surge(4, 4);
+
+    const sent = callsOf('bulkDeleteMessages').flatMap((c) => c.args[1] as string[]);
+    expect(sent).toEqual(ids(0, 8));
   });
 
   it('bans and bulk-deletes the triggering messages when deleteMinutes is 0', async () => {

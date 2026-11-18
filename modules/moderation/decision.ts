@@ -11,6 +11,12 @@ export interface Decision {
   spamHits: readonly SpamHit[];
   /** 1-based escalation step; set only when escalation applied. */
   escalationStep: number | undefined;
+  /**
+   * Applied when Discord refuses the ban (`forbidden`/`not_found`): the most severe non-ban
+   * punishment of the rules that fired (and the phishing timeout, when phishing is confirmed).
+   * Set only when the punishment is a ban and such a punishment exists.
+   */
+  fallback?: Punishment | undefined;
   reason: string;
 }
 
@@ -66,6 +72,14 @@ export function decide(input: DecideInput): Decision {
     candidates.push(escalated.punishment);
   }
   if (phishingConfirmed) candidates.push(phishingTimeout);
+  const chosen = mostSevere(...candidates);
+  const fallback =
+    chosen.kind === 'ban'
+      ? mostSevere(
+          ...punishing.filter((p) => p.kind !== 'ban'),
+          ...(phishingConfirmed ? [phishingTimeout] : []),
+        )
+      : undefined;
 
   const deleteMinutes = Math.max(...spamHits.map((hit) => config.spam[hit.rule].deleteMinutes));
   const ids = new Set<string>();
@@ -77,11 +91,12 @@ export function decide(input: DecideInput): Decision {
 
   return {
     level: punishing.length > 0 || phishingConfirmed ? 'confirmed' : 'suspicious',
-    punishment: mostSevere(...candidates),
+    punishment: chosen,
     deleteMinutes,
     deleteMessageIds: [...ids],
     spamHits,
     escalationStep: step,
+    fallback: fallback === undefined || fallback.kind === 'none' ? undefined : fallback,
     reason: reasons.join('; '),
   };
 }

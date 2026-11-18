@@ -306,6 +306,48 @@ export class Responder {
     }
   }
 
+  /**
+   * Applies the decided punishment and, when Discord refuses a ban (`forbidden`/`not_found`),
+   * the decision's fallback. Never rejects; the results go into `outcome`.
+   */
+  private async punishWithFallback(
+    authorId: string,
+    decision: Decision,
+    nowMs: number,
+  ): Promise<{
+    outcome: Record<string, string>;
+    applied: Punishment;
+    timeoutUntil: string | null;
+  }> {
+    const { punishment, reason, fallback } = decision;
+    const banDeleteSeconds = punishment.kind === 'ban' ? decision.deleteMinutes * 60 : 0;
+    const outcome: Record<string, string> = {};
+    const first = this.punish(authorId, punishment, reason, banDeleteSeconds);
+    if (first === undefined) return { outcome, applied: punishment, timeoutUntil: null };
+    const [settled] = await Promise.allSettled([first]);
+    const result = outcomeOf(settled);
+    outcome[punishment.kind] = result;
+
+    let applied = punishment;
+    let appliedResult = result;
+    if (punishment.kind === 'ban' && TIMEOUT_NOT_APPLIED.has(result) && fallback !== undefined) {
+      const second = this.punish(authorId, fallback, reason, 0);
+      if (second !== undefined) {
+        const [fallbackSettled] = await Promise.allSettled([second]);
+        appliedResult = outcomeOf(fallbackSettled);
+        applied = fallback;
+        outcome['fallback'] = fallback.kind;
+        outcome[fallback.kind] = appliedResult;
+      }
+    }
+    // `failed` may still have reached Discord (e.g. our 10 s limit), so it keeps the deadline.
+    const timeoutUntil =
+      applied.kind === 'timeout' && !TIMEOUT_NOT_APPLIED.has(appliedResult)
+        ? new Date(nowMs + applied.minutes * 60_000).toISOString()
+        : null;
+    return { outcome, applied, timeoutUntil };
+  }
+
   /** Bulk deletion and punishment run in parallel; only a `confirmed` decision acts. */
   private async actOnSpam(
     payload: DiscordMessagePayload,
@@ -319,40 +361,32 @@ export class Responder {
     const confirmed = level === 'confirmed';
     let outcome: Record<string, string> = {};
     let timeoutUntil: string | null = null;
+    let applied: Punishment = punishment;
     let punished = false;
     let requested = 0;
 
     if (confirmed) {
-      // A ban with a deletion window lets Discord remove the messages in every channel.
-      const banDeletes = punishment.kind === 'ban' && decision.deleteMinutes > 0;
-      const batches = banDeletes ? [] : this.deletionBatches(payload, decision, nowMs);
+      // Deletion always runs, even for a ban with a deletion window: a refused ban must not leave
+      // the flood up. The ban's own deletion stays as well; `not_found` counts as deleted.
+      const batches = this.deletionBatches(payload, decision, nowMs);
       const sentIds = batches.flatMap((batch) => batch.ids);
       requested = sentIds.length;
       // Forgotten before any await, so a concurrent case of the same author (another rule on a
       // later message) cannot read and send these IDs again, whatever the batch results.
       this.deps.activity.forget(payload.authorId, sentIds);
-      const punishing = this.punish(
-        payload.authorId,
-        punishment,
-        reason,
-        banDeletes ? decision.deleteMinutes * 60 : 0,
-      );
-      const [deletion, punishmentResult] = await Promise.allSettled([
-        batches.length === 0 ? Promise.resolve(undefined) : this.bulkDelete(batches),
-        punishing ?? Promise.resolve<GuildActionResult>({ ok: true }),
+      const [deletion, punishing] = await Promise.all([
+        this.bulkDelete(batches),
+        this.punishWithFallback(payload.authorId, decision, nowMs),
       ]);
 
-      if (deletion.status === 'fulfilled' && deletion.value !== undefined) {
-        outcome = { ...deletion.value };
-      }
-      if (punishing !== undefined && punishment.kind !== 'none') {
-        const result = outcomeOf(punishmentResult);
-        outcome[punishment.kind] = result;
-        punished = result === 'ok';
-        if (punishment.kind === 'timeout' && !TIMEOUT_NOT_APPLIED.has(result)) {
-          timeoutUntil = new Date(nowMs + punishment.minutes * 60_000).toISOString();
-        }
-      }
+      outcome = { ...deletion, ...punishing.outcome };
+      applied = punishing.applied;
+      timeoutUntil = punishing.timeoutUntil;
+      const result = outcome[applied.kind];
+      // Like stage 1, a timeout that `failed` may still have applied: only a refusal stays open.
+      punished =
+        result === 'ok' ||
+        (applied.kind === 'timeout' && result !== undefined && !TIMEOUT_NOT_APPLIED.has(result));
     }
 
     const rules: RuleHit[] = decision.spamHits.map((hit) =>
@@ -365,7 +399,8 @@ export class Responder {
       newCase: {
         kind: 'automatic',
         level,
-        action: confirmed ? SPAM_ACTIONS[punishment.kind] : 'none',
+        // A fallback replaces the refused ban, so a revert undoes what was really applied.
+        action: confirmed ? SPAM_ACTIONS[applied.kind] : 'none',
         targetUserId: payload.authorId,
         actorUserId: null,
         channelId: payload.channelId,
@@ -402,6 +437,11 @@ export class Responder {
         Promise.resolve().then(() => guild.timeout(payload.authorId, timeoutMs, reason)),
       ]);
       outcome = { delete: outcomeOf(deleted), timeout: outcomeOf(timedOut) };
+      // A message already gone must not be sent again by a later spam case of the same author;
+      // one that could not be deleted stays tracked, so that case can still remove it.
+      if (outcome['delete'] === 'ok' || outcome['delete'] === 'not_found') {
+        this.deps.activity.forget(payload.authorId, [payload.messageId]);
+      }
       // `failed` may still have reached Discord (e.g. our 10 s limit), so it keeps the deadline.
       if (!TIMEOUT_NOT_APPLIED.has(outcome['timeout'] ?? '')) {
         timeoutUntil = new Date(now.getTime() + timeoutMs).toISOString();

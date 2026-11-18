@@ -175,4 +175,70 @@ describe('decide', () => {
     });
     expect(d.deleteMessageIds).toEqual(['a', MSG]);
   });
+
+  describe('ban fallback', () => {
+    it('falls back to the rule timeout when escalation reaches a ban', () => {
+      const d = decide({
+        analysis: none,
+        spamHits: [hit('flood')],
+        config: cfg(),
+        priorActionedSpam: 2,
+        messageId: MSG,
+      });
+      expect(d.punishment).toEqual({ kind: 'ban' });
+      expect(d.fallback).toEqual({ kind: 'timeout', minutes: 10 });
+    });
+
+    it('takes the most severe non-ban rule punishment', () => {
+      const d = decide({
+        analysis: none,
+        spamHits: [hit('flood'), hit('repeat'), hit('mentions')],
+        config: cfg({
+          spam: {
+            flood: { punishment: 'ban' },
+            repeat: { punishment: 'kick' },
+            mentions: { timeoutMinutes: 30 },
+          },
+        }),
+        priorActionedSpam: 0,
+        messageId: MSG,
+      });
+      expect(d.punishment).toEqual({ kind: 'ban' });
+      expect(d.fallback).toEqual({ kind: 'kick' });
+    });
+
+    it('has no fallback when every rule punishment is a ban', () => {
+      const d = decide({
+        analysis: none,
+        spamHits: [hit('flood')],
+        config: cfg({ spam: { flood: { punishment: 'ban' } } }),
+        priorActionedSpam: 0,
+        messageId: MSG,
+      });
+      expect(d.punishment).toEqual({ kind: 'ban' });
+      expect(d.fallback).toBeUndefined();
+    });
+
+    it('keeps the phishing timeout as a fallback for confirmed phishing', () => {
+      const d = decide({
+        analysis: analysis('confirmed', ['blocked']),
+        spamHits: [hit('flood')],
+        config: cfg({ spam: { flood: { punishment: 'ban' } } }),
+        priorActionedSpam: 0,
+        messageId: MSG,
+      });
+      expect(d.fallback).toEqual({ kind: 'timeout', minutes: 60 });
+    });
+
+    it('has no fallback when the punishment is not a ban', () => {
+      const d = decide({
+        analysis: none,
+        spamHits: [hit('flood')],
+        config: cfg(),
+        priorActionedSpam: 0,
+        messageId: MSG,
+      });
+      expect(d.fallback).toBeUndefined();
+    });
+  });
 });
