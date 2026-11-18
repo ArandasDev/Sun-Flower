@@ -112,6 +112,56 @@ describe('moderation module', () => {
     }
   });
 
+  it('bulk-deletes a flood surge, times out and escalates the next surge', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-18T12:00:00.000Z'));
+    const guild = createFakeGuild();
+    const core = await startCore({
+      dbPath: ':memory:',
+      modulesDir: MODULES_DIR,
+      logger: createRecordingLogger(),
+      guild,
+    });
+    const surge = (from: number) => {
+      for (let i = from; i < from + 8; i++) {
+        const messageId = String(900000000000000000n + BigInt(i));
+        core.publishCoreEvent('discord.message.created', {
+          messageId,
+          messageUrl: `https://discord.com/channels/000000000000000000/222222222222222222/${messageId}`,
+          channelId: '222222222222222222',
+          authorId: '111111111111111111',
+          authorRoleIds: [],
+          authorJoinedAt: '2020-01-01T00:00:00.000Z',
+          authorAccountCreatedAt: '2020-01-01T00:00:00.000Z',
+          content: `mensagem ${String(i)}`,
+        });
+      }
+    };
+    const timeouts = () =>
+      guild.calls.filter((c) => c.action === 'timeout').map((c) => c.args[1] as number);
+    try {
+      surge(0);
+      await vi.waitFor(() => {
+        expect(timeouts()).toEqual([600_000]);
+      });
+      expect(guild.calls.some((c) => c.action === 'bulkDeleteMessages')).toBe(true);
+
+      vi.setSystemTime(new Date('2026-11-18T12:00:40.000Z'));
+      surge(8);
+      await vi.waitFor(() => {
+        expect(timeouts()).toEqual([600_000, 3_600_000]);
+      });
+      const bulk = guild.calls.filter((c) => c.action === 'bulkDeleteMessages');
+      expect(bulk).toHaveLength(2);
+      // Messages already sent by the first surge are not sent again.
+      const first = new Set(bulk[0]?.args[1] as string[]);
+      expect((bulk[1]?.args[1] as string[]).filter((id) => first.has(id))).toEqual([]);
+    } finally {
+      await core.stop();
+      vi.useRealTimers();
+    }
+  });
+
   async function dispatchTimeout(core: CoreHandle, logger: Logger) {
     const strings: Record<string, string> = { user: TARGET, reason: 'spam' };
     const integers: Record<string, number> = { minutes: 30 };
