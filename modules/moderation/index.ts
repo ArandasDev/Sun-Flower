@@ -11,21 +11,41 @@ import type { ModerationConfig } from './config.ts';
 import { MultiChannelTracker } from './detection/multi-channel.ts';
 import { DomainStore } from './domains.ts';
 import { Responder } from './responder.ts';
+import { ActivityLog } from './spam/activity.ts';
+import { SpamCooldown } from './spam/rules.ts';
 
 export { configSchema } from './config.ts';
 
 const PRUNE_INTERVAL_MS = 60_000;
+const MAX_ACTIVITY_AGE_MS = 3_600_000;
+
+/** The longest window any spam rule looks back (detection or deletion), capped at one hour. */
+export function activityMaxAgeMs(spam: ModerationConfig['spam']): number {
+  const windows = [
+    spam.flood.seconds * 1000,
+    spam.flood.deleteMinutes * 60_000,
+    spam.repeat.seconds * 1000,
+    spam.repeat.deleteMinutes * 60_000,
+    spam.mentions.deleteMinutes * 60_000,
+  ];
+  return Math.min(MAX_ACTIVITY_AGE_MS, Math.max(...windows));
+}
 
 const createModeration: ModuleFactory = () => {
   let context: ModuleContext | undefined;
   let responder: Responder | undefined;
   let tracker: MultiChannelTracker | undefined;
+  let activity: ActivityLog | undefined;
+  let cooldown: SpamCooldown | undefined;
   let caseStore: CaseStore | undefined;
   let domainStore: DomainStore | undefined;
   let pruneTimer: ReturnType<typeof setInterval> | undefined;
 
-  const onMessage = async (event: SunFlowerEvent): Promise<void> => {
-    await responder?.handle(event.payload as DiscordMessagePayload);
+  const onCreated = async (event: SunFlowerEvent): Promise<void> => {
+    await responder?.handle(event.payload as DiscordMessagePayload, 'created');
+  };
+  const onUpdated = async (event: SunFlowerEvent): Promise<void> => {
+    await responder?.handle(event.payload as DiscordMessagePayload, 'updated');
   };
 
   const required = <T>(value: T | undefined): T => {
@@ -42,8 +62,8 @@ const createModeration: ModuleFactory = () => {
     register: async (ctx) => {
       await Promise.resolve();
       context = ctx;
-      ctx.events.subscribe(DISCORD_MESSAGE_CREATED, onMessage);
-      ctx.events.subscribe(DISCORD_MESSAGE_UPDATED, onMessage);
+      ctx.events.subscribe(DISCORD_MESSAGE_CREATED, onCreated);
+      ctx.events.subscribe(DISCORD_MESSAGE_UPDATED, onUpdated);
       ctx.commands.register(
         buildModCommand({
           permissions: ctx.permissions,
@@ -71,11 +91,15 @@ const createModeration: ModuleFactory = () => {
       const cases = new CaseStore(ctx.storage);
       caseStore = cases;
       tracker = new MultiChannelTracker({ maxAuthors: 1000, maxEntries: 50 });
+      activity = new ActivityLog({ maxAuthors: 2000, maxEntries: 200 });
+      cooldown = new SpamCooldown();
       responder = new Responder({
         guild: ctx.guild,
         cases,
         lists,
         tracker,
+        activity,
+        cooldown,
         config: () => ctx.config.get<ModerationConfig>(),
         isDeveloper: (userId) => ctx.permissions.isDeveloper(userId),
         publish: (type, payload) => {
@@ -91,7 +115,10 @@ const createModeration: ModuleFactory = () => {
         if (context === undefined || tracker === undefined) return;
         try {
           const config = context.config.get<ModerationConfig>();
-          tracker.prune(Date.now(), config.multiChannel.windowSeconds * 1000);
+          const now = Date.now();
+          tracker.prune(now, config.multiChannel.windowSeconds * 1000);
+          activity?.prune(now, activityMaxAgeMs(config.spam));
+          cooldown?.prune(now);
         } catch (error) {
           context.logger.warn(
             { error: error instanceof Error ? error.message : String(error) },
@@ -110,6 +137,8 @@ const createModeration: ModuleFactory = () => {
       clearPruneTimer();
       responder = undefined;
       tracker = undefined;
+      activity = undefined;
+      cooldown = undefined;
       caseStore = undefined;
       domainStore = undefined;
     },

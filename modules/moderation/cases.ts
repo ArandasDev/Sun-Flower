@@ -1,8 +1,15 @@
 import type { ModuleStorage, SqlValue } from '../../shared/contracts/storage.ts';
+import type { SpamRuleName } from './config.ts';
 import type { Signal } from './detection/score.ts';
 
 export type CaseAction = 'none' | 'delete_timeout' | 'warn' | 'timeout' | 'kick' | 'ban';
 export type CaseStatus = 'open' | 'actioned' | 'reverted' | 'dismissed';
+
+export interface RuleHit {
+  rule: SpamRuleName;
+  count: number;
+  seconds?: number;
+}
 
 /** No message content is stored: only identifiers, domains, signals and outcomes. */
 export interface NewCase {
@@ -15,6 +22,8 @@ export interface NewCase {
   messageId: string | null;
   domains: string[];
   signals: Signal[];
+  /** Spam rules that fired; defaults to none (phishing and manual cases). */
+  rules?: RuleHit[];
   score: number;
   reason: string;
   outcome: Record<string, string>;
@@ -24,6 +33,7 @@ export interface NewCase {
 }
 
 export interface CaseRecord extends NewCase {
+  rules: RuleHit[];
   id: number;
   revertedBy: string | null;
   revertedAt: string | null;
@@ -40,6 +50,7 @@ interface CaseRow {
   message_id: string | null;
   domains: string;
   signals: string;
+  rules: string;
   score: number;
   reason: string;
   outcome: string;
@@ -62,6 +73,7 @@ function toRecord(row: CaseRow): CaseRecord {
     messageId: row.message_id,
     domains: JSON.parse(row.domains) as string[],
     signals: JSON.parse(row.signals) as Signal[],
+    rules: JSON.parse(row.rules) as RuleHit[],
     score: row.score,
     reason: row.reason,
     outcome: JSON.parse(row.outcome) as Record<string, string>,
@@ -90,8 +102,8 @@ export class CaseStore {
     const result = this.storage.run(
       `INSERT INTO moderation_cases
          (kind, level, action, target_user_id, actor_user_id, channel_id, message_id,
-          domains, signals, score, reason, outcome, status, timeout_until, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          domains, signals, rules, score, reason, outcome, status, timeout_until, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         c.kind,
         c.level,
@@ -102,6 +114,7 @@ export class CaseStore {
         c.messageId,
         JSON.stringify(c.domains),
         JSON.stringify(c.signals),
+        JSON.stringify(c.rules ?? []),
         c.score,
         c.reason,
         JSON.stringify(c.outcome),
@@ -140,6 +153,17 @@ export class CaseStore {
         params,
       )
       .map(toRecord);
+  }
+
+  /** Automatic spam cases (non-empty `rules`) that were actioned since the given instant. */
+  countActionedSpamSince(targetUserId: string, sinceIso: string): number {
+    const row = this.storage.get<{ total: number }>(
+      `SELECT COUNT(*) AS total FROM moderation_cases
+       WHERE target_user_id = ? AND kind = 'automatic' AND status = 'actioned'
+         AND rules <> '[]' AND created_at >= ?`,
+      [targetUserId, sinceIso],
+    );
+    return row?.total ?? 0;
   }
 
   /** False when the case does not exist or its current status does not allow the change. */

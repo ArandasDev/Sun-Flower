@@ -101,3 +101,51 @@ describe('CaseStore', () => {
     expect(columns.filter((n) => /content|text|body/.test(n))).toEqual([]);
   });
 });
+
+describe('CaseStore spam rules', () => {
+  let ctx: ReturnType<typeof createTestModuleStorage>;
+  let store: CaseStore;
+
+  beforeEach(() => {
+    ctx = createTestModuleStorage(MODULE_DIR);
+    store = new CaseStore(ctx.storage);
+  });
+  afterEach(() => {
+    ctx.close();
+  });
+
+  const spamCase = (overrides: Partial<NewCase> = {}): NewCase =>
+    newCase({ rules: [{ rule: 'flood', count: 9, seconds: 5 }], ...overrides });
+  const user = '111111111111111111';
+  const since = '2026-01-01T00:00:00.000Z';
+
+  it('stores and reads back rules, defaulting to an empty list', () => {
+    const withRules = store.create(
+      spamCase({
+        rules: [
+          { rule: 'mentions', count: 7 },
+          { rule: 'repeat', count: 4, seconds: 60 },
+        ],
+      }),
+    );
+    const without = store.create(newCase());
+    expect(store.get(withRules)?.rules).toEqual([
+      { rule: 'mentions', count: 7 },
+      { rule: 'repeat', count: 4, seconds: 60 },
+    ]);
+    expect(store.get(without)?.rules).toEqual([]);
+  });
+
+  it('counts only actioned automatic spam cases since the given instant', () => {
+    store.create(spamCase());
+    store.create(spamCase({ createdAt: '2026-01-02T00:00:00.000Z' }));
+    store.create(newCase()); // phishing: rules empty
+    store.create(spamCase({ status: 'open' }));
+    store.create(spamCase({ status: 'reverted' }));
+    store.create(spamCase({ status: 'dismissed' }));
+    store.create(spamCase({ createdAt: '2025-12-31T23:59:59.999Z' }));
+    store.create(spamCase({ kind: 'manual' }));
+    store.create(spamCase({ targetUserId: '999999999999999999' }));
+    expect(store.countActionedSpamSince(user, since)).toBe(2);
+  });
+});

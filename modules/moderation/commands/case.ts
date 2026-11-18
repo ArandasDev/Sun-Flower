@@ -148,7 +148,18 @@ export async function caseRevert(
     }
   }
   deps.publish('moderation.case.reverted', { caseId: record.id });
-  await interaction.reply(CASE_REVERTED(record.id, record.action === 'delete_timeout'), EPHEMERAL);
+  await interaction.reply(CASE_REVERTED(record.id, deletedMessages(record)), EPHEMERAL);
+}
+
+/** Whether the case removed messages that a revert cannot bring back. */
+function deletedMessages(record: CaseRecord): boolean {
+  if (record.action === 'delete_timeout') return true;
+  const spam = record.kind === 'automatic' && record.rules.length > 0;
+  return (
+    spam &&
+    (record.action === 'kick' || record.action === 'ban') &&
+    Number(record.outcome['deleted'] ?? '0') > 0
+  );
 }
 
 export async function caseDismiss(

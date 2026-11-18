@@ -59,6 +59,74 @@ const multiChannelSchema = z.object({
   windowSeconds: z.number().int().min(10).max(3600).default(60),
 });
 
+export const SPAM_RULES = ['flood', 'repeat', 'mentions'] as const;
+
+export type SpamRuleName = (typeof SPAM_RULES)[number];
+
+export type Punishment =
+  { kind: 'none' } | { kind: 'timeout'; minutes: number } | { kind: 'kick' } | { kind: 'ban' };
+
+const spamLimit = z.number().int().min(2).max(50);
+const spamSeconds = z.number().int().min(2).max(600);
+const deleteMinutes = z.number().int().min(0).max(60);
+const punishment = z.enum(['none', 'timeout', 'kick', 'ban']);
+const timeoutMinutes = z.number().int().min(1).max(40320);
+
+const floodSchema = z.object({
+  enabled: z.boolean().default(true),
+  limit: spamLimit.default(7),
+  seconds: spamSeconds.default(5),
+  deleteMinutes: deleteMinutes.default(2),
+  punishment: punishment.default('timeout'),
+  timeoutMinutes: timeoutMinutes.default(10),
+});
+
+const repeatSchema = z.object({
+  enabled: z.boolean().default(true),
+  limit: spamLimit.default(4),
+  seconds: spamSeconds.default(60),
+  deleteMinutes: deleteMinutes.default(10),
+  punishment: punishment.default('timeout'),
+  timeoutMinutes: timeoutMinutes.default(10),
+});
+
+const mentionsSchema = z.object({
+  enabled: z.boolean().default(true),
+  limit: spamLimit.default(6),
+  deleteMinutes: deleteMinutes.default(0),
+  punishment: punishment.default('timeout'),
+  timeoutMinutes: timeoutMinutes.default(10),
+});
+
+const escalationStepSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('timeout'), minutes: timeoutMinutes }),
+  z.object({ kind: z.literal('kick') }),
+  z.object({ kind: z.literal('ban') }),
+]);
+
+// Compile-time check: a parsed escalation step is always a valid Punishment.
+const _stepIsPunishment: (step: z.output<typeof escalationStepSchema>) => Punishment = (step) =>
+  step;
+void _stepIsPunishment;
+
+const escalationSchema = z.object({
+  enabled: z.boolean().default(true),
+  windowHours: z.number().int().min(1).max(168).default(24),
+  steps: z
+    .array(escalationStepSchema)
+    .min(1)
+    .max(5)
+    .default([{ kind: 'timeout', minutes: 10 }, { kind: 'timeout', minutes: 60 }, { kind: 'ban' }]),
+});
+
+const spamSchema = z.object({
+  ignoredChannelIds: z.array(snowflake).max(25).default([]),
+  flood: floodSchema.default(() => floodSchema.parse({})),
+  repeat: repeatSchema.default(() => repeatSchema.parse({})),
+  mentions: mentionsSchema.default(() => mentionsSchema.parse({})),
+  escalation: escalationSchema.default(() => escalationSchema.parse({})),
+});
+
 export const configSchema = z
   .object({
     alertChannelId: snowflake.optional(),
@@ -73,6 +141,7 @@ export const configSchema = z
       .array(z.string().min(1).max(32))
       .max(100)
       .default([...DEFAULT_BAIT_TERMS]),
+    spam: spamSchema.default(() => spamSchema.parse({})),
   })
   .refine((config) => config.thresholds.confirmed > config.thresholds.suspicious, {
     path: ['thresholds'],

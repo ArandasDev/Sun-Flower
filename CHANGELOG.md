@@ -9,10 +9,11 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 ### Atenção: ação necessária antes de atualizar
 
 - O bot passa a solicitar os intents privilegiados **Server Members** e **Message Content**. Ative-os no Discord Developer Portal (**Bot → Privileged Gateway Intents**) antes de atualizar; sem isso o login falha com `DisallowedIntents`.
-- O módulo `moderation` começa ativo e age automaticamente: em violação confirmada, apaga a mensagem e aplica timeout sem revisão da equipe. Logo após atualizar, associe as permissões `moderation.*` aos cargos da equipe (`npm run staff -- grant`) e defina o canal de alertas com `/mod config alert-channel`; até lá, os casos são gravados sem alerta.
+- O módulo `moderation` começa ativo e age automaticamente: em violação confirmada, apaga a mensagem e aplica timeout sem revisão da equipe. Logo após atualizar, associe as permissões `moderation.*` aos cargos da equipe (`npm run staff -- grant`) e defina o canal de alertas com `/mod config alert-channel`; até lá, os casos são gravados sem alerta. Isente também o cargo da equipe das regras automáticas com `/mod config exempt-role <cargo da equipe> add`: as permissões `moderation.*` protegem só das ações manuais.
 
 ### Added
 
+- Módulo `moderation`: detecção de spam e flood (regras `flood`, `repeat` e `mentions`) com exclusão em lote das mensagens do autor, punição configurável por regra e escalada para quem reincide (padrão `10m,1h,ban`). A exclusão em lote roda sempre em paralelo com a punição, inclusive no banimento; um banimento recusado aplica como plano B a punição mais grave das regras que não é `ban`. Novos comandos `/mod config spam-rule`, `spam-escalation` e `spam-ignore`, e resumo de spam em `/mod config view`.
 - Core 1.2.0 (aditivo): `bulkDeleteMessages` no serviço `guild` (capacidade `guild.moderate`), que apaga até 100 mensagens em lote e, quando o Discord recusa algumas (mais de 14 dias) ou o lote falha, apaga as restantes uma a uma. Devolve o total apagado e quantas saíram individualmente (decisão 0016).
 - Documentação inicial do projeto:
   - `docs/ARCHITECTURE.md`: visão arquitetural, servidor de atuação e domínios funcionais (moderação, social, música, painel administrativo).

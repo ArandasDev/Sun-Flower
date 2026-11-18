@@ -8,7 +8,7 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                 |
 | **Fase 1 — Core + Discord mínimo** | Em revisão: Core, interface Discord, comando `staff` e módulo `ping` implementados; falta a verificação manual de `/ping` no servidor real. |
-| **Fase 2 — Moderação**             | Em andamento: etapa 1 implementada; falta a verificação manual no servidor real; etapa 2 (spam e flood) pendente.                           |
+| **Fase 2 — Moderação**             | Em andamento: etapas 1 e 2 implementadas; falta a verificação manual no servidor real.                                                      |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 

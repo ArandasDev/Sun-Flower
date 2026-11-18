@@ -278,6 +278,42 @@ describe('/mod case revert', () => {
     expect(statusOf(t, id)).toBe('reverted');
   });
 
+  it.each(['kick', 'ban'] as const)(
+    'automatic spam %s with deleted messages warns about them',
+    async (action) => {
+      const t = setup();
+      const id = seed(t, action, {
+        rules: [{ rule: 'flood', count: 8, seconds: 5 }],
+        outcome: { deleted: '8', individually: '0', bulk: 'ok', [action]: 'ok' },
+      });
+      expect(await run(t, 'case', 'revert', { number: id })).toBe(
+        `Caso #${String(id)} revertido. A mensagem apagada não pode ser recuperada.`,
+      );
+    },
+  );
+
+  it.each([
+    ['spam kick with nothing deleted', 'kick', { deleted: '0', bulk: 'forbidden', kick: 'ok' }],
+    ['automatic ban without spam rules', 'ban', { ban: 'ok' }],
+  ] as const)('%s has no deleted-message note', async (_label, action, outcome) => {
+    const t = setup();
+    const id = seed(t, action, {
+      rules: action === 'kick' ? [{ rule: 'flood', count: 8, seconds: 5 }] : [],
+      outcome: { ...outcome },
+    });
+    expect(await run(t, 'case', 'revert', { number: id })).toBe(`Caso #${String(id)} revertido.`);
+  });
+
+  it('a manual ban case has no deleted-message note even with a deleted count', async () => {
+    const t = setup();
+    const id = seed(t, 'ban', {
+      kind: 'manual',
+      level: null,
+      outcome: { deleted: '3', ban: 'ok' },
+    });
+    expect(await run(t, 'case', 'revert', { number: id })).toBe(`Caso #${String(id)} revertido.`);
+  });
+
   it.each(['kick', 'warn', 'none'] as const)('%s makes no Discord call', async (action) => {
     const t = setup();
     const id = seed(t, action, { status: 'open' });
