@@ -106,7 +106,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 **Etapas:**
 
 1. Phishing e ações manuais: spec [2026-11-17-fase-2-moderacao-phishing.md](specs/2026-11-17-fase-2-moderacao-phishing.md).
-2. Spam e flood: spec própria, antes da release.
+2. Spam e flood: spec [2026-11-18-fase-2-moderacao-spam.md](specs/2026-11-18-fase-2-moderacao-spam.md) e decisão [0016](decisions/0016-bulk-message-deletion.md) (exclusão de mensagens em lote).
 
 **Critérios de conclusão:**
 
