@@ -64,10 +64,6 @@ describe('extractLinks', () => {
     expect(extractLinks('fale com joao.silva@exemplo.com.br')).toEqual([]);
   });
 
-  it('extracts file-like names (scoring decides later)', () => {
-    expect(extractLinks('abre arquivo.txt')).toEqual([{ domain: 'arquivo.txt' }]);
-  });
-
   it('deduplicates unmasked links but keeps masked ones, in order', () => {
     expect(extractLinks('b.com a.com b.com')).toEqual([{ domain: 'b.com' }, { domain: 'a.com' }]);
     expect(extractLinks('a.com [x.com](https://a.com) [y.com](https://a.com)')).toEqual([
@@ -149,5 +145,25 @@ describe('extractLinks', () => {
     expect(extractLinks('https://16843009/')).toEqual([{ domain: '1.1.1.1' }]);
     expect(extractLinks('https://0x7f.0.0.1/')).toEqual([{ domain: '127.0.0.1' }]);
     expect(extractLinks('https://01.2.3.4/')).toEqual([{ domain: '1.2.3.4' }]);
+  });
+});
+
+describe('extractLinks bare TLD rule', () => {
+  it('accepts bare tokens with a ccTLD or a common gTLD', () => {
+    for (const domain of ['golpe.gift', 'dlscord.ru', 'exemplo.com.br', 'site.xyz', 'a.gg']) {
+      expect(extractLinks(`veja ${domain}`), domain).toEqual([{ domain }]);
+    }
+  });
+
+  it('rejects bare tokens with other or Unicode TLDs', () => {
+    expect(extractLinks('ganhei de presente o disco.amei demais')).toEqual([]);
+    expect(extractLinks('o resgate do disco.tá aqui')).toEqual([]);
+    expect(extractLinks('abre arquivo.txt')).toEqual([]);
+    expect(extractLinks('golpe.xn--p1ai')).toEqual([]);
+  });
+
+  it('keeps any valid TLD for scheme and markdown URLs', () => {
+    expect(extractLinks('https://disco.amei/x')).toEqual([{ domain: 'disco.amei' }]);
+    expect(extractLinks('[aqui](https://arquivo.txt)')).toEqual([{ domain: 'arquivo.txt' }]);
   });
 });

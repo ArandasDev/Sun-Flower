@@ -17,6 +17,19 @@ const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const TLD = /^(?:[a-z]{2,24}|xn--[a-z0-9-]{1,59})$/;
 
+/** Without a scheme, ordinary words like `disco.amei` would read as links: only these TLDs count. */
+const BARE_GTLDS: ReadonlySet<string> = new Set(
+  (
+    'com net org info biz io gg app dev xyz gift link click site online top shop store live tv ' +
+    'me co club fun win bet vip pro icu cc ws ru su tk ml ga cf gq buzz monster rest cyou sbs lol pw'
+  ).split(' '),
+);
+
+function isBareLinkTld(domain: string): boolean {
+  const tld = domain.slice(domain.lastIndexOf('.') + 1);
+  return /^[a-z]{2}$/.test(tld) || BARE_GTLDS.has(tld);
+}
+
 const DOT_VARIANTS = /[\u3002\uFF0E\uFF61]/g;
 const SOFT_HYPHEN = /\u00AD/g;
 const TRAILING_DECORATION = /[.,:;!?*_|~\u2026]+$/;
@@ -99,7 +112,9 @@ function scanDomains(text: string): Found[] {
   }
   for (const match of rest.matchAll(BARE_DOMAIN)) {
     const domain = normalizeDomain(match[1] ?? '');
-    if (domain !== undefined) found.push({ index: match.index, domain });
+    if (domain !== undefined && isBareLinkTld(domain)) {
+      found.push({ index: match.index, domain });
+    }
   }
   return found.sort((a, b) => a.index - b.index);
 }

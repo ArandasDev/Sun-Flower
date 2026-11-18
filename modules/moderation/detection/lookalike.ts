@@ -16,7 +16,7 @@ export const PROTECTED_BRANDS: readonly { brand: string; official: readonly stri
   },
   {
     brand: 'steam',
-    official: ['steamcommunity.com', 'steampowered.com', 'steamstatic.com'],
+    official: ['steamcommunity.com', 'steampowered.com', 'steamstatic.com', 's.team'],
   },
 ];
 

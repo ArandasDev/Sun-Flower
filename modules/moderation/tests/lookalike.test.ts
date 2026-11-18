@@ -33,6 +33,7 @@ describe('official data', () => {
     expect(PROTECTED_BRANDS.map((b) => b.brand)).toEqual(['discord', 'steam']);
     expect(OFFICIAL_DOMAINS).toContain('discord.gift');
     expect(OFFICIAL_DOMAINS).toContain('steamstatic.com');
+    expect(OFFICIAL_DOMAINS).toContain('s.team');
   });
 });
 

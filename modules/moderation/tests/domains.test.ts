@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestModuleStorage } from '../../../tests/helpers/module-storage.ts';
 import { DomainStore } from '../domains.ts';
 import { OFFICIAL_DOMAINS } from '../detection/lookalike.ts';
+import { KNOWN_SAFE_DOMAINS } from '../known-safe.ts';
 
 const MODULE_DIR = fileURLToPath(new URL('..', import.meta.url));
 const NOW = '2026-01-01T00:00:00.000Z';
@@ -21,10 +22,14 @@ describe('DomainStore', () => {
     ctx.close();
   });
 
-  it('seeds the official domains once', () => {
+  it('seeds the official and known-safe domains once', () => {
     store.seedOfficial(NOW);
     store.seedOfficial(NOW);
-    expect(store.list('allow', 1000)).toHaveLength(new Set(OFFICIAL_DOMAINS).size);
+    expect(store.list('allow', 1000)).toHaveLength(
+      new Set([...OFFICIAL_DOMAINS, ...KNOWN_SAFE_DOMAINS]).size,
+    );
+    expect(store.isAllowed('steamdb.info')).toBe(true);
+    expect(store.isAllowed('s.team')).toBe(true);
     expect(store.isAllowed(OFFICIAL_DOMAINS[0]!)).toBe(true);
   });
 
@@ -35,6 +40,14 @@ describe('DomainStore', () => {
     store.seedOfficial(NOW);
     expect(store.isBlocked(official)).toBe(true);
     expect(store.isAllowed(official)).toBe(false);
+  });
+
+  it('lets staff block a known-safe domain', () => {
+    store.seedOfficial(NOW);
+    store.set('discogs.com', 'block', '111111111111111111', NOW);
+    store.seedOfficial(NOW);
+    expect(store.isBlocked('discogs.com')).toBe(true);
+    expect(store.isAllowed('discogs.com')).toBe(false);
   });
 
   it('moves a domain between lists', () => {

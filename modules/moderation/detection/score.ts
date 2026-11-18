@@ -1,7 +1,7 @@
 import { SIGNAL_NAMES } from '../config.ts';
 import type { ModerationConfig, SignalName } from '../config.ts';
 import { MAX_SCANNED_CHARS, extractLinks } from './links.ts';
-import { isLookalike } from './lookalike.ts';
+import { PROTECTED_BRANDS, isLookalike } from './lookalike.ts';
 import type { MultiChannelTracker } from './multi-channel.ts';
 
 /** Both methods already take parent domains into account. */
@@ -51,12 +51,15 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Naming the brand is ordinary talk ("compra na steam"), not bait. */
+const BRAND_NAMES: ReadonlySet<string> = new Set(PROTECTED_BRANDS.map((b) => fold(b.brand)));
+
 function hasBait(content: string, terms: readonly string[]): boolean {
   // Link text is not message text: "discord.gift" must not match the "gift" bait.
   const haystack = fold(content).replace(SCHEME_URL, ' ').replace(DOTTED_TOKEN, ' ');
   return terms.some((term) => {
     const needle = fold(term).trim();
-    if (needle === '') return false;
+    if (needle === '' || BRAND_NAMES.has(needle)) return false;
     const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(needle)}(?![\\p{L}\\p{N}])`, 'u');
     return pattern.test(haystack);
   });

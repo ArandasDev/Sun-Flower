@@ -2,6 +2,7 @@ import type { ModuleStorage } from '../../shared/contracts/storage.ts';
 import { parentDomains } from './detection/links.ts';
 import { OFFICIAL_DOMAINS } from './detection/lookalike.ts';
 import type { DomainLists } from './detection/score.ts';
+import { KNOWN_SAFE_DOMAINS } from './known-safe.ts';
 
 export type DomainList = 'block' | 'allow';
 
@@ -13,10 +14,10 @@ export class DomainStore implements DomainLists {
     this.storage = storage;
   }
 
-  /** Inserts the official domains as `allow`; never overrides an existing entry. */
+  /** Inserts the official and known-safe domains as `allow`; never overrides an existing entry. */
   seedOfficial(nowIso: string): void {
     this.storage.transaction(() => {
-      for (const domain of OFFICIAL_DOMAINS) {
+      for (const domain of [...OFFICIAL_DOMAINS, ...KNOWN_SAFE_DOMAINS]) {
         this.storage.run(
           `INSERT OR IGNORE INTO moderation_domains (domain, list, added_by, added_at)
            VALUES (?, 'allow', NULL, ?)`,

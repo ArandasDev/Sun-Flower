@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { configSchema } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
+import { parentDomains } from '../detection/links.ts';
+import { OFFICIAL_DOMAINS } from '../detection/lookalike.ts';
 import { MultiChannelTracker } from '../detection/multi-channel.ts';
 import { analyzeMessage } from '../detection/score.ts';
 import type { AnalysisInput, DomainLists } from '../detection/score.ts';
+import { KNOWN_SAFE_DOMAINS } from '../known-safe.ts';
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
 const OLD_ACCOUNT = '2020-01-01T00:00:00.000Z';
@@ -104,7 +107,7 @@ describe('analyzeMessage', () => {
   });
 
   it('new account with a plain link is 15 and has no level', () => {
-    const r = run('arquivo.txt', { authorAccountCreatedAt: NEW_ACCOUNT });
+    const r = run('exemplo.org', { authorAccountCreatedAt: NEW_ACCOUNT });
     expect(r.score).toBe(15);
     expect(r.level).toBeUndefined();
   });
@@ -196,5 +199,45 @@ describe('analyzeMessage hardening', () => {
     const r = run('[golpe.gift](https://discord.com)');
     expect(r.score).toBe(0);
     expect(r.signals).toEqual([]);
+  });
+});
+
+describe('analyzeMessage with the seeded lists', () => {
+  const seeded = new Set<string>([...OFFICIAL_DOMAINS, ...KNOWN_SAFE_DOMAINS]);
+  const seededLists: DomainLists = {
+    isBlocked: () => false,
+    isAllowed: (d) => parentDomains(d).some((p) => seeded.has(p)),
+  };
+  const score = (content: string) =>
+    analyzeMessage(baseInput(content), {
+      lists: seededLists,
+      config: configSchema.parse({}),
+      tracker: new MultiChannelTracker(),
+    }).score;
+
+  it.each([
+    'steam: https://s.team/a/123',
+    'promoção na steam, olha no steamdb.info',
+    'veja steamcharts.com e a steam',
+    'dá uma olhada no https://steamdb.info/sales e compra na steam',
+    'free fire hoje? link: https://discord.js.org/docs',
+    'ganhei de presente o disco.amei demais',
+    'o resgate do disco.tá aqui',
+  ])('does not confirm the ordinary message %s', (content) => {
+    expect(score(content)).toBeLessThan(80);
+  });
+
+  it('still confirms real phishing', () => {
+    expect(score('free nitro https://dlscord-gift.com/x')).toBeGreaterThanOrEqual(80);
+    expect(score('steam gift https://steamcomunity.com/trade')).toBeGreaterThanOrEqual(80);
+  });
+});
+
+describe('analyzeMessage brand names as bait', () => {
+  it('does not count a protected brand name as bait', () => {
+    expect(names('steam https://steamcomunity.com/trade')).not.toContain('bait');
+    expect(names('discord dlscord.gift')).not.toContain('bait');
+    expect(names('steam gift https://steamcomunity.com/trade')).toContain('bait');
+    expect(names('steam dlscord.gift')).not.toContain('bait');
   });
 });
