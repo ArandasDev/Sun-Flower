@@ -118,7 +118,7 @@ export class Responder {
 
     await this.alert(
       config,
-      { ...newCase, id: caseId, revertedBy: null, revertedAt: null },
+      { ...newCase, rules: newCase.rules ?? [], id: caseId, revertedBy: null, revertedAt: null },
       payload,
     );
   }

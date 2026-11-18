@@ -21,6 +21,7 @@ function record(overrides: Partial<CaseRecord> = {}): CaseRecord {
       { name: 'lookalike', points: 60 },
       { name: 'bait', points: 30 },
     ],
+    rules: [],
     score: 90,
     reason: 'phishing: lookalike, bait',
     outcome: { delete: 'ok', timeout: 'ok' },
