@@ -153,6 +153,21 @@ describe('/mod domain', () => {
     expect(text.match(/`/g)).toHaveLength(100);
   });
 
+  it('list stays within the Discord limit with long domains', async () => {
+    const t = setup();
+    for (let i = 0; i < 50; i += 1) {
+      const name = `${'a'.repeat(110)}${String(i).padStart(2, '0')}.example`;
+      t.deps.domains.set(name, 'block', null, NOW.toISOString());
+      t.deps.domains.set(`b${name}`, 'allow', null, NOW.toISOString());
+    }
+    const text = await run(t, 'domain', 'list');
+    expect(text.length).toBeLessThanOrEqual(2000);
+    expect(text).toContain('(+');
+    expect(text).toContain('…');
+    expect(text).toContain('Bloqueados:');
+    expect(text).toContain('Permitidos:');
+  });
+
   it('list allow shows only the allow list', async () => {
     const t = setup();
     t.deps.domains.set('ok.example', 'allow', null, NOW.toISOString());
@@ -184,6 +199,16 @@ describe('/mod case view and list', () => {
     expect(text).toContain('delete: ok');
     expect(text).toContain('2026-11-17T10:00:00.000Z');
     expect(text).toContain(`revertido por <@${OTHER}> em 2026-11-18T09:00:00.000Z`);
+  });
+
+  it('view bounds many long domains', async () => {
+    const t = setup();
+    const domains = Array.from({ length: 20 }, (_, i) => `${'a'.repeat(120)}${String(i)}.example`);
+    const id = seed(t, 'delete_timeout', { domains });
+    const text = await run(t, 'case', 'view', { number: id });
+    expect(text.length).toBeLessThanOrEqual(2000);
+    expect(text).toContain('e mais 15');
+    expect(text).toContain('…');
   });
 
   it('list replies with an empty marker', async () => {

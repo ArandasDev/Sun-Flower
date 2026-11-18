@@ -15,6 +15,12 @@ import {
 
 const EPHEMERAL = { ephemeral: true } as const;
 const RECENT_LIMIT = 10;
+const MAX_DOMAINS = 5;
+const DOMAIN_MAX = 100;
+const REPLY_MAX = 2000;
+
+const clip = (text: string): string =>
+  text.length > DOMAIN_MAX ? `${text.slice(0, DOMAIN_MAX - 1)}…` : text;
 
 const nowIso = (deps: ModCommandDeps): string => (deps.now ?? (() => new Date()))().toISOString();
 
@@ -41,7 +47,10 @@ export async function caseView(
   ];
   if (record.channelId !== null) lines.push(`Canal: <#${record.channelId}>`);
   if (record.domains.length > 0) {
-    lines.push(`Domínios: ${record.domains.map((d) => `\`${d}\``).join(', ')}`);
+    const shown = record.domains.slice(0, MAX_DOMAINS).map((d) => `\`${clip(d)}\``);
+    const more = record.domains.length - shown.length;
+    const suffix = more > 0 ? ` e mais ${String(more)}` : '';
+    lines.push(`Domínios: ${shown.join(', ')}${suffix}`);
   }
   if (record.signals.length > 0) {
     lines.push(
@@ -57,7 +66,11 @@ export async function caseView(
   if (record.revertedBy !== null && record.revertedAt !== null) {
     lines.push(`Reversão: revertido por <@${record.revertedBy}> em ${record.revertedAt}`);
   }
-  await interaction.reply(lines.join('\n'), EPHEMERAL);
+  const text = lines.join('\n');
+  await interaction.reply(
+    text.length > REPLY_MAX ? `${text.slice(0, REPLY_MAX - 1)}…` : text,
+    EPHEMERAL,
+  );
 }
 
 export async function caseList(
