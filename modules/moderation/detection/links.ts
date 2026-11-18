@@ -17,18 +17,19 @@ const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const TLD = /^(?:[a-z]{2,24}|xn--[a-z0-9-]{1,59})$/;
 
-/** Normalizes a bare domain or URL; undefined if it is not a plausible domain. */
-export function normalizeDomain(input: string): string | undefined {
-  let host = input.trim().toLowerCase();
-  const schemeMatch = /^[a-z][a-z0-9+.-]*:\/\//.exec(host);
-  const hasScheme = schemeMatch !== null;
-  if (schemeMatch) host = host.slice(schemeMatch[0].length);
-  host = host.split(/[/?#\\]/)[0] ?? '';
-  host = host.slice(host.lastIndexOf('@') + 1);
-  host = /^[\p{L}\p{N}.-]+/u.exec(host)?.[0] ?? '';
-  host = host.replace(/\.+$/, '').replace(/^www\./, '');
+const DOT_VARIANTS = /[\u3002\uFF0E\uFF61]/g;
+const SOFT_HYPHEN = /\u00AD/g;
+const TRAILING_DECORATION = /[.,:;!?*_|~\u2026]+$/;
+
+/** Maps dot lookalikes to "." and drops soft hyphens, as a browser would. */
+function foldHostChars(text: string): string {
+  return text.replace(SOFT_HYPHEN, '').replace(DOT_VARIANTS, '.');
+}
+
+function validateHost(rawHost: string, allowIp: boolean): string | undefined {
+  const host = rawHost.replace(/\.+$/, '').replace(/^www\./, '');
   if (host === '') return undefined;
-  if (hasScheme && IPV4.test(host) && host.split('.').every((o) => Number(o) <= 255)) {
+  if (allowIp && IPV4.test(host) && host.split('.').every((o) => Number(o) <= 255)) {
     return host;
   }
 
@@ -40,6 +41,30 @@ export function normalizeDomain(input: string): string | undefined {
   if (!labels.every((label) => LABEL.test(label))) return undefined;
   if (!TLD.test(labels[labels.length - 1] ?? '')) return undefined;
   return ascii;
+}
+
+/** Normalizes a bare domain or URL; undefined if it is not a plausible domain. */
+export function normalizeDomain(input: string): string | undefined {
+  const text = foldHostChars(input.trim().toLowerCase());
+  const schemeMatch = /^[a-z][a-z0-9+.-]*:\/\//.exec(text);
+  if (schemeMatch === null) {
+    const host = text.split(/[/?#\\]/)[0] ?? '';
+    return validateHost(host.slice(host.lastIndexOf('@') + 1).replace(/:\d*$/, ''), false);
+  }
+
+  // Scheme URL: let the WHATWG parser canonicalize the host (IDNA mapping,
+  // percent-decoding, IPv4 forms, userinfo, port); fall back to a manual cut.
+  try {
+    const hostname = new URL(text.replace(TRAILING_DECORATION, '')).hostname;
+    const viaUrl = validateHost(hostname, true);
+    if (viaUrl !== undefined) return viaUrl;
+  } catch {
+    // fall through to the manual cut
+  }
+  let host = text.slice(schemeMatch[0].length).split(/[/?#\\]/)[0] ?? '';
+  host = host.slice(host.lastIndexOf('@') + 1);
+  host = /^[\p{L}\p{N}.-]+/u.exec(host)?.[0] ?? '';
+  return validateHost(host, true);
 }
 
 /** `a.b.golpe.com` -> `a.b.golpe.com`, `b.golpe.com`, `golpe.com`. */
@@ -84,7 +109,7 @@ interface Candidate extends Found {
 }
 
 export function extractLinks(content: string): ExtractedLink[] {
-  let text = content.slice(0, MAX_SCAN_CHARS);
+  let text = foldHostChars(content.slice(0, MAX_SCAN_CHARS));
   const candidates: Candidate[] = [];
 
   for (const match of text.matchAll(MARKDOWN_LINK)) {

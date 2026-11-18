@@ -133,4 +133,21 @@ describe('extractLinks', () => {
     expect(extractLinks('1.2.3.4 e v1.2.3')).toEqual([]);
     expect(parentDomains('1.2.3.4')).toEqual(['1.2.3.4']);
   });
+
+  it('canonicalizes hosts like a browser', () => {
+    for (const text of [
+      'https://golpe\u3002gift',
+      'https://golpe\uFF0Egift',
+      'https://golpe\uFF61gift',
+      'https://golpe%2Egift',
+      'https://gol\u00ADpe.gift',
+      'golpe\u3002gift',
+      'gol\u00ADpe.gift',
+    ]) {
+      expect(extractLinks(text), text).toEqual([{ domain: 'golpe.gift' }]);
+    }
+    expect(extractLinks('https://16843009/')).toEqual([{ domain: '1.1.1.1' }]);
+    expect(extractLinks('https://0x7f.0.0.1/')).toEqual([{ domain: '127.0.0.1' }]);
+    expect(extractLinks('https://01.2.3.4/')).toEqual([{ domain: '1.2.3.4' }]);
+  });
 });
