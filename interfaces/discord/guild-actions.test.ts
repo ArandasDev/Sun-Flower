@@ -86,6 +86,15 @@ describe('createGuildActions', () => {
     expect(banSpy).not.toHaveBeenCalled();
   });
 
+  it('refuses a direct message to the bot without calling the gateway', async () => {
+    const sendDirectSpy = vi.fn(() => Promise.resolve());
+    const actions = createGuildActions(fakeGateway({ sendDirect: sendDirectSpy }));
+    expect(await actions.sendDirectMessage(BOT, 'x')).toEqual({ ok: false, error: 'forbidden' });
+    expect(sendDirectSpy).not.toHaveBeenCalled();
+    expect(await actions.sendDirectMessage(USER, 'x')).toEqual({ ok: true });
+    expect(sendDirectSpy).toHaveBeenCalledExactlyOnceWith(USER, 'x');
+  });
+
   it('removeTimeout calls setTimeout with null', async () => {
     const setTimeoutSpy = vi.fn(() => Promise.resolve());
     await createGuildActions(fakeGateway({ setTimeout: setTimeoutSpy })).removeTimeout(USER);

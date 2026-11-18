@@ -111,14 +111,14 @@ O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcoman
 - `case list` mostra os 10 casos mais recentes, do usuário quando informado.
 - `case revert` vale para casos `actioned` ou `open`: remove o timeout (`delete_timeout`, `timeout`), desfaz o banimento (`ban`) ou só muda o status (`kick`, `warn`, `none`). A mensagem apagada não é recuperada. `allow-domain` move os domínios do caso para a lista de permitidos, exceto imitações de marcas protegidas, que são recusadas. `case dismiss` vale só para casos `open`.
 - `timeout` aceita de 1 a 40320 minutos (28 dias). `delete-days` vai de 0 a 7 (padrão 0). O motivo tem até 512 caracteres.
-- `warn` registra o caso e envia ao membro a mensagem direta `Você recebeu uma advertência no servidor. Motivo: <motivo>`. Se a mensagem direta falhar, o caso continua registrado e a resposta informa.
+- `warn` registra o caso e envia ao membro a mensagem direta `Você recebeu uma advertência no servidor. Motivo: <motivo>`. Se a mensagem direta falhar (por exemplo, mensagens diretas fechadas), o caso continua registrado e a resposta informa. Se o serviço `guild` recusar a mensagem direta com `forbidden` (por exemplo, o alvo é o próprio bot), a resposta é `Não é possível agir contra este membro.` e nenhum caso é gravado.
 - Cada ação manual que o Discord aceita grava um caso `manual` com status `actioned` e publica `moderation.case.created`. Se o Discord recusar, a resposta é `O Discord recusou a ação: <sem permissão|não encontrado|falha>.` e nenhum caso é gravado.
 
 **Proteções das ações manuais (`warn`, `timeout`, `kick`, `ban`).** A ação é recusada, sem nenhuma chamada ao Discord, quando o alvo:
 
 - é a própria pessoa que executa o comando (`Não é possível agir contra você mesmo.`);
 - é um desenvolvedor do bot, tem um cargo de `exemptRoleIds` ou tem um cargo com alguma permissão `moderation.*` (`Não é possível agir contra este membro.`);
-- é o próprio bot: o serviço `guild` do Core recusa, e a resposta é `O Discord recusou a ação: sem permissão.`.
+- é o próprio bot: o serviço `guild` do Core recusa; em `warn` a resposta é `Não é possível agir contra este membro.` e, nas demais, `O Discord recusou a ação: sem permissão.`.
 
 `warn`, `timeout` e `kick` exigem que o alvo seja membro do servidor (`Este usuário não é membro do servidor.`); `ban` aceita um usuário que não é membro. Se não for possível consultar os cargos do alvo (erro ou demora do Discord), nenhuma das quatro ações é executada: a resposta é `O Discord recusou a ação: falha.` e nenhum caso é gravado.
 

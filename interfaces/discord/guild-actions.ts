@@ -68,7 +68,9 @@ export function createGuildActions(
     unban: (userId) => run('unban', () => gateway.unban(userId)),
     sendMessage: (channelId, content) => run('sendMessage', () => gateway.send(channelId, content)),
     sendDirectMessage: (userId, content) =>
-      run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
+      isSelf(userId)
+        ? Promise.resolve(forbidden)
+        : run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
     getMemberRoleIds: async (userId) => {
       try {
         return await withTimeout(() => gateway.memberRoleIds(userId), timeoutMs, 'memberRoleIds');

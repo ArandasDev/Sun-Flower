@@ -198,7 +198,17 @@ describe('/mod case view and list', () => {
     expect(text).toContain('phishing');
     expect(text).toContain('delete: ok');
     expect(text).toContain('2026-11-17T10:00:00.000Z');
-    expect(text).toContain(`revertido por <@${OTHER}> em 2026-11-18T09:00:00.000Z`);
+    expect(text).toContain(`Reversão: revertido por <@${OTHER}> em 2026-11-18T09:00:00.000Z`);
+    expect(text).not.toContain('Descarte');
+  });
+
+  it('view labels a dismissed case as descartado, not revertido', async () => {
+    const t = setup();
+    const id = seed(t, 'none', { status: 'open' });
+    t.deps.cases.setStatus(id, 'dismissed', OTHER, '2026-11-18T09:00:00.000Z');
+    const text = await run(t, 'case', 'view', { number: id });
+    expect(text).toContain(`Descarte: descartado por <@${OTHER}> em 2026-11-18T09:00:00.000Z`);
+    expect(text).not.toContain('revertido');
   });
 
   it('view bounds many long domains', async () => {

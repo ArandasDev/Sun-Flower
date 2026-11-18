@@ -55,7 +55,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - `config view | alert-channel | timeout | thresholds | exempt-role` para a configuração em tempo de execução.
   - `domain block | allow | remove | list` para as listas de domínios, com normalização do domínio informado.
   - `case view | list | revert | dismiss` para consultar, reverter (remover timeout, desbanir e, opcionalmente, permitir os domínios do caso, exceto imitações de marcas) e descartar casos.
-  - Ações manuais `warn`, `timeout`, `kick` e `ban`, que gravam um caso `manual`; `warn` envia mensagem direta ao membro. Recusam agir contra a própria pessoa, desenvolvedores do bot, cargos isentos e cargos com permissão `moderation.*`; `warn`, `timeout` e `kick` exigem um membro do servidor. Se o Discord recusar a ação, ou se a consulta dos cargos do alvo falhar, nenhum caso é gravado.
+  - Ações manuais `warn`, `timeout`, `kick` e `ban`, que gravam um caso `manual`; `warn` envia mensagem direta ao membro. Recusam agir contra a própria pessoa, o próprio bot, desenvolvedores do bot, cargos isentos e cargos com permissão `moderation.*`; `warn`, `timeout` e `kick` exigem um membro do servidor. Se o Discord recusar a ação, ou se a consulta dos cargos do alvo falhar, nenhum caso é gravado.
 - README: seção "Moderação" com as permissões a associar e o passo a passo do teste manual no servidor real.
 
 ### Changed

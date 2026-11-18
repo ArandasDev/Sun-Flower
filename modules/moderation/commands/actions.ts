@@ -136,6 +136,11 @@ export async function actionWarn(
   if (target === undefined) return;
   const now = clock(deps);
   const dm = await deps.guild.sendDirectMessage(target.userId, WARN_DM(target.reason));
+  if (!dm.ok && dm.error === 'forbidden') {
+    // The target cannot be warned (for example, the bot itself): no case is recorded.
+    await interaction.reply(PROTECTED_TARGET, EPHEMERAL);
+    return;
+  }
   const caseId = recordCase(
     interaction,
     deps,

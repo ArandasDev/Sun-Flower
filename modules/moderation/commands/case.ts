@@ -64,7 +64,11 @@ export async function caseView(
   }
   lines.push(`Criado em: ${record.createdAt}`);
   if (record.revertedBy !== null && record.revertedAt !== null) {
-    lines.push(`Reversão: revertido por <@${record.revertedBy}> em ${record.revertedAt}`);
+    lines.push(
+      record.status === 'dismissed'
+        ? `Descarte: descartado por <@${record.revertedBy}> em ${record.revertedAt}`
+        : `Reversão: revertido por <@${record.revertedBy}> em ${record.revertedAt}`,
+    );
   }
   const text = lines.join('\n');
   await interaction.reply(

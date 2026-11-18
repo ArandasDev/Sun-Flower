@@ -390,7 +390,7 @@ Todas as respostas são efêmeras.
 - `exempt-role` usa uma opção `string` com as escolhas `add` e `remove`.
 - `domain list` mostra no máximo 50 domínios por lista. `case list` mostra os 10 casos mais recentes, do usuário quando informado.
 - `domain block` e `allow` validam o domínio pela mesma normalização de §4.3. Bloquear um domínio permitido o move para a lista de bloqueados, e vice-versa.
-- `warn` grava o caso e tenta `sendDirectMessage` com o motivo. Se a mensagem direta falhar, o caso fica registrado e a resposta informa.
+- `warn` tenta `sendDirectMessage` com o motivo e grava o caso. Se a mensagem direta falhar, o caso fica registrado e a resposta informa. Se o resultado for `forbidden` (por exemplo, o alvo é o próprio bot), a resposta é `Não é possível agir contra este membro.` e nenhum caso é gravado.
 - `delete-days` vai de 0 a 7.
 
 **Proteções das ações manuais (`warn`, `timeout`, `kick`, `ban`):** a ação é recusada quando o alvo:

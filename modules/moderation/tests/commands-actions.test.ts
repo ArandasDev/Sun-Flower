@@ -223,12 +223,25 @@ describe('/mod warn', () => {
     });
   });
 
-  it('keeps the case and reports a failed DM', async () => {
+  it.each(['failed', 'not_found'] as const)(
+    'keeps the case and reports a DM that %s',
+    async (error) => {
+      const t = setup({ guild: { sendDirectMessage: { ok: false, error } } });
+      const text = await run(t, 'warn');
+      expect(text).toBe(
+        'Advertência registrada (caso #1). Não foi possível enviar mensagem direta.',
+      );
+      expect(t.deps.cases.get(1)?.outcome).toEqual({ warn: 'ok', dm: error });
+      expect(t.publish).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('refuses a forbidden DM target as protected and records no case', async () => {
     const t = setup({ guild: { sendDirectMessage: { ok: false, error: 'forbidden' } } });
     const text = await run(t, 'warn');
-    expect(text).toBe('Advertência registrada (caso #1). Não foi possível enviar mensagem direta.');
-    expect(t.deps.cases.get(1)?.outcome).toEqual({ warn: 'ok', dm: 'forbidden' });
-    expect(t.publish).toHaveBeenCalledOnce();
+    expect(text).toBe('Não é possível agir contra este membro.');
+    expect(t.create).not.toHaveBeenCalled();
+    expect(t.publish).not.toHaveBeenCalled();
   });
 });
 
