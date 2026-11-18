@@ -38,6 +38,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
 - Módulo `ping`: comando `/ping`, que responde `Pong!`.
 - Registros de decisão 0011 a 0015 (eventos do Discord no Event Bus, ações no servidor por capacidades, persistência dos módulos, opções de comando e configuração em tempo de execução, detecção de phishing) e spec da Fase 2, etapa 1 (moderação contra phishing).
+- Registro de decisão 0016 (exclusão de mensagens em lote) e spec da Fase 2, etapa 2 (moderação contra spam e flood).
 - Core da Fase 2, etapa 1:
   - Eventos `discord.message.created` e `discord.message.updated` publicados pela interface; o prefixo `discord.` é reservado ao Core.
   - Capacidades `guild.moderate` e `guild.message` no manifesto e serviço `guild` do contexto do módulo (apagar mensagem, castigo, expulsão, banimento, mensagens), com recusa registrada quando a capacidade não foi declarada. O log do Core registra o motivo de cada ação com os IDs do Discord mascarados como `[id]`; o motivo enviado ao Discord não muda.

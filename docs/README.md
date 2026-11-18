@@ -33,3 +33,4 @@ Cada assunto tem um único documento responsável. Quando dois documentos tratam
 | [0013](decisions/0013-module-storage.md)                     | Persistência dos módulos                              | Aceita                                      |
 | [0014](decisions/0014-command-options-and-runtime-config.md) | Opções de comando e configuração em tempo de execução | Aceita                                      |
 | [0015](decisions/0015-phishing-policy.md)                    | Detecção de phishing e ações automáticas iniciais     | Aceita                                      |
+| [0016](decisions/0016-bulk-message-deletion.md)              | Exclusão de mensagens em lote                         | Aceita                                      |
