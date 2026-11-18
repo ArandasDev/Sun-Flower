@@ -279,7 +279,7 @@ interface CommandInteraction {
 - Cada sinal conta uma vez por mensagem. A pontuação é a soma.
 - Links de domínios permitidos não produzem nenhum sinal e não contam como "link não permitido".
 - Mensagem sem link não permitido tem pontuação 0.
-- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `steam`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos e considera só o texto fora dos links (`discord.gift` não conta como `gift`). Os nomes das marcas protegidas (`discord`, `steam`) nunca contam como isca, mesmo em `baitTerms`: falar da marca é conversa comum (`compra na steam`). `steam gift` com um link de imitação ainda conta, por `gift`.
+- Termos de isca iniciais: `nitro`, `free`, `grátis`, `gratis`, `gift`, `presente`, `airdrop`, `giveaway`, `sorteio`, `claim`, `resgate`. A comparação ignora maiúsculas e acentos e considera só o texto fora dos links (`discord.gift` não conta como `gift`). Os nomes das marcas protegidas (`discord`, `steam`) nunca contam como isca, mesmo em `baitTerms`: falar da marca é conversa comum (`compra na steam`). `steam gift` com um link de imitação ainda conta, por `gift`.
 
 **Marcas protegidas:** `discord` (`discord.com`, `discord.gg`, `discordapp.com`, `discordapp.net`, `discord.media`, `discord.new`, `discord.gift`, `discordstatus.com`) e `steam` (`steamcommunity.com`, `steampowered.com`, `steamstatic.com`, `s.team`). Esses domínios formam a lista inicial de permitidos.
 

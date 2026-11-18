@@ -16,6 +16,22 @@ describe('moderation configSchema', () => {
     });
   });
 
+  it('ships the spec §4.4 bait terms, without the inert brand name steam', () => {
+    expect(DEFAULT_BAIT_TERMS).toEqual([
+      'nitro',
+      'free',
+      'grátis',
+      'gratis',
+      'gift',
+      'presente',
+      'airdrop',
+      'giveaway',
+      'sorteio',
+      'claim',
+      'resgate',
+    ]);
+  });
+
   it('fills missing inner keys of nested objects', () => {
     const parsed = configSchema.parse({ thresholds: { confirmed: 90 }, weights: { bait: 5 } });
     expect(parsed.thresholds).toEqual({ confirmed: 90, suspicious: 40 });

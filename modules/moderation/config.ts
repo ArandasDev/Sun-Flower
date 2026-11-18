@@ -30,7 +30,6 @@ export const DEFAULT_BAIT_TERMS: readonly string[] = [
   'gift',
   'presente',
   'airdrop',
-  'steam',
   'giveaway',
   'sorteio',
   'claim',
