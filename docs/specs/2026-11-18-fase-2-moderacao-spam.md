@@ -81,7 +81,7 @@ interface GuildActions {
 | `repeat`   | o autor tem `limit` entradas com o mesmo `fingerprint` não nulo em `seconds` s | 4 em 60 s |
 | `mentions` | uma única mensagem soma `limit` menções                                        | 6         |
 
-- `mentions` conta, no conteúdo da mensagem (criada ou editada), as menções distintas `<@ID>`, `<@!ID>` e `<@&ID>`; cada `@everyone` ou `@here` soma 3, desde que não esteja colado a letra, número, `_` ou `.` em nenhum dos lados (`fulano@everyone.com.br` não conta). Menções repetidas da mesma pessoa ou do mesmo cargo contam uma vez.
+- `mentions` conta, no conteúdo da mensagem (criada ou editada), as menções distintas `<@ID>`, `<@!ID>` e `<@&ID>`; cada `@everyone` ou `@here` soma 3, desde que não esteja colado a letra, número, `_` ou `.` em nenhum dos lados (`fulano@everyone.example.com` não conta). Menções repetidas da mesma pessoa ou do mesmo cargo contam uma vez.
 - Uma regra que disparou para um autor não dispara de novo para ele nos 30 segundos seguintes.
 - Autores com cargo de `exemptRoleIds` e desenvolvedores do bot não são analisados, como na etapa 1.
 - Mensagens em canais de `spam.ignoredChannelIds` não geram entrada nem disparam regras.

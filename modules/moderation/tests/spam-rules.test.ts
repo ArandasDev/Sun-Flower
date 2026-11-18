@@ -240,7 +240,7 @@ describe('false-positive guards', () => {
   });
 
   it('requires a left boundary on @everyone and @here', () => {
-    expect(countMentions('fulano@everyone.com.br')).toBe(0);
+    expect(countMentions('fulano@everyone.example.com')).toBe(0);
     expect(countMentions('contato@here.example.com')).toBe(0);
     expect(countMentions('a_@everyone x.@here 9@here')).toBe(0);
     expect(countMentions('oi @everyone (@here) "@everyone"')).toBe(9);

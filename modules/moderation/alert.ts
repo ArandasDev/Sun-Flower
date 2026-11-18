@@ -114,7 +114,8 @@ function spamAction(record: CaseRecord, spam: SpamAlertDetails): string {
     if (result === undefined) continue;
     const labels = PUNISHMENT_LABELS[kind];
     if (result !== 'ok') parts.push(`${labels.failed} (${failureLabel(result)})`);
-    // Without a bulk deletion, the ban itself removed the recent messages.
+    // These branches only cover cases recorded before spam deletion always ran in parallel
+    // (older cases re-rendered): there, the ban itself removed the recent messages.
     else if (kind === 'ban' && bulk === undefined) {
       parts.push('banimento com exclusão das mensagens recentes');
     } else parts.push(labels.ok);
