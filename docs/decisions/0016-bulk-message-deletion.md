@@ -17,7 +17,9 @@ A exclusão em lote do Discord tem limites próprios: no máximo 100 mensagens p
   - mensagens com mais de 14 dias, que o Discord ignora no lote;
   - uma lista de um único ID;
   - um lote que falhou por erro temporário ou por limite de tempo.
-- A exclusão uma por uma não é tentada quando o Discord recusa por falta de permissão (`forbidden`). Mensagens que já não existem (`not_found`) contam como já apagadas.
+- A exclusão uma por uma não é tentada quando o lote é recusado por um caso terminal: falta de permissão (50013), falta de acesso (50001) ou tópico arquivado (50083), todos `forbidden`, ou canal inexistente (10003), `not_found`. Os mesmos casos interrompem a exclusão individual já em andamento e devolvem o que foi apagado até ali.
+- A exclusão individual também para após 3 falhas consecutivas, devolvendo o que já foi apagado (ou `failed` se nada foi). Isso limita o pior caso de um lote de 100 mensagens com falhas repetidas.
+- Mensagens que já não existem (`not_found`, exceto canal inexistente) contam como já apagadas.
 - O resultado informa quantas mensagens foram apagadas e quantas foram pela exclusão individual.
 - O log do Core registra o módulo, a ação e as contagens, sem IDs.
 - `CORE_API_VERSION` passa para `1.2.0`. A mudança é aditiva.

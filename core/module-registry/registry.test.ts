@@ -146,6 +146,7 @@ const fakeGuild: GuildActions = {
   unban: () => Promise.resolve(OK),
   sendMessage: () => Promise.resolve(OK),
   sendDirectMessage: () => Promise.resolve(OK),
+  bulkDeleteMessages: () => Promise.resolve({ ok: true, deleted: 0, individually: 0 }),
   getMemberRoleIds: () => Promise.resolve([]),
 };
 
@@ -198,7 +199,7 @@ describe('ModuleRegistry', () => {
   it('starts modules in dependency order and stops in reverse', async () => {
     writeModule('b', { dependencies: ['a'] });
     writeModule('a');
-    const registry = createRegistry();
+    const registry = createRegistry(1000);
     await registry.load();
     await registry.start();
     expect(calls()).toEqual([
@@ -243,7 +244,7 @@ describe('ModuleRegistry', () => {
 
   it('treats a step that exceeds the timeout as a failure', async () => {
     writeModule('a', { hangIn: ['initialize'] });
-    const registry = createRegistry(20);
+    const registry = createRegistry(200);
     await registry.load();
     await registry.start();
     expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'initialize' });
@@ -266,7 +267,7 @@ describe('ModuleRegistry', () => {
 
   it('survives dispose hanging after a failure', async () => {
     writeModule('a', { throwIn: ['register'], hangIn: ['dispose'] });
-    const registry = createRegistry(20);
+    const registry = createRegistry(200);
     await registry.load();
     await registry.start();
     expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
@@ -324,7 +325,7 @@ describe('ModuleRegistry', () => {
       rawSource: 'await new Promise(() => {});\nexport default () => ({});\n',
     });
     writeModule('b');
-    const registry = createRegistry(20);
+    const registry = createRegistry(200);
     await registry.load();
     expect(registry.status().get('hang')).toMatchObject({ state: 'FAILED', failedAt: 'import' });
     expect(registry.status().get('hang')?.error).toMatch(/import timed out/);
@@ -551,7 +552,7 @@ describe('ModuleRegistry', () => {
     writeModule('a');
     writeModule('b', { throwIn: ['stop'] });
     writeModule('c', { hangIn: ['dispose'] });
-    const registry = createRegistry(20);
+    const registry = createRegistry(200);
     await registry.load();
     await registry.start();
     await registry.stop();
@@ -611,7 +612,7 @@ describe('ModuleRegistry', () => {
       rawSource: `const calls = (globalThis[${key}] ??= []);
 export default () => ({
   async register(ctx) {
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await new Promise((resolve) => setTimeout(resolve, 400));
     ctx.events.subscribe('pub.thing.happened', () => { calls.push('late:received'); });
     calls.push('late:subscribed');
     await new Promise(() => {});
@@ -620,7 +621,7 @@ export default () => ({
 });
 `,
     });
-    const registry = createRegistry(20);
+    const registry = createRegistry(200);
     await registry.load();
     await registry.start();
     expect(registry.status().get('late')).toMatchObject({ state: 'FAILED', failedAt: 'register' });

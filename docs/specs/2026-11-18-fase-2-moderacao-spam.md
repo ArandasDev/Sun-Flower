@@ -52,8 +52,9 @@ interface GuildActions {
   2. as mensagens que o lote não apagou são apagadas uma por uma com a exclusão normal, cada uma com limite de 10 s;
   3. com 1 ID, apaga diretamente com a exclusão normal;
   4. se o lote falhar com erro temporário ou limite de tempo, todas as mensagens passam pela exclusão individual;
-  5. se o Discord responder `forbidden` (no lote ou na primeira exclusão individual), nada mais é tentado e o resultado é `forbidden`;
-  6. `not_found` numa exclusão individual conta como mensagem já apagada.
+  5. casos terminais: falta de permissão (50013), falta de acesso (50001) e tópico arquivado (50083) são `forbidden`; canal inexistente (10003) é `not_found`. No lote, nada mais é tentado. Na exclusão individual, a tentativa para ali e devolve o que já foi apagado (`ok: true` com as contagens) ou, se nada foi apagado, o erro correspondente;
+  6. `not_found` numa exclusão individual (exceto canal inexistente) conta como mensagem já apagada;
+  7. a exclusão individual para após 3 falhas consecutivas e devolve o que já foi apagado (`failed` se nada foi).
 - `deleted` soma as mensagens apagadas e as que já não existiam; `individually` conta as apagadas pelo plano B. `ok: false` só acontece quando nenhuma mensagem pôde ser apagada.
 - O log do Core registra `{ module, action: 'bulkDeleteMessages', requested, deleted, individually, result }`, sem IDs.
 
@@ -69,6 +70,7 @@ interface GuildActions {
 - `fingerprint`: `sha256` (de `node:crypto`), em hexadecimal, do texto normalizado — minúsculas, `NFD` sem marcas (`\p{M}`) e sem caracteres de formatação (`\p{Cf}`), espaços colapsados e aparados. Textos com menos de 10 caracteres depois da normalização recebem `fingerprint` nulo e não contam para `repeat`. O texto em si nunca é guardado.
 - Limites: 200 entradas por autor (a mais antiga sai primeiro) e 2 000 autores (o autor menos recente sai primeiro).
 - As entradas expiram depois da maior janela configurada entre as regras (`seconds` e `deleteMinutes`), com teto de 60 minutos. Uma limpeza roda a cada 60 segundos, junto com a do rastreador de vários canais.
+- As entradas apagadas por um caso são removidas do registro, para que um caso posterior na mesma janela não as reenvie.
 - O registro se perde ao reiniciar o bot.
 
 ### 4.3. Regras (`spam/rules.ts`)
@@ -117,8 +119,9 @@ Cada mensagem é avaliada uma única vez. A decisão combina a análise de phish
 ### 4.6. Execução da resposta
 
 - **Exclusão:** as mensagens do autor dentro da janela, mais a mensagem atual, agrupadas por canal e enviadas a `bulkDeleteMessages` em lotes de até 100.
-- **Banimento:** em vez da exclusão em lote, usa `ban(userId, reason, deleteMinutes × 60)`, que apaga as mensagens da pessoa em todos os canais pelo próprio Discord.
-- **Expulsão e timeout:** exclusão em lote e, em seguida, a punição. As etapas são independentes: uma falha não impede a outra.
+- **Banimento com `deleteMinutes` maior que 0:** em vez da exclusão em lote, usa `ban(userId, reason, deleteMinutes × 60)`, que apaga as mensagens da pessoa em todos os canais pelo próprio Discord.
+- **Expulsão e timeout:** a exclusão em lote e a punição rodam **em paralelo**, pois são independentes: uma falha não impede a outra.
+- **Banimento com `deleteMinutes` 0:** o `deleteMessageSeconds` 0 do `ban` não apaga nada; por isso as mensagens que dispararam (`deleteMessageIds`) ainda são apagadas com `bulkDeleteMessages`.
 - Uma punição recusada pelo Discord (`forbidden`) não consome degrau de reincidência, porque o caso não fica `actioned`.
 
 ### 4.7. Persistência (`migrations/0002-spam.sql`)

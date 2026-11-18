@@ -56,6 +56,7 @@ function setup(
     unban: record('unban'),
     sendMessage: record('sendMessage'),
     sendDirectMessage: record('sendDirectMessage'),
+    bulkDeleteMessages: record('bulkDeleteMessages', { ok: true, deleted: 2, individually: 1 }),
     getMemberRoleIds: record('getMemberRoleIds', [channel]),
     ...portOverride,
   } as GuildActions;
@@ -264,5 +265,99 @@ describe('UNAVAILABLE_GUILD', () => {
       error: 'failed',
     });
     expect(await UNAVAILABLE_GUILD.getMemberRoleIds(target)).toBeUndefined();
+    expect(await UNAVAILABLE_GUILD.bulkDeleteMessages(channel, [message])).toEqual({
+      ok: false,
+      error: 'failed',
+      deleted: 0,
+    });
+  });
+});
+
+describe('createModuleGuild bulkDeleteMessages', () => {
+  const ids = ['333333333333333333', '444444444444444444'];
+  const failed = { ok: false, error: 'failed', deleted: 0 };
+
+  it('throws CapabilityError without guild.moderate', async () => {
+    const { guild, calls } = setup([]);
+    await expect(guild.bulkDeleteMessages(channel, ids)).rejects.toBeInstanceOf(CapabilityError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each([
+    ['an empty list', []],
+    [
+      '101 unique ids',
+      Array.from({ length: 101 }, (_, i) => String(100_000_000_000_000_000n + BigInt(i))),
+    ],
+    ['a malformed id', ['333333333333333333', 'abc']],
+  ])('refuses %s without calling the port', async (_name, list) => {
+    const { guild, calls } = setup(['guild.moderate']);
+    await expect(guild.bulkDeleteMessages(channel, list)).resolves.toEqual(failed);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('dedupes ids keeping the first occurrence order', async () => {
+    const { guild, calls } = setup(['guild.moderate']);
+    const a = '333333333333333333';
+    const b = '444444444444444444';
+    await guild.bulkDeleteMessages(channel, [b, a, b, a]);
+    expect(calls).toEqual([{ name: 'bulkDeleteMessages', args: [channel, [b, a]] }]);
+  });
+
+  it('counts unique ids against the limit of 100', async () => {
+    const { guild, calls } = setup(['guild.moderate']);
+    const list = Array.from({ length: 100 }, (_, i) =>
+      String(100_000_000_000_000_000n + BigInt(i)),
+    );
+    await guild.bulkDeleteMessages(channel, [...list, ...list]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('refuses without calling the port when the module is inactive', async () => {
+    const { guild, calls } = setup(['guild.moderate'], undefined, () => false);
+    await expect(guild.bulkDeleteMessages(channel, ids)).resolves.toEqual(failed);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('turns a throwing port into a failed result', async () => {
+    const { guild } = setup(['guild.moderate'], {
+      bulkDeleteMessages: () => Promise.reject(new Error('boom')),
+    });
+    await expect(guild.bulkDeleteMessages(channel, ids)).resolves.toEqual(failed);
+  });
+
+  it('logs the throw path with only module and action', async () => {
+    const { guild, entries } = setup(['guild.moderate'], {
+      bulkDeleteMessages: () => Promise.reject(new Error(`boom ${ids.join(' ')}`)),
+    });
+    await guild.bulkDeleteMessages(channel, ids);
+    const errors = entries.filter((entry) => entry.level === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.obj).toEqual({ module: 'moderation', action: 'bulkDeleteMessages' });
+    expect(JSON.stringify(entries)).not.toMatch(/\d{17,20}/);
+  });
+
+  it('returns the port result and logs counts without ids', async () => {
+    const { guild, entries } = setup(['guild.moderate']);
+    await expect(guild.bulkDeleteMessages(channel, [...ids, ids[0] ?? ''])).resolves.toEqual({
+      ok: true,
+      deleted: 2,
+      individually: 1,
+    });
+    expect(entries).toEqual([
+      {
+        level: 'info',
+        obj: {
+          module: 'moderation',
+          action: 'bulkDeleteMessages',
+          requested: 2,
+          deleted: 2,
+          individually: 1,
+          result: 'ok',
+        },
+        msg: 'guild action executed',
+      },
+    ]);
+    expect(JSON.stringify(entries)).not.toMatch(/\d{17,20}/);
   });
 });

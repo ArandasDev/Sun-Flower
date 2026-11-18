@@ -13,6 +13,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ### Added
 
+- Core 1.2.0 (aditivo): `bulkDeleteMessages` no serviço `guild` (capacidade `guild.moderate`), que apaga até 100 mensagens em lote e, quando o Discord recusa algumas (mais de 14 dias) ou o lote falha, apaga as restantes uma a uma. Devolve o total apagado e quantas saíram individualmente (decisão 0016).
 - Documentação inicial do projeto:
   - `docs/ARCHITECTURE.md`: visão arquitetural, servidor de atuação e domínios funcionais (moderação, social, música, painel administrativo).
   - `docs/MODULES.md`: contrato de módulo, `manifest.json`, ciclo de vida, Event Bus, permissões, configurações e testes.

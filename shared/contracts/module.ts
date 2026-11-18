@@ -4,7 +4,7 @@ import type { EventContext, EventHandler } from './events.ts';
 import type { Logger } from './logger.ts';
 import type { ModuleStorage } from './storage.ts';
 
-export const CORE_API_VERSION = '1.1.0';
+export const CORE_API_VERSION = '1.2.0';
 
 export type Capability = 'guild.moderate' | 'guild.message';
 

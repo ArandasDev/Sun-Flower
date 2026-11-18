@@ -3,7 +3,18 @@ export type GuildActionError = 'forbidden' | 'not_found' | 'failed';
 export type GuildActionResult =
   { readonly ok: true } | { readonly ok: false; readonly error: GuildActionError };
 
+/**
+ * Outcome of a bulk deletion. `deleted` counts messages actually removed; `individually` is how
+ * many of those were deleted one by one by the fallback (a single ID, a failed or timed-out batch,
+ * or messages older than 14 days, which bulk delete rejects).
+ */
+export type BulkDeleteResult =
+  | { readonly ok: true; readonly deleted: number; readonly individually: number }
+  | { readonly ok: false; readonly error: GuildActionError; readonly deleted: number };
+
 export interface GuildActions {
+  /** Deletes up to 100 messages of one channel (IDs are deduplicated by the Core). */
+  bulkDeleteMessages(channelId: string, messageIds: readonly string[]): Promise<BulkDeleteResult>;
   deleteMessage(channelId: string, messageId: string): Promise<GuildActionResult>;
   timeout(userId: string, durationMs: number, reason: string): Promise<GuildActionResult>;
   removeTimeout(userId: string): Promise<GuildActionResult>;
