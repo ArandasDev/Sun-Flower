@@ -6,6 +6,7 @@ import type { DiscordMessagePayload } from '../../shared/contracts/discord-event
 import type { SunFlowerEvent } from '../../shared/contracts/events.ts';
 import type { ModuleContext, ModuleFactory } from '../../shared/contracts/module.ts';
 import { CaseStore } from './cases.ts';
+import { buildModCommand } from './commands/mod-command.ts';
 import type { ModerationConfig } from './config.ts';
 import { MultiChannelTracker } from './detection/multi-channel.ts';
 import { DomainStore } from './domains.ts';
@@ -19,10 +20,17 @@ const createModeration: ModuleFactory = () => {
   let context: ModuleContext | undefined;
   let responder: Responder | undefined;
   let tracker: MultiChannelTracker | undefined;
+  let caseStore: CaseStore | undefined;
+  let domainStore: DomainStore | undefined;
   let pruneTimer: ReturnType<typeof setInterval> | undefined;
 
   const onMessage = async (event: SunFlowerEvent): Promise<void> => {
     await responder?.handle(event.payload as DiscordMessagePayload);
+  };
+
+  const required = <T>(value: T | undefined): T => {
+    if (value === undefined) throw new Error('moderation is not initialized');
+    return value;
   };
 
   const clearPruneTimer = (): void => {
@@ -36,6 +44,22 @@ const createModeration: ModuleFactory = () => {
       context = ctx;
       ctx.events.subscribe(DISCORD_MESSAGE_CREATED, onMessage);
       ctx.events.subscribe(DISCORD_MESSAGE_UPDATED, onMessage);
+      ctx.commands.register(
+        buildModCommand({
+          permissions: ctx.permissions,
+          config: ctx.config,
+          guild: ctx.guild,
+          get cases() {
+            return required(caseStore);
+          },
+          get domains() {
+            return required(domainStore);
+          },
+          publish: (type, payload) => {
+            ctx.events.publish(type, payload);
+          },
+        }),
+      );
     },
     initialize: async () => {
       await Promise.resolve();
@@ -43,10 +67,13 @@ const createModeration: ModuleFactory = () => {
       const ctx = context;
       const lists = new DomainStore(ctx.storage);
       lists.seedOfficial(new Date().toISOString());
+      domainStore = lists;
+      const cases = new CaseStore(ctx.storage);
+      caseStore = cases;
       tracker = new MultiChannelTracker({ maxAuthors: 1000, maxEntries: 50 });
       responder = new Responder({
         guild: ctx.guild,
-        cases: new CaseStore(ctx.storage),
+        cases,
         lists,
         tracker,
         config: () => ctx.config.get<ModerationConfig>(),
@@ -83,6 +110,8 @@ const createModeration: ModuleFactory = () => {
       clearPruneTimer();
       responder = undefined;
       tracker = undefined;
+      caseStore = undefined;
+      domainStore = undefined;
     },
   };
 };
