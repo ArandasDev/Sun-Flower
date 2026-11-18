@@ -61,8 +61,8 @@ export function toRawInteraction(interaction: ChatInputCommandInteraction): RawI
           : { content, allowedMentions: NO_MENTIONS },
       );
     },
-    deferReply: async () => {
-      await interaction.deferReply();
+    deferReply: async (ephemeral) => {
+      await interaction.deferReply(ephemeral ? { flags: MessageFlags.Ephemeral } : {});
     },
     editReply: async (content) => {
       await interaction.editReply({ content, allowedMentions: NO_MENTIONS });

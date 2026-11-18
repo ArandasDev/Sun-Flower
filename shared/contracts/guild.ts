@@ -12,5 +12,10 @@ export interface GuildActions {
   unban(userId: string): Promise<GuildActionResult>;
   sendMessage(channelId: string, content: string): Promise<GuildActionResult>;
   sendDirectMessage(userId: string, content: string): Promise<GuildActionResult>;
-  getMemberRoleIds(userId: string): Promise<readonly string[] | undefined>;
+  /**
+   * The member's role IDs (without @everyone) when the user is a member; `null` when the
+   * user is confirmed not to be a member (Unknown Member / Unknown User); `undefined` when the
+   * lookup failed (error, timeout, guild unavailable or module not allowed to act).
+   */
+  getMemberRoleIds(userId: string): Promise<readonly string[] | null | undefined>;
 }

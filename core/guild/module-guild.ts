@@ -3,6 +3,7 @@ import type { Logger } from '../../shared/contracts/logger.ts';
 import type { Capability, ModuleManifest } from '../../shared/contracts/module.ts';
 
 const MAX_REASON_LENGTH = 512;
+const SNOWFLAKE_RUN = /\d{17,20}/g;
 const MIN_TIMEOUT_MS = 60_000;
 const MAX_TIMEOUT_MS = 2_419_200_000;
 const MAX_DELETE_MESSAGE_SECONDS = 604_800;
@@ -61,6 +62,9 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
     throw new CapabilityError(moduleId, capability);
   }
 
+  // Free-text reasons may mention users (`<@id>`); snowflakes never reach the log.
+  const maskIds = (reason: string): string => reason.replace(SNOWFLAKE_RUN, '[id]');
+
   async function execute(
     action: string,
     reason: string | undefined,
@@ -77,7 +81,7 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
       {
         module: moduleId,
         action,
-        ...(reason === undefined ? {} : { reason }),
+        ...(reason === undefined ? {} : { reason: maskIds(reason) }),
         result: result.ok ? 'ok' : result.error,
       },
       'guild action executed',

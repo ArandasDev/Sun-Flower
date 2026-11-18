@@ -15,7 +15,7 @@ const roleId = '111111111111111111';
 
 type Call =
   | { readonly kind: 'reply'; readonly content: string; readonly ephemeral: boolean }
-  | { readonly kind: 'deferReply' }
+  | { readonly kind: 'deferReply'; readonly ephemeral: boolean }
   | { readonly kind: 'editReply'; readonly content: string };
 
 interface FakeInteraction extends RawInteraction {
@@ -51,9 +51,9 @@ function fakeInteraction(
         throw new Error('Discord API failure');
       }
     },
-    deferReply: async () => {
+    deferReply: async (ephemeral) => {
       await Promise.resolve();
-      calls.push({ kind: 'deferReply' });
+      calls.push({ kind: 'deferReply', ephemeral });
     },
     editReply: async (content) => {
       await Promise.resolve();
@@ -174,7 +174,10 @@ describe('dispatchCommand', () => {
     await vi.advanceTimersByTimeAsync(30);
     await done;
 
-    expect(raw.calls).toEqual([{ kind: 'deferReply' }, { kind: 'editReply', content: 'Done' }]);
+    expect(raw.calls).toEqual([
+      { kind: 'deferReply', ephemeral: true },
+      { kind: 'editReply', content: 'Done' },
+    ]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -191,11 +194,14 @@ describe('dispatchCommand', () => {
     await vi.advanceTimersByTimeAsync(2499);
     expect(raw.calls).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
-    expect(raw.calls).toEqual([{ kind: 'deferReply' }]);
+    expect(raw.calls).toEqual([{ kind: 'deferReply', ephemeral: true }]);
     await vi.advanceTimersByTimeAsync(500);
     await done;
 
-    expect(raw.calls).toEqual([{ kind: 'deferReply' }, { kind: 'editReply', content: 'Done' }]);
+    expect(raw.calls).toEqual([
+      { kind: 'deferReply', ephemeral: true },
+      { kind: 'editReply', content: 'Done' },
+    ]);
   });
 
   it('answers unknown commands with Comando indisponível.', async () => {
@@ -263,7 +269,7 @@ describe('dispatchCommand', () => {
     await done;
 
     expect(raw.calls).toEqual([
-      { kind: 'deferReply' },
+      { kind: 'deferReply', ephemeral: true },
       { kind: 'editReply', content: 'Ocorreu um erro.' },
     ]);
   });

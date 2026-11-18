@@ -15,7 +15,8 @@ O módulo `moderation` precisa apagar mensagens, silenciar, expulsar e banir mem
   - `guild.message`: `sendMessage`.
 - Um módulo que chama uma ação sem declarar a capacidade correspondente recebe um erro, e o Core registra a recusa no log.
 - O Core recusa qualquer ação de moderação contra um desenvolvedor do bot ([0006](0006-permission-model.md)) ou contra o próprio bot.
-- Toda ação executada é registrada no log do Core com o módulo, a ação e o motivo, sem conteúdo de mensagens.
+- Toda ação executada é registrada no log do Core com o módulo, a ação e o motivo, com IDs mascarados, sem conteúdo de mensagens.
+- `getMemberRoleIds` tem três resultados: a lista de cargos quando a pessoa é membro; `null` quando o Discord confirma que ela não é membro (Unknown Member ou Unknown User); `undefined` quando a consulta falhou (erro, limite de tempo, servidor indisponível ou módulo inativo). Assim o módulo distingue "não é membro" de "não foi possível verificar" e pode recusar a ação no segundo caso.
 - Falhas do Discord são devolvidas como erros tipados: `forbidden`, `not_found` ou `failed`, sem detalhes internos.
 - Mensagens enviadas pelo bot não notificam ninguém (`allowedMentions` vazio).
 

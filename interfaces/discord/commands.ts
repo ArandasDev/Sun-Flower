@@ -113,7 +113,8 @@ export interface RawInteraction {
   readonly subcommand: string | undefined;
   readonly options: CommandOptions;
   reply(content: string, ephemeral: boolean): Promise<void>;
-  deferReply(): Promise<void>;
+  /** Defers the reply; the dispatcher always passes `true`, so a deferred reply is ephemeral. */
+  deferReply(ephemeral: boolean): Promise<void>;
   editReply(content: string): Promise<void>;
 }
 
@@ -128,9 +129,10 @@ function errorMessage(error: unknown): string {
 /**
  * Runs the handler of `raw.commandName` and guarantees at most one response to the user.
  *
- * If the handler has not replied within `deferAfterMs`, the interaction is deferred
- * (non-ephemeral) and the later reply goes through `editReply`. Discord does not let an
- * edited deferred reply change its visibility, so the `ephemeral` option is lost after deferral.
+ * If the handler has not replied within `deferAfterMs`, the interaction is deferred as an
+ * ephemeral reply and the later reply goes through `editReply`. Discord does not let an edited
+ * deferred reply change its visibility, so a slow reply is always ephemeral and never leaks to
+ * the channel; a command that wants a public reply must answer within `deferAfterMs`.
  *
  * Never rejects: Discord API failures are logged. Logs carry only the command name and the
  * error message, never user, guild or role IDs.
@@ -168,7 +170,7 @@ export async function dispatchCommand(
     if (responded) {
       return;
     }
-    deferral = raw.deferReply().catch((error: unknown) => {
+    deferral = raw.deferReply(true).catch((error: unknown) => {
       logger.error({ command: name, error: errorMessage(error) }, 'Failed to defer command reply');
     });
   }, options.deferAfterMs ?? DEFAULT_DEFER_AFTER_MS);

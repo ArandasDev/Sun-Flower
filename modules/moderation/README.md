@@ -10,6 +10,7 @@ Primeiro módulo real do Sun Flower. Detecta phishing em mensagens do servidor, 
 - Pontuação por sinais de phishing e classificação em dois níveis.
 - Resposta automática, registro de casos em `moderation_cases` e alerta no canal da equipe.
 - Listas de domínios bloqueados e permitidos em `moderation_domains`, com os domínios oficiais das marcas protegidas e os domínios conhecidos como seguros (§9.1) como lista inicial de permitidos.
+- Comando `/mod` (§7): configuração, listas de domínios, consulta, reversão e descarte de casos, e ações manuais (advertência, timeout, expulsão e banimento) com proteções.
 
 ### 2.1. Sinais e pesos
 
@@ -64,7 +65,7 @@ O módulo exporta `configSchema` (`config.ts`). Todos os campos são opcionais e
 
 Sem `alertChannelId`, os casos são gravados normalmente e o log registra um aviso uma vez por início.
 
-O módulo começa ativo e age automaticamente desde o primeiro início. Até os comandos `/mod` (disponíveis a partir do próximo PR) existirem, `alertChannelId` só pode ser definido direto na tabela `module_config`; sem isso, mantenha o bot desligado ou aceite casos sem alerta.
+O módulo começa ativo e age automaticamente desde o primeiro início. Defina o canal de alertas com `/mod config alert-channel` logo após a primeira execução; até lá, os casos são gravados sem alerta.
 
 ## 5. Permissões necessárias
 
@@ -82,11 +83,44 @@ O módulo começa ativo e age automaticamente desde o primeiro início. Até os 
 ## 6. Eventos emitidos e consumidos
 
 - Consome: `discord.message.created`, `discord.message.updated`.
-- Publica: `moderation.case.created` (`moderation.case.reverted` está declarado para os comandos `/mod`).
+- Publica: `moderation.case.created` com `{ caseId, kind, level, action }` (casos automáticos e ações manuais) e `moderation.case.reverted` com `{ caseId }` (`/mod case revert`).
 
 ## 7. Comandos e interfaces disponibilizados
 
-Nenhum ainda. Os comandos `/mod` chegam no próximo Pull Request.
+O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcomando exige a permissão indicada, associada a um cargo com `npm run staff -- grant <permissão> <ID do cargo>`. Sem ela, a resposta é `Você não tem permissão para isso.` e nada é executado.
+
+| Comando                                                                | Permissão                    |
+| ---------------------------------------------------------------------- | ---------------------------- |
+| `/mod config view`                                                     | `moderation.config.manage`   |
+| `/mod config alert-channel <canal>`                                    | `moderation.config.manage`   |
+| `/mod config timeout <minutos>`                                        | `moderation.config.manage`   |
+| `/mod config thresholds <confirmado> <suspeito>`                       | `moderation.config.manage`   |
+| `/mod config exempt-role <cargo> <add\|remove>`                        | `moderation.config.manage`   |
+| `/mod domain block <domínio>` · `allow <domínio>` · `remove <domínio>` | `moderation.domains.manage`  |
+| `/mod domain list [lista]`                                             | `moderation.domains.manage`  |
+| `/mod case view <número>`                                              | `moderation.cases.read`      |
+| `/mod case list [usuário]`                                             | `moderation.cases.read`      |
+| `/mod case revert <número> [allow-domain]`                             | `moderation.cases.revert`    |
+| `/mod case dismiss <número>`                                           | `moderation.cases.revert`    |
+| `/mod warn <usuário> <motivo>`                                         | `moderation.actions.warn`    |
+| `/mod timeout <usuário> <minutos> <motivo>`                            | `moderation.actions.timeout` |
+| `/mod kick <usuário> <motivo>`                                         | `moderation.actions.kick`    |
+| `/mod ban <usuário> <motivo> [delete-days]`                            | `moderation.actions.ban`     |
+
+- `domain block` e `allow` normalizam o domínio (`https://Golpe.COM/abc` vira `golpe.com`); bloquear um domínio permitido o move para a lista de bloqueados, e vice-versa. `domain list` mostra no máximo 50 domínios por lista.
+- `case list` mostra os 10 casos mais recentes, do usuário quando informado.
+- `case revert` vale para casos `actioned` ou `open`: remove o timeout (`delete_timeout`, `timeout`), desfaz o banimento (`ban`) ou só muda o status (`kick`, `warn`, `none`). A mensagem apagada não é recuperada. `allow-domain` move os domínios do caso para a lista de permitidos, exceto imitações de marcas protegidas, que são recusadas. `case dismiss` vale só para casos `open`.
+- `timeout` aceita de 1 a 40320 minutos (28 dias). `delete-days` vai de 0 a 7 (padrão 0). O motivo tem até 512 caracteres.
+- `warn` envia ao membro a mensagem direta `Você recebeu uma advertência no servidor. Motivo: <motivo>` e registra o caso. Se a mensagem direta falhar (por exemplo, mensagens diretas fechadas), o caso fica registrado assim mesmo e a resposta informa. Se o alvo não pode receber a advertência (o serviço `guild` recusa a mensagem direta com `forbidden`, por exemplo, o próprio bot), a resposta é `Não é possível agir contra este membro.` e nenhum caso é registrado.
+- Cada ação manual que o Discord aceita grava um caso `manual` com status `actioned` e publica `moderation.case.created`. Se o Discord recusar, a resposta é `O Discord recusou a ação: <sem permissão|não encontrado|falha>.` e nenhum caso é gravado.
+
+**Proteções das ações manuais (`warn`, `timeout`, `kick`, `ban`).** A ação é recusada, sem nenhuma chamada ao Discord, quando o alvo:
+
+- é a própria pessoa que executa o comando (`Não é possível agir contra você mesmo.`);
+- é um desenvolvedor do bot, tem um cargo de `exemptRoleIds` ou tem um cargo com alguma permissão `moderation.*` (`Não é possível agir contra este membro.`);
+- é o próprio bot: o serviço `guild` do Core recusa; em `warn` a resposta é `Não é possível agir contra este membro.` e, nas demais, `O Discord recusou a ação: sem permissão.`.
+
+`warn`, `timeout` e `kick` exigem que o alvo seja membro do servidor (`Este usuário não é membro do servidor.`); `ban` aceita um usuário que não é membro. Se não for possível consultar os cargos do alvo (erro ou demora do Discord), nenhuma das quatro ações é executada: a resposta é `O Discord recusou a ação: falha.` e nenhum caso é gravado.
 
 ## 8. Exemplos de utilização
 
@@ -101,13 +135,12 @@ Ação: mensagem apagada, timeout de 60 min
 Reverter: /mod case revert 12
 ```
 
-Falhas aparecem na linha `Ação`, por exemplo `timeout não aplicado (sem permissão)`. Se a mensagem não foi apagada, o alerta confirmado traz também a linha `Mensagem: <link>`, para a equipe apagá-la à mão. Em casos suspeitos, a linha é `Ação: nenhuma`, seguida do link da mensagem e da sugestão `/mod case dismiss 12 ou /mod timeout`. Os comandos citados no alerta (`/mod case revert`, `/mod case dismiss`, `/mod timeout`) estão disponíveis a partir do próximo PR (comandos /mod).
-
+Falhas aparecem na linha `Ação`, por exemplo `timeout não aplicado (sem permissão)`. Se a mensagem não foi apagada, o alerta confirmado traz também a linha `Mensagem: <link>`, para a equipe apagá-la à mão. Em casos suspeitos, a linha é `Ação: nenhuma`, seguida do link da mensagem e da sugestão `/mod case dismiss 12 ou /mod timeout`.
 O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), corta cada domínio em 100 caracteres e nunca passa de 2000 caracteres, o limite do Discord.
 
 ## 9. Limitações conhecidas
 
-- Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo (`/mod domain block`, disponível a partir do próximo PR); o bloqueio prevalece. O mesmo vale para os domínios conhecidos como seguros.
+- Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo com `/mod domain block`; o bloqueio prevalece. O mesmo vale para os domínios conhecidos como seguros.
 - O estado da regra de vários canais fica em memória (no máximo 1000 autores e 50 entradas por autor) e se perde ao reiniciar.
 - Variações de link com `\` ou espaços em volta do ponto não são reconstruídas.
 - Links atrás de redirecionadores (`google.com/url?q=…` e semelhantes) não são abertos: só o domínio do redirecionador é analisado, e o link interno passa despercebido.
@@ -115,6 +148,10 @@ O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), cort
 - Quando o sinal `multiChannel` confirma um caso, só a mensagem que atingiu o limite é apagada; as mensagens anteriores do mesmo autor continuam no servidor, e as que geraram caso ficam como casos suspeitos abertos.
 - Uma edição de mensagem fora do cache do bot pode chegar sem os cargos do autor; nesse caso não é possível verificar `exemptRoleIds` e a mensagem é analisada normalmente.
 - Quando o Discord demora a responder, o Event Bus pode registrar `event handler failed` depois de 5 s, enquanto a resposta (ações, caso e alerta) ainda termina normalmente.
+- Reverter um caso antigo de `timeout` ou `ban` também remove uma sanção mais recente do mesmo tipo aplicada ao mesmo membro: o Discord guarda um único timeout e um único banimento por pessoa.
+- Uma ação manual que o Discord aplica depois do limite de 10 s é informada como falha e não grava caso. Confira o estado do membro e corrija direto no Discord.
+- A opção do canal de alertas aceita qualquer tipo de canal; escolha um canal de texto.
+- Um caso descartado guarda quem o descartou e quando nas mesmas colunas de reversão (`reverted_by` e `reverted_at`); `case view` mostra `Descarte: descartado por …`.
 
 ### 9.1. Falsos positivos conhecidos
 
@@ -131,11 +168,11 @@ A regra `lookalike` ainda marca alguns domínios legítimos como imitação:
 - domínios que contêm `disco`, como `disco-music.com` e `discos.blogspot.com`;
 - palavras unidas por pontos ou hífens que formam `steam`, como `sales-team.com` e `steamboat.com`.
 
-Sozinho, o sinal `lookalike` só gera alerta de suspeita, sem ação; com uma palavra de isca, gera ação automática. Para eliminar o falso positivo, permita o domínio com `/mod domain allow <domínio>` (disponível a partir do próximo PR (comandos /mod)).
+Sozinho, o sinal `lookalike` só gera alerta de suspeita, sem ação; com uma palavra de isca, gera ação automática. Para eliminar o falso positivo, permita o domínio com `/mod domain allow <domínio>`.
 
 ## 10. Informações relevantes para manutenção
 
 - Migração: `migrations/0001-moderation.sql` cria `moderation_cases` e `moderation_domains`.
 - `index.ts` monta `DomainStore`, `CaseStore`, `MultiChannelTracker` e `Responder` no `initialize`; no `start`, uma limpeza do rastreador a cada 60 s (`unref()`), cancelada no `stop` e no `dispose`.
-- `responder.ts` aplica a resposta; `alert.ts` formata o alerta. Os logs nunca contêm o conteúdo da mensagem nem IDs, apenas o número do caso.
+- `responder.ts` aplica a resposta; `alert.ts` formata o alerta. `commands/mod-command.ts` define o `/mod` e roteia cada subcomando, checando a permissão antes de tudo; `commands/{config,domain,case,actions}.ts` implementam os subcomandos e `commands/replies.ts` reúne as respostas. Os logs nunca contêm o conteúdo da mensagem nem IDs, apenas o número do caso.
 - Testes: `modules/moderation/tests/` e `tests/integration/moderation.test.ts`.

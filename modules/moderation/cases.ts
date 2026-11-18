@@ -145,6 +145,7 @@ export class CaseStore {
   /** False when the case does not exist or its current status does not allow the change. */
   setStatus(id: number, status: 'reverted' | 'dismissed', by: string, nowIso: string): boolean {
     const from = ALLOWED_FROM[status];
+    // reverted_by/reverted_at also record who dismissed the case and when.
     return this.storage.transaction(() => {
       const placeholders = from.map(() => '?').join(', ');
       const result = this.storage.run(

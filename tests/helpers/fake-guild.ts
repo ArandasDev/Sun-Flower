@@ -2,7 +2,10 @@ import type { GuildActionResult, GuildActions } from '../../shared/contracts/gui
 
 export interface FakeGuild extends GuildActions {
   readonly calls: { action: string; args: unknown[] }[];
+  /** Users present here are members with these roles; any other user is not a member (null). */
   readonly memberRoles: Map<string, string[]>;
+  /** Users whose member lookup fails: getMemberRoleIds resolves undefined. */
+  readonly lookupFails: Set<string>;
 }
 
 type ActionName = Exclude<keyof GuildActions, 'getMemberRoleIds'>;
@@ -12,6 +15,7 @@ export function createFakeGuild(
 ): FakeGuild {
   const calls: { action: string; args: unknown[] }[] = [];
   const memberRoles = new Map<string, string[]>();
+  const lookupFails = new Set<string>();
   const record =
     (action: ActionName) =>
     async (...args: unknown[]): Promise<GuildActionResult> => {
@@ -22,6 +26,7 @@ export function createFakeGuild(
   return {
     calls,
     memberRoles,
+    lookupFails,
     deleteMessage: record('deleteMessage'),
     timeout: record('timeout'),
     removeTimeout: record('removeTimeout'),
@@ -33,7 +38,8 @@ export function createFakeGuild(
     getMemberRoleIds: async (userId) => {
       await Promise.resolve();
       calls.push({ action: 'getMemberRoleIds', args: [userId] });
-      return memberRoles.get(userId);
+      if (lookupFails.has(userId)) return undefined;
+      return memberRoles.get(userId) ?? null;
     },
   };
 }

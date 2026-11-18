@@ -13,7 +13,8 @@ export interface GuildGateway {
   unban(userId: string): Promise<void>;
   send(channelId: string, content: string): Promise<void>;
   sendDirect(userId: string, content: string): Promise<void>;
-  memberRoleIds(userId: string): Promise<readonly string[] | undefined>;
+  /** Resolves `null` when the user is not a member (Unknown Member / Unknown User). */
+  memberRoleIds(userId: string): Promise<readonly string[] | null>;
 }
 
 const DEFAULT_CALL_TIMEOUT_MS = 10_000;
@@ -67,7 +68,9 @@ export function createGuildActions(
     unban: (userId) => run('unban', () => gateway.unban(userId)),
     sendMessage: (channelId, content) => run('sendMessage', () => gateway.send(channelId, content)),
     sendDirectMessage: (userId, content) =>
-      run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
+      isSelf(userId)
+        ? Promise.resolve(forbidden)
+        : run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
     getMemberRoleIds: async (userId) => {
       try {
         return await withTimeout(() => gateway.memberRoleIds(userId), timeoutMs, 'memberRoleIds');
@@ -128,7 +131,7 @@ export function createDiscordGateway(client: Client, guildId: string): GuildGate
         return [...member.roles.cache.keys()].filter((id) => id !== current.id);
       } catch (error) {
         const code = (error as { code?: unknown } | null)?.code;
-        if (code === UNKNOWN_MEMBER || code === UNKNOWN_USER) return undefined;
+        if (code === UNKNOWN_MEMBER || code === UNKNOWN_USER) return null;
         throw error;
       }
     },

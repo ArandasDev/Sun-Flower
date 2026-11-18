@@ -156,7 +156,9 @@ Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 | `guild.moderate` | `deleteMessage`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`. |
 | `guild.message`  | `sendMessage`.                                                                                                 |
 
-Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core: nunca inclua nele IDs nem conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
+Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core, com toda sequência de 17 a 20 dígitos trocada por `[id]`; o Discord recebe o motivo original. Mesmo assim, nunca inclua nele conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
+
+`getMemberRoleIds(userId)` tem três resultados: a lista de cargos do membro (sem `@everyone`); `null` quando a pessoa não é membro do servidor; `undefined` quando a consulta falhou (erro do Discord, limite de tempo, servidor indisponível ou módulo inativo). Trate `undefined` como "não foi possível verificar", e não como "não é membro": uma proteção que dependa dos cargos deve recusar a ação nesse caso.
 
 ### 4.4. Validação
 
@@ -428,6 +430,10 @@ Alterações de configuração não deverão exigir reinicialização completa d
 ### Opções de comando
 
 Um `CommandDefinition` pode declarar `options`, tanto no comando quanto em cada subcomando. Cada opção tem `name`, `description`, `type` (`string`, `integer`, `boolean`, `user`, `channel` ou `role`) e, opcionalmente, `required`, `minValue` e `maxValue` (inteiros), `maxLength` (texto) e `choices`. `choices` vale somente para opções `string`: é uma lista de textos em que o nome de cada escolha é igual ao valor. O handler lê os valores por `interaction.options` (`getString`, `getInteger`, `getBoolean`, `getUser`, `getChannel`, `getRole`).
+
+### Respostas de comando
+
+O handler responde uma única vez por `interaction.reply(content, { ephemeral })`; uma segunda resposta é ignorada. Se o handler não responder em 2,5 s, a interface adia a interação com uma resposta efêmera, e a resposta posterior edita essa resposta adiada. Como o Discord não permite mudar a visibilidade de uma resposta adiada, uma resposta lenta é sempre efêmera e nunca aparece para o canal. O comando que quiser uma resposta pública precisa responder em até 2,5 s.
 
 ## 9. Permissões
 

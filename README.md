@@ -4,8 +4,9 @@ Bot Discord modular e dedicado, que reúne moderação, funcionalidades sociais,
 
 ## Estado atual
 
-- **Fase 0 — Base do repositório (em andamento).** Projeto TypeScript e CI prontos; falta importar o ruleset da `main` (`.github/rulesets/main.json`) no GitHub.
-- **Fase 1 — Core + Discord mínimo (em revisão).** O Core carrega os módulos, a interface Discord atua só no servidor configurado e o módulo de exemplo `ping` responde a `/ping`.
+- **Fase 0 — Base do repositório (concluída).** Projeto TypeScript, CI e ruleset da `main` ativos.
+- **Fase 1 — Core + Discord mínimo (em revisão).** O Core carrega os módulos, a interface Discord atua só no servidor configurado e o módulo de exemplo `ping` responde a `/ping`; falta a verificação manual de `/ping` no servidor real.
+- **Fase 2 — Moderação (em andamento).** Etapa 1 (phishing e ações manuais) implementada; falta a verificação manual no servidor real ([Moderação](#moderação)). Etapa 2 (spam e flood) pendente.
 
 Veja o [ROADMAP](docs/ROADMAP.md).
 
@@ -78,6 +79,34 @@ O bot conecta ao Discord e registra os comandos dos módulos no servidor `DISCOR
 | `npm run check`                                     | Executa `format:check`, `lint`, `typecheck` e `test`, parando na primeira falha. |
 
 `npm run check` é obrigatório antes de abrir um Pull Request e é o que a CI executa.
+
+## Moderação
+
+O módulo `moderation` detecta phishing, age automaticamente nas violações confirmadas e oferece o comando `/mod` para a equipe. Os comandos, as permissões e a configuração estão em [modules/moderation/README.md](modules/moderation/README.md).
+
+Nenhuma permissão `moderation.*` é concedida por padrão: associe cada uma ao cargo da equipe que deve usá-la, substituindo `<ID do cargo>` pelo ID real, sem os sinais `<` e `>`:
+
+```bash
+npm run staff -- grant moderation.config.manage <ID do cargo>
+npm run staff -- grant moderation.domains.manage <ID do cargo>
+npm run staff -- grant moderation.cases.read <ID do cargo>
+npm run staff -- grant moderation.cases.revert <ID do cargo>
+npm run staff -- grant moderation.actions.warn <ID do cargo>
+npm run staff -- grant moderation.actions.timeout <ID do cargo>
+npm run staff -- grant moderation.actions.kick <ID do cargo>
+npm run staff -- grant moderation.actions.ban <ID do cargo>
+```
+
+`npm run staff -- grants` lista as associações e `npm run staff -- revoke <permissão> <ID do cargo>` remove uma delas. Membros com um cargo que tenha qualquer permissão `moderation.*` ficam protegidos das ações manuais.
+
+**Teste manual no servidor real:**
+
+1. Ative os intents privilegiados **Server Members** e **Message Content** no Discord Developer Portal (**Bot → Privileged Gateway Intents**).
+2. Associe as permissões `moderation.*` necessárias a um cargo de teste com `npm run staff -- grant moderation.<…> <ID do cargo>`, uma por permissão, como no bloco acima.
+3. Inicie o bot com `npm start` e, com uma conta que tenha o cargo, configure o canal de alertas com `/mod config alert-channel`.
+4. Bloqueie um domínio de teste com `/mod domain block`.
+5. Com uma conta **sem** o cargo, envie uma mensagem com um link desse domínio: a mensagem é apagada, a conta recebe timeout e o alerta aparece no canal configurado, com o número do caso.
+6. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
 
 ## Documentação
 
