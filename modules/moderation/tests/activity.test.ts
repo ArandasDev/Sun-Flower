@@ -88,3 +88,11 @@ describe('ActivityLog', () => {
     expect(log.authorCount).toBe(1);
   });
 });
+
+describe('fingerprintOf repeated characters', () => {
+  it('collapses runs of 3+ identical characters before the length check', () => {
+    expect(fingerprintOf('kkkkkkkkkkkk')).toBeNull();
+    expect(fingerprintOf('aaaaaaaaaa bbbbbbbbbb')).toBeNull();
+    expect(fingerprintOf('kkkkkkkkkkkk')).toBe(fingerprintOf('kkk'));
+  });
+});

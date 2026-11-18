@@ -41,9 +41,11 @@ function send(
 
 describe('countMentions', () => {
   it('counts distinct users and roles, with <@!id> equal to <@id>', () => {
-    expect(countMentions('<@1> <@!1> <@1>')).toBe(1);
-    expect(countMentions('<@1> <@&1>')).toBe(2);
-    expect(countMentions('<@1> <@2> <@&3>')).toBe(3);
+    expect(countMentions('<@111111111111111111> <@!1> <@111111111111111111>')).toBe(1);
+    expect(countMentions('<@111111111111111111> <@&111111111111111111>')).toBe(2);
+    expect(
+      countMentions('<@111111111111111111> <@222222222222222222> <@&333333333333333333>'),
+    ).toBe(3);
   });
 
   it('counts 3 per @everyone or @here occurrence', () => {
@@ -143,7 +145,11 @@ describe('repeat', () => {
 describe('mentions', () => {
   it('fires with 6 distinct mentions in one message', () => {
     const deps = setup();
-    const hits = send(deps, '<@1> <@2> <@3> <@4> <@5> <@&6>', T0);
+    const hits = send(
+      deps,
+      '<@111111111111111111> <@222222222222222222> <@333333333333333333> <@444444444444444444> <@555555555555555555> <@&666666666666666666>',
+      T0,
+    );
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatchObject({ rule: 'mentions', count: 6 });
     expect(hits[0]?.seconds).toBeUndefined();
@@ -151,12 +157,24 @@ describe('mentions', () => {
   });
 
   it('does not fire for the same person 6 times', () => {
-    expect(send(setup(), '<@1> <@1> <@1> <@1> <@1> <@1>', T0)).toEqual([]);
+    expect(
+      send(
+        setup(),
+        '<@111111111111111111> <@111111111111111111> <@111111111111111111> <@111111111111111111> <@111111111111111111> <@111111111111111111>',
+        T0,
+      ),
+    ).toEqual([]);
   });
 
   it('fires with 2 @everyone and not with 5 mentions', () => {
     expect(send(setup(), '@everyone @everyone', T0)[0]?.rule).toBe('mentions');
-    expect(send(setup(), '<@1> <@2> <@3> <@4> <@5>', T0)).toEqual([]);
+    expect(
+      send(
+        setup(),
+        '<@111111111111111111> <@222222222222222222> <@333333333333333333> <@444444444444444444> <@555555555555555555>',
+        T0,
+      ),
+    ).toEqual([]);
   });
 
   it('evaluates edits without recording them', () => {
@@ -211,5 +229,47 @@ describe('cooldown', () => {
     expect(cooldown.isCooling(A, 'flood', T0 + 29_000)).toBe(true);
     cooldown.prune(T0 + 31_000);
     expect(cooldown.isCooling(A, 'flood', T0)).toBe(false);
+  });
+});
+
+describe('false-positive guards', () => {
+  it('requires a right boundary on @everyone and @here', () => {
+    expect(countMentions('@heresia @heresia')).toBe(0);
+    expect(countMentions('joao@herelabs.com')).toBe(0);
+    expect(countMentions('@everyone!')).toBe(3);
+  });
+
+  it('ignores code, escaped mentions and short IDs', () => {
+    expect(countMentions('\\@everyone `@here`')).toBe(0);
+    expect(countMentions('```\n@everyone @everyone\n```')).toBe(0);
+    expect(countMentions('\\<@111111111111111111> <@1>')).toBe(0);
+    expect(countMentions('`@everyone` @everyone')).toBe(3);
+  });
+
+  it('does not fire repeat or mentions when disabled', () => {
+    const deps = setup({ repeat: { enabled: false }, mentions: { enabled: false } });
+    for (let i = 0; i < 4; i += 1) {
+      expect(send(deps, 'Compre agora mesmo!', T0 + i * 1000)).toEqual([]);
+    }
+    expect(send(deps, '@everyone @everyone', T0 + 9000)).toEqual([]);
+  });
+
+  it('stops counting repeat copies outside the window', () => {
+    const deps = setup();
+    for (let i = 0; i < 3; i += 1) send(deps, 'Compre agora mesmo!', T0 + i * 1000);
+    expect(send(deps, 'Compre agora mesmo!', T0 + 70_000)).toEqual([]);
+  });
+
+  it('returns flood before repeat', () => {
+    const deps = setup({ repeat: { limit: 7 } });
+    let hits: SpamHit[] = [];
+    for (let i = 0; i < 7; i += 1) hits = send(deps, 'Compre agora mesmo!', T0 + i * 100);
+    expect(hits.map((hit) => hit.rule)).toEqual(['flood', 'repeat']);
+  });
+
+  it('edit in an ignored channel returns [] and records nothing', () => {
+    const deps = setup({ ignoredChannelIds: [CH1] });
+    expect(send(deps, '@everyone @everyone', T0, { isEdit: true })).toEqual([]);
+    expect(deps.activity.since(A, 0)).toEqual([]);
   });
 });

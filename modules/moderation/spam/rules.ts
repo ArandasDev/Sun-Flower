@@ -28,14 +28,19 @@ export interface SpamDeps {
 
 /** Distinct user and role mentions, plus 3 for each literal @everyone or @here. */
 export function countMentions(content: string): number {
+  const text = content
+    .replace(/```[\s\S]*?```/gu, ' ')
+    .replace(/`[^`\n]*`/gu, ' ')
+    .replace(/\\<@[!&]?\d+>/gu, ' ')
+    .replace(/\\@(?:everyone|here)/gu, ' ');
   const users = new Set<string>();
   const roles = new Set<string>();
-  for (const match of content.matchAll(/<@(!|&)?(\d+)>/gu)) {
+  for (const match of text.matchAll(/<@(!|&)?(\d{17,20})>/gu)) {
     const id = match[2];
     if (id === undefined) continue;
     (match[1] === '&' ? roles : users).add(id);
   }
-  const broadcasts = content.match(/@(?:everyone|here)/gu)?.length ?? 0;
+  const broadcasts = text.match(/@(?:everyone|here)(?![\p{L}\p{N}_])/gu)?.length ?? 0;
   return users.size + roles.size + broadcasts * BROADCAST_WEIGHT;
 }
 

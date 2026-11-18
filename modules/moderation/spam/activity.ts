@@ -25,7 +25,8 @@ export function fingerprintOf(content: string): string | null {
     .normalize('NFD')
     .replace(/[\p{M}\p{Cf}]/gu, '')
     .replace(/\s+/gu, ' ')
-    .trim();
+    .trim()
+    .replace(/(.)\1{2,}/gsu, '$1$1$1');
   if (normalized.length < MIN_FINGERPRINT_LENGTH) return null;
   return createHash('sha256').update(normalized).digest('hex');
 }
