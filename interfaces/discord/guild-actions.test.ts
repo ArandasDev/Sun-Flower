@@ -263,6 +263,98 @@ describe('createGuildActions bulkDeleteMessages', () => {
     });
   });
 
+  it('stops the fallback after 3 consecutive failures', async () => {
+    const deleteMessage = vi.fn(() => Promise.reject(discordError(500)));
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: false,
+      error: 'failed',
+      deleted: 0,
+    });
+    expect(deleteMessage).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps going when failures are not consecutive', async () => {
+    const failing = new Set(['2', '4']);
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage: (_c, id) =>
+        failing.has(id) ? Promise.reject(discordError(500)) : Promise.resolve(),
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: true,
+      deleted: 3,
+      individually: 3,
+    });
+  });
+
+  it('returns what was deleted when the breaker trips after some deletions', async () => {
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage: (_c, id) =>
+        id === '1' ? Promise.resolve() : Promise.reject(discordError(500)),
+    });
+    expect(
+      await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1', '2', '3', '4', '5']),
+    ).toEqual({ ok: true, deleted: 1, individually: 1 });
+  });
+
+  it.each([50001, 50083])('does not fall back when the bulk call fails with %i', async (code) => {
+    const deleteMessage = vi.fn(() => Promise.resolve());
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(code)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: false,
+      error: 'forbidden',
+      deleted: 0,
+    });
+    expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('stops the fallback on an archived thread', async () => {
+    const deleteMessage = vi.fn(() => Promise.reject(discordError(50083)));
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: false,
+      error: 'forbidden',
+      deleted: 0,
+    });
+    expect(deleteMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns not_found for a single ID in an unknown channel', async () => {
+    const gateway = fakeGateway({ deleteMessage: () => Promise.reject(discordError(10003)) });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ['1'])).toEqual({
+      ok: false,
+      error: 'not_found',
+      deleted: 0,
+    });
+  });
+
+  it('stops the fallback on an unknown channel and keeps the counts', async () => {
+    const deleteMessage = vi.fn((_c: string, id: string) =>
+      id === '2' ? Promise.reject(discordError(10003)) : Promise.resolve(),
+    );
+    const gateway = fakeGateway({
+      bulkDelete: () => Promise.reject(discordError(500)),
+      deleteMessage,
+    });
+    expect(await createGuildActions(gateway).bulkDeleteMessages(CHANNEL, ids)).toEqual({
+      ok: true,
+      deleted: 1,
+      individually: 1,
+    });
+    expect(deleteMessage).toHaveBeenCalledTimes(2);
+  });
+
   it('falls back when the bulk call exceeds callTimeoutMs', async () => {
     const gateway = fakeGateway({ bulkDelete: () => new Promise<never>(() => undefined) });
     const actions = createGuildActions(gateway, { callTimeoutMs: 20 });

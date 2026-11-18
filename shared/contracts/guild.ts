@@ -5,7 +5,8 @@ export type GuildActionResult =
 
 /**
  * Outcome of a bulk deletion. `deleted` counts messages actually removed; `individually` is how
- * many of those had to be deleted one by one (older than 14 days, which bulk delete rejects).
+ * many of those were deleted one by one by the fallback (a single ID, a failed or timed-out batch,
+ * or messages older than 14 days, which bulk delete rejects).
  */
 export type BulkDeleteResult =
   | { readonly ok: true; readonly deleted: number; readonly individually: number }

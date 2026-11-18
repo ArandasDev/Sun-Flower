@@ -199,7 +199,7 @@ describe('ModuleRegistry', () => {
   it('starts modules in dependency order and stops in reverse', async () => {
     writeModule('b', { dependencies: ['a'] });
     writeModule('a');
-    const registry = createRegistry();
+    const registry = createRegistry(1000);
     await registry.load();
     await registry.start();
     expect(calls()).toEqual([

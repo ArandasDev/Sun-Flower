@@ -326,6 +326,17 @@ describe('createModuleGuild bulkDeleteMessages', () => {
     await expect(guild.bulkDeleteMessages(channel, ids)).resolves.toEqual(failed);
   });
 
+  it('logs the throw path with only module and action', async () => {
+    const { guild, entries } = setup(['guild.moderate'], {
+      bulkDeleteMessages: () => Promise.reject(new Error(`boom ${ids.join(' ')}`)),
+    });
+    await guild.bulkDeleteMessages(channel, ids);
+    const errors = entries.filter((entry) => entry.level === 'error');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.obj).toEqual({ module: 'moderation', action: 'bulkDeleteMessages' });
+    expect(JSON.stringify(entries)).not.toMatch(/\d{17,20}/);
+  });
+
   it('returns the port result and logs counts without ids', async () => {
     const { guild, entries } = setup(['guild.moderate']);
     await expect(guild.bulkDeleteMessages(channel, [...ids, ids[0] ?? ''])).resolves.toEqual({
