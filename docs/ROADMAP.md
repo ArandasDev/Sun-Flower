@@ -4,11 +4,11 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 
 ## Estado atual
 
-| Fase atual                         | Situação                                                                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                 |
-| **Fase 1 — Core + Discord mínimo** | Em revisão: Core, interface Discord, comando `staff` e módulo `ping` implementados; falta a verificação manual de `/ping` no servidor real. |
-| **Fase 2 — Moderação**             | Em andamento: etapas 1 e 2 implementadas; falta a verificação manual no servidor real.                                                      |
+| Fase atual                         | Situação                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                |
+| **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                          |
+| **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente. |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -75,13 +75,13 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Critérios de conclusão:**
 
-- [ ] O bot conecta ao servidor e `/ping` responde.
-- [ ] O bot ignora interações de outro servidor e de mensagens diretas ([decisão 0010](decisions/0010-stay-in-other-guilds.md)).
-- [ ] Um módulo com manifesto inválido não é iniciado, e os demais continuam funcionando.
-- [ ] Uma dependência circular é rejeitada.
-- [ ] Uma operação sem permissão é negada.
-- [ ] Os testes de ciclo de vida de [MODULES.md §14.4](MODULES.md#144-testes-de-ciclo-de-vida) passam.
-- [ ] As diretrizes de [CONTRIBUTING.md](../CONTRIBUTING.md) foram revisadas ([CONTRIBUTING.md §9](../CONTRIBUTING.md#9-governança)).
+- [x] O bot conecta ao servidor e `/ping` responde.
+- [x] O bot ignora interações de outro servidor e de mensagens diretas ([decisão 0010](decisions/0010-stay-in-other-guilds.md)).
+- [x] Um módulo com manifesto inválido não é iniciado, e os demais continuam funcionando.
+- [x] Uma dependência circular é rejeitada.
+- [x] Uma operação sem permissão é negada.
+- [x] Os testes de ciclo de vida de [MODULES.md §14.4](MODULES.md#144-testes-de-ciclo-de-vida) passam.
+- [x] As diretrizes de [CONTRIBUTING.md](../CONTRIBUTING.md) foram revisadas ([CONTRIBUTING.md §9](../CONTRIBUTING.md#9-governança)).
 
 **Release:** `v0.1.0`.
 
@@ -110,9 +110,9 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Critérios de conclusão:**
 
-- [ ] Cada regra de detecção tem testes com casos positivos e negativos (falsos positivos).
-- [ ] Toda ação automática fica registrada e pode ser revertida.
-- [ ] Nenhuma ação é executada sem a permissão correspondente.
+- [x] Cada regra de detecção tem testes com casos positivos e negativos (falsos positivos).
+- [x] Toda ação automática fica registrada e pode ser revertida.
+- [x] Nenhuma ação é executada sem a permissão correspondente.
 
 **Release:** `v0.2.0`.
 

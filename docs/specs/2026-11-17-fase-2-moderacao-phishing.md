@@ -505,9 +505,9 @@ Verificações de pontuação e níveis: soma, limites configuráveis, cada sina
 
 ## 9. Critérios de conclusão desta etapa
 
-- [ ] Um link de domínio bloqueado é apagado, a conta recebe timeout e o alerta chega ao canal configurado.
-- [ ] Cada sinal de detecção tem testes com casos positivos e negativos.
-- [ ] Toda ação automática gera um caso e pode ser revertida por `/mod case revert`.
-- [ ] Nenhum comando `/mod` executa sem a permissão correspondente.
-- [ ] Um módulo sem a capacidade `guild.moderate` não consegue executar ações de moderação.
-- [ ] O conteúdo das mensagens não aparece em nenhum log nem no banco.
+- [x] Um link de domínio bloqueado é apagado, a conta recebe timeout e o alerta chega ao canal configurado.
+- [x] Cada sinal de detecção tem testes com casos positivos e negativos.
+- [x] Toda ação automática gera um caso e pode ser revertida por `/mod case revert`.
+- [x] Nenhum comando `/mod` executa sem a permissão correspondente.
+- [x] Um módulo sem a capacidade `guild.moderate` não consegue executar ações de moderação.
+- [x] O conteúdo das mensagens não aparece em nenhum log nem no banco.

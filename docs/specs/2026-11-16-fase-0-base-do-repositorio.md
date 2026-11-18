@@ -77,7 +77,7 @@ Agentes de IA não alteram essa configuração ([CONTRIBUTING.md §8.2](../../CO
 
 ## 7. Critérios de conclusão
 
-- [ ] `npm run check` passa em uma cópia nova do repositório após `npm ci`.
-- [ ] A CI executa no Pull Request da etapa 2 e passa.
-- [ ] Um commit com erro de formatação, lint, tipo ou teste faz a CI falhar (verificado em um commit temporário no mesmo Pull Request, revertido antes do merge).
-- [ ] Um push direto na `main` é recusado pelo GitHub.
+- [x] `npm run check` passa em uma cópia nova do repositório após `npm ci`.
+- [x] A CI executa no Pull Request da etapa 2 e passa.
+- [x] Um commit com erro de formatação, lint, tipo ou teste faz a CI falhar (verificado em um commit temporário no mesmo Pull Request, revertido antes do merge).
+- [x] Um push direto na `main` é recusado pelo GitHub.
