@@ -171,10 +171,18 @@ describe('extractLinks order and cap', () => {
     ]);
   });
 
-  it('caps at 50 candidates', () => {
+  it('has no candidate cap', () => {
     const content = Array.from({ length: 60 }, (_, i) => `site${String(i)}.com`).join(' ');
     const links = extractLinks(content);
-    expect(links).toHaveLength(50);
+    expect(links).toHaveLength(60);
     expect(links[0]).toEqual({ domain: 'site0.com' });
+  });
+
+  it('deduplicates masked links by domain and text domain', () => {
+    const same = Array.from({ length: 50 }, () => '[a.com](https://discord.com)').join(' ');
+    expect(extractLinks(`${same} [b.com](https://discord.com)`)).toEqual([
+      { domain: 'discord.com', maskedTextDomain: 'a.com' },
+      { domain: 'discord.com', maskedTextDomain: 'b.com' },
+    ]);
   });
 });

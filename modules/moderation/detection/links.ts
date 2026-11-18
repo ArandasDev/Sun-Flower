@@ -6,8 +6,6 @@ export interface ExtractedLink {
 }
 
 export const MAX_SCANNED_CHARS = 4000;
-/** Candidates returned per message; scoring analyzes at most 20 non-allowed domains. */
-const MAX_LINKS = 50;
 
 const MARKDOWN_LINK =
   /\[([^\]]{1,256})\]\(\s*<?(https?:\/\/[^\s)>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/gi;
@@ -150,17 +148,19 @@ export function extractLinks(content: string): ExtractedLink[] {
   // Clickable links first, so bare fillers cannot use up the cap before the real link.
   candidates.sort((a, b) => Number(b.clickable) - Number(a.clickable) || a.index - b.index);
 
+  // No cap: the 4000-character cut bounds the work, and a cap would let fillers hide the real link.
   const seen = new Set<string>();
   const links: ExtractedLink[] = [];
   for (const candidate of candidates) {
-    if (candidate.maskedTextDomain === undefined) {
-      if (seen.has(candidate.domain)) continue;
-      seen.add(candidate.domain);
-      links.push({ domain: candidate.domain });
-    } else {
-      links.push({ domain: candidate.domain, maskedTextDomain: candidate.maskedTextDomain });
-    }
-    if (links.length === MAX_LINKS) break;
+    const masked = candidate.maskedTextDomain;
+    const key = masked === undefined ? candidate.domain : `${candidate.domain} ${masked}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push(
+      masked === undefined
+        ? { domain: candidate.domain }
+        : { domain: candidate.domain, maskedTextDomain: masked },
+    );
   }
   return links;
 }

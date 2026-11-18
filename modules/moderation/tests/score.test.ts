@@ -118,7 +118,7 @@ describe('analyzeMessage', () => {
     );
     expect(r.signals.filter((s) => s.name === 'lookalike')).toHaveLength(1);
     expect(r.signals.filter((s) => s.name === 'masked')).toHaveLength(1);
-    expect(r.domains).toEqual(['a1.org', 'b1.org', 'dlscord.gift', 'dlscord.com']);
+    expect(r.domains).toEqual(['dlscord.gift', 'dlscord.com', 'a1.org', 'b1.org']);
   });
 
   it('uses weights and thresholds from config', () => {
@@ -250,11 +250,56 @@ describe('analyzeMessage link budget', () => {
     expect(r.domains).toEqual(['dlscord-gift.com']);
   });
 
-  it('analyzes at most 20 distinct non-allowed domains', () => {
+  it('returns at most 20 distinct non-allowed domains', () => {
     const links = Array.from({ length: 30 }, (_, i) => `https://site${String(i)}.org`).join(' ');
     const r = run(links);
     expect(r.domains).toHaveLength(20);
     expect(r.domains[0]).toBe('site0.org');
+  });
+
+  const REAL = 'free nitro https://dlscord-gift.com/x';
+  const n = (count: number, f: (i: number) => string) =>
+    Array.from({ length: count }, (_, i) => f(i + 1)).join(' ');
+
+  it.each([
+    ['50 allowed subdomains', n(50, (i) => `https://a${String(i)}.discord.com`)],
+    ['50 masked allowed subdomains', n(50, (i) => `[a](https://a${String(i)}.discord.com)`)],
+    ['50 identical masked links', n(50, () => '[a.com](https://discord.com)')],
+    ['50 identical masked links to discord.gg', n(50, () => '[a.co](https://discord.gg)')],
+    ['20 benign non-allowed domains', n(20, (i) => `https://site${String(i)}.org`)],
+  ])('confirms the real link after %s', (_, fillers) => {
+    const r = run(`${fillers} ${REAL}`);
+    expect(r.score).toBeGreaterThanOrEqual(80);
+    expect(r.level).toBe('confirmed');
+    expect(r.domains.length).toBeLessThanOrEqual(20);
+  });
+
+  it('confirms a bare lookalike after 50 allowed scheme URLs', () => {
+    const fillers = n(50, (i) => `https://a${String(i)}.discord.com`);
+    expect(run(`${fillers} free nitro dlscord-gift.com`).level).toBe('confirmed');
+  });
+
+  it('detects a blocked domain in 30th position and lists signalled domains first', () => {
+    const benign = n(29, (i) => `https://site${String(i)}.org`);
+    const r = run(`${benign} https://x.golpe.gift [discord.com](https://site99.org) dlscord.gift`);
+    expect(r.signals.map((s) => s.name)).toEqual(
+      expect.arrayContaining(['blocked', 'lookalike', 'masked']),
+    );
+    expect(r.domains).toHaveLength(20);
+    expect(r.domains.slice(0, 4)).toEqual([
+      'x.golpe.gift',
+      'dlscord.gift',
+      'site99.org',
+      'site1.org',
+    ]);
+  });
+
+  it('analyzes a 4000-character message of minimal links quickly', () => {
+    let content = '';
+    for (let i = 0; content.length < 4000; i++) content += `https://a${String(i)}.bc `;
+    const start = performance.now();
+    run(content.slice(0, 4000));
+    expect(performance.now() - start).toBeLessThan(50);
   });
 
   it('skips allowed domains before applying the cap', () => {

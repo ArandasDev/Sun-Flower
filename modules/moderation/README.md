@@ -111,6 +111,7 @@ O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), cort
 - O estado da regra de vários canais fica em memória (no máximo 1000 autores e 50 entradas por autor) e se perde ao reiniciar.
 - Variações de link com `\` ou espaços em volta do ponto não são reconstruídas.
 - Links atrás de redirecionadores (`google.com/url?q=…` e semelhantes) não são abertos: só o domínio do redirecionador é analisado, e o link interno passa despercebido.
+- O alerta e o caso guardam no máximo 20 domínios por mensagem, primeiro os que produziram sinal (bloqueados, imitações, mascarados). Todos os links não permitidos são avaliados, mas só esses 20 entram na regra de vários canais.
 - Quando o sinal `multiChannel` confirma um caso, só a mensagem que atingiu o limite é apagada; as mensagens anteriores do mesmo autor continuam no servidor, e as que geraram caso ficam como casos suspeitos abertos.
 - Uma edição de mensagem fora do cache do bot pode chegar sem os cargos do autor; nesse caso não é possível verificar `exemptRoleIds` e a mensagem é analisada normalmente.
 - Quando o Discord demora a responder, o Event Bus pode registrar `event handler failed` depois de 5 s, enquanto a resposta (ações, caso e alerta) ainda termina normalmente.

@@ -28,14 +28,20 @@ export interface Analysis {
   score: number;
   level: 'confirmed' | 'suspicious' | undefined;
   signals: Signal[];
-  /** Distinct non-allowed domains, in order of appearance. */
+  /**
+   * Up to 20 distinct non-allowed domains: blocked, then lookalike, then masked, then the rest,
+   * each group in order of appearance (clickable links first).
+   */
   domains: string[];
 }
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
-/** Distinct non-allowed domains analyzed per message; allowed ones do not count. */
-const MAX_ANALYZED_DOMAINS = 20;
+/**
+ * Every non-allowed link is evaluated; only the domains list (stored in the case and shown in
+ * the alert) and the multi-channel tracking are capped, to keep storage and memory bounded.
+ */
+const MAX_LISTED_DOMAINS = 20;
 const MASS_MENTION = /@(?:everyone|here)(?![\p{L}\p{N}_])/u;
 
 const SCHEME_URL = /https?:\/\/\S+/gi;
@@ -84,27 +90,38 @@ export function analyzeMessage(
   const content = input.content.slice(0, MAX_SCANNED_CHARS);
   const links = extractLinks(content);
 
-  const domains: string[] = [];
+  // Per distinct non-allowed domain, in order of appearance: 0 blocked, 1 lookalike, 2 masked, 3 none.
+  const rank = new Map<string, number>();
   let blocked = false;
   let lookalike = false;
   let masked = false;
   for (const link of links) {
     const isBlocked = lists.isBlocked(link.domain);
     if (!isBlocked && lists.isAllowed(link.domain)) continue;
-    if (!domains.includes(link.domain)) {
-      if (domains.length === MAX_ANALYZED_DOMAINS) continue;
-      domains.push(link.domain);
+    const isMasked = link.maskedTextDomain !== undefined;
+    let domainRank = rank.get(link.domain);
+    if (domainRank === undefined) {
+      const isLook = isLookalike(link.domain);
+      domainRank = isBlocked ? 0 : isLook ? 1 : 3;
+      if (isBlocked) blocked = true;
+      if (isLook) lookalike = true;
     }
-    if (isBlocked) blocked = true;
-    if (isLookalike(link.domain)) lookalike = true;
-    if (link.maskedTextDomain !== undefined) masked = true;
+    if (isMasked) masked = true;
+    rank.set(link.domain, Math.min(domainRank, isMasked ? 2 : 3));
   }
 
-  if (domains.length === 0) return { score: 0, level: undefined, signals: [], domains };
+  const ordered = [...rank.keys()];
+  if (ordered.length === 0) return { score: 0, level: undefined, signals: [], domains: [] };
+  const domains = ordered
+    .map((domain, index) => ({ domain, index, rank: rank.get(domain) ?? 3 }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .slice(0, MAX_LISTED_DOMAINS)
+    .map((d) => d.domain);
 
   const nowMs = input.now.getTime();
   const windowMs = config.multiChannel.windowSeconds * 1000;
   let multiChannel = false;
+  // Tracks the listed domains (signalled first), so fillers cannot push the real one out.
   for (const domain of domains) {
     const channels = tracker.record(input.authorId, domain, input.channelId, nowMs, windowMs);
     if (channels >= config.multiChannel.channels) multiChannel = true;
