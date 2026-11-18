@@ -235,8 +235,15 @@ describe('cooldown', () => {
 describe('false-positive guards', () => {
   it('requires a right boundary on @everyone and @here', () => {
     expect(countMentions('@heresia @heresia')).toBe(0);
-    expect(countMentions('joao@herelabs.com')).toBe(0);
+    expect(countMentions('contato@herelabs.example.com')).toBe(0);
     expect(countMentions('@everyone!')).toBe(3);
+  });
+
+  it('requires a left boundary on @everyone and @here', () => {
+    expect(countMentions('fulano@everyone.com.br')).toBe(0);
+    expect(countMentions('contato@here.example.com')).toBe(0);
+    expect(countMentions('a_@everyone x.@here 9@here')).toBe(0);
+    expect(countMentions('oi @everyone (@here) "@everyone"')).toBe(9);
   });
 
   it('ignores code, escaped mentions and short IDs', () => {

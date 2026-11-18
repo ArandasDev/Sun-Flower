@@ -40,7 +40,9 @@ export function countMentions(content: string): number {
     if (id === undefined) continue;
     (match[1] === '&' ? roles : users).add(id);
   }
-  const broadcasts = text.match(/@(?:everyone|here)(?![\p{L}\p{N}_])/gu)?.length ?? 0;
+  // Both boundaries, so e-mail-like text (`fulano@everyone.com.br`) never counts.
+  const broadcasts =
+    text.match(/(?<![\p{L}\p{N}_.])@(?:everyone|here)(?![\p{L}\p{N}_])/gu)?.length ?? 0;
   return users.size + roles.size + broadcasts * BROADCAST_WEIGHT;
 }
 
