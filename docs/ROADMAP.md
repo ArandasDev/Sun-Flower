@@ -6,8 +6,9 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 
 | Fase atual                         | Situação                                                                                                                                    |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fase 0 — Base do repositório**   | Em andamento: projeto TypeScript e CI prontos; falta importar o ruleset da `main` (`.github/rulesets/main.json`).                           |
+| **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                 |
 | **Fase 1 — Core + Discord mínimo** | Em revisão: Core, interface Discord, comando `staff` e módulo `ping` implementados; falta a verificação manual de `/ping` no servidor real. |
+| **Fase 2 — Moderação**             | Em andamento: etapa 1 (phishing) em implementação.                                                                                          |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -26,6 +27,8 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 ## Fase 0 — Base do repositório
 
+**Situação:** concluída.
+
 **Objetivo:** repositório pronto para receber código com qualidade verificada automaticamente.
 
 **Entregas:**
@@ -43,9 +46,9 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Critérios de conclusão:**
 
-- [ ] Um Pull Request de teste executa a CI e ela passa.
-- [ ] Um push direto na `main` é bloqueado.
-- [ ] Os comandos de verificação estão documentados no README e funcionam em uma cópia nova do repositório.
+- [x] Um Pull Request de teste executa a CI e ela passa.
+- [x] Um push direto na `main` é bloqueado.
+- [x] Os comandos de verificação estão documentados no README e funcionam em uma cópia nova do repositório.
 
 **Release:** nenhuma.
 
