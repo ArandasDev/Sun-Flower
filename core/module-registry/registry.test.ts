@@ -146,6 +146,7 @@ const fakeGuild: GuildActions = {
   unban: () => Promise.resolve(OK),
   sendMessage: () => Promise.resolve(OK),
   sendDirectMessage: () => Promise.resolve(OK),
+  bulkDeleteMessages: () => Promise.resolve({ ok: true, deleted: 0, individually: 0 }),
   getMemberRoleIds: () => Promise.resolve([]),
 };
 

@@ -126,6 +126,10 @@ describe('validateManifest', () => {
     expect(validateManifest(base, 'ping', '1.1.0').ok).toBe(true);
   });
 
+  it('accepts apiVersion 1.1.0 against core 1.2.0', () => {
+    expect(validateManifest({ ...base, apiVersion: '1.1.0' }, 'ping', '1.2.0').ok).toBe(true);
+  });
+
   it('allows subscribing to events of other modules', () => {
     const raw = { ...base, events: { subscribes: ['other.x.created'], publishes: [] } };
     expect(validateManifest(raw, 'ping', '1.0.0').ok).toBe(true);

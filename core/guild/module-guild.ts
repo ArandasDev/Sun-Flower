@@ -1,4 +1,8 @@
-import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
+import type {
+  BulkDeleteResult,
+  GuildActionResult,
+  GuildActions,
+} from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { Capability, ModuleManifest } from '../../shared/contracts/module.ts';
 
@@ -10,6 +14,9 @@ const MAX_DELETE_MESSAGE_SECONDS = 604_800;
 
 const FAILED: GuildActionResult = { ok: false, error: 'failed' };
 const FORBIDDEN: GuildActionResult = { ok: false, error: 'forbidden' };
+const BULK_FAILED: BulkDeleteResult = { ok: false, error: 'failed', deleted: 0 };
+const MAX_BULK_DELETE = 100;
+const MESSAGE_ID = /^\d{17,20}$/;
 
 export class CapabilityError extends Error {
   constructor(moduleId: string, capability: Capability) {
@@ -27,6 +34,7 @@ export const UNAVAILABLE_GUILD: GuildActions = {
   unban: () => Promise.resolve(FAILED),
   sendMessage: () => Promise.resolve(FAILED),
   sendDirectMessage: () => Promise.resolve(FAILED),
+  bulkDeleteMessages: () => Promise.resolve(BULK_FAILED),
   getMemberRoleIds: () => Promise.resolve(undefined),
 };
 
@@ -147,6 +155,40 @@ export function createModuleGuild(options: ModuleGuildOptions): GuildActions {
       return await execute('sendDirectMessage', undefined, () =>
         port.sendDirectMessage(userId, content),
       );
+    },
+    async bulkDeleteMessages(channelId, messageIds) {
+      if (refusedAsInactive('bulkDeleteMessages')) return BULK_FAILED;
+      requireCapability('guild.moderate', 'bulkDeleteMessages');
+      const unique = [...new Set(messageIds)];
+      if (
+        unique.length < 1 ||
+        unique.length > MAX_BULK_DELETE ||
+        !unique.every((id) => MESSAGE_ID.test(id))
+      ) {
+        return BULK_FAILED;
+      }
+      let result: BulkDeleteResult;
+      try {
+        result = await port.bulkDeleteMessages(channelId, unique);
+      } catch {
+        logger.error(
+          { module: moduleId, action: 'bulkDeleteMessages' },
+          'guild action failed unexpectedly',
+        );
+        return BULK_FAILED;
+      }
+      logger.info(
+        {
+          module: moduleId,
+          action: 'bulkDeleteMessages',
+          requested: unique.length,
+          deleted: result.deleted,
+          individually: result.ok ? result.individually : 0,
+          result: result.ok ? 'ok' : result.error,
+        },
+        'guild action executed',
+      );
+      return result;
     },
     async getMemberRoleIds(userId) {
       if (refusedAsInactive('getMemberRoleIds')) return undefined;

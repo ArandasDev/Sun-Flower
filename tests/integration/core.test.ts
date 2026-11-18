@@ -141,6 +141,7 @@ describe('startCore', () => {
       unban: vi.fn(),
       sendMessage: vi.fn(),
       sendDirectMessage: vi.fn(),
+      bulkDeleteMessages: vi.fn(),
       getMemberRoleIds: vi.fn(),
     };
     const core = await startCore({

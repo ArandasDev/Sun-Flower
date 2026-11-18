@@ -1,4 +1,8 @@
-import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
+import type {
+  BulkDeleteResult,
+  GuildActionResult,
+  GuildActions,
+} from '../../shared/contracts/guild.ts';
 
 export interface FakeGuild extends GuildActions {
   readonly calls: { action: string; args: unknown[] }[];
@@ -8,10 +12,11 @@ export interface FakeGuild extends GuildActions {
   readonly lookupFails: Set<string>;
 }
 
-type ActionName = Exclude<keyof GuildActions, 'getMemberRoleIds'>;
+type ActionName = Exclude<keyof GuildActions, 'getMemberRoleIds' | 'bulkDeleteMessages'>;
 
 export function createFakeGuild(
-  overrides: Partial<Record<keyof GuildActions, GuildActionResult>> = {},
+  overrides: Partial<Record<ActionName, GuildActionResult>> = {},
+  bulkResult?: BulkDeleteResult,
 ): FakeGuild {
   const calls: { action: string; args: unknown[] }[] = [];
   const memberRoles = new Map<string, string[]>();
@@ -35,6 +40,11 @@ export function createFakeGuild(
     unban: record('unban'),
     sendMessage: record('sendMessage'),
     sendDirectMessage: record('sendDirectMessage'),
+    bulkDeleteMessages: async (channelId, ids) => {
+      await Promise.resolve();
+      calls.push({ action: 'bulkDeleteMessages', args: [channelId, ids] });
+      return bulkResult ?? { ok: true, deleted: ids.length, individually: 0 };
+    },
     getMemberRoleIds: async (userId) => {
       await Promise.resolve();
       calls.push({ action: 'getMemberRoleIds', args: [userId] });

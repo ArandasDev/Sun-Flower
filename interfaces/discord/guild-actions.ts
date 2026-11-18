@@ -71,6 +71,8 @@ export function createGuildActions(
       isSelf(userId)
         ? Promise.resolve(forbidden)
         : run('sendDirectMessage', () => gateway.sendDirect(userId, content)),
+    // Temporary stub: replaced by the real implementation in the next task.
+    bulkDeleteMessages: () => Promise.reject(new Error('not implemented')),
     getMemberRoleIds: async (userId) => {
       try {
         return await withTimeout(() => gateway.memberRoleIds(userId), timeoutMs, 'memberRoleIds');
