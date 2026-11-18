@@ -90,4 +90,47 @@ describe('extractLinks', () => {
       { domain: 'golpe.com' },
     ]);
   });
+
+  it('survives trailing punctuation and markdown decoration', () => {
+    for (const text of [
+      '**https://golpe.gift**',
+      '||https://golpe.gift||',
+      '__https://golpe.gift__',
+      'acesse https://golpe.gift, rapido',
+      'acesse https://golpe.gift!',
+      'https://golpe.gift\u2026',
+      '**golpe.gift**',
+      '||golpe.gift||',
+      'golpe.gift, clique',
+      'golpe.gift!',
+    ]) {
+      expect(extractLinks(text), text).toEqual([{ domain: 'golpe.gift' }]);
+    }
+  });
+
+  it('keeps maskedTextDomain through decoration, case and titles', () => {
+    for (const text of [
+      '[**discord.com**](https://golpe.gift)',
+      '[discord.com!](https://golpe.gift)',
+      '[discord.com](HTTPS://golpe.gift)',
+      '[discord.com](https://golpe.gift "t")',
+    ]) {
+      expect(extractLinks(text), text).toEqual([
+        { domain: 'golpe.gift', maskedTextDomain: 'discord.com' },
+      ]);
+    }
+  });
+
+  it('treats the host after userinfo as the domain', () => {
+    expect(extractLinks('https://discord.com@golpe.gift')).toEqual([{ domain: 'golpe.gift' }]);
+  });
+
+  it('treats IPv4 hosts with a scheme as links, bare ones not', () => {
+    expect(extractLinks('https://1.2.3.4/nitro')).toEqual([{ domain: '1.2.3.4' }]);
+    expect(extractLinks('[discord.com](https://1.2.3.4/nitro)')).toEqual([
+      { domain: '1.2.3.4', maskedTextDomain: 'discord.com' },
+    ]);
+    expect(extractLinks('1.2.3.4 e v1.2.3')).toEqual([]);
+    expect(parentDomains('1.2.3.4')).toEqual(['1.2.3.4']);
+  });
 });
