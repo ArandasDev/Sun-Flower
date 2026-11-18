@@ -81,7 +81,7 @@ interface GuildActions {
 | `repeat`   | o autor tem `limit` entradas com o mesmo `fingerprint` não nulo em `seconds` s | 4 em 60 s |
 | `mentions` | uma única mensagem soma `limit` menções                                        | 6         |
 
-- `mentions` conta, no conteúdo da mensagem (criada ou editada), as menções distintas `<@ID>`, `<@!ID>` e `<@&ID>`; cada `@everyone` ou `@here` soma 3. Menções repetidas da mesma pessoa ou do mesmo cargo contam uma vez.
+- `mentions` conta, no conteúdo da mensagem (criada ou editada), as menções distintas `<@ID>`, `<@!ID>` e `<@&ID>`; cada `@everyone` ou `@here` soma 3, desde que não esteja colado a letra, número, `_` ou `.` em nenhum dos lados (`fulano@everyone.com.br` não conta). Menções repetidas da mesma pessoa ou do mesmo cargo contam uma vez.
 - Uma regra que disparou para um autor não dispara de novo para ele nos 30 segundos seguintes.
 - Autores com cargo de `exemptRoleIds` e desenvolvedores do bot não são analisados, como na etapa 1.
 - Mensagens em canais de `spam.ignoredChannelIds` não geram entrada nem disparam regras.
@@ -113,6 +113,7 @@ Cada mensagem é avaliada uma única vez. A decisão combina a análise de phish
    - **punição da regra:** a mais grave entre as regras disparadas com `punishment` diferente de `none` (`ban` > `kick` > `timeout`; entre timeouts, o maior `timeoutMinutes`);
    - **reincidência:** se `spam.escalation.enabled` e a punição da regra não é `none`, o degrau é o de índice `min(n, steps.length − 1)`, onde `n` é o número de casos automáticos de spam do autor com `status` `actioned` nos últimos `windowHours`; a punição aplicada é a mais grave entre a da regra e a do degrau;
    - **phishing confirmado na mesma mensagem:** a punição aplicada é a mais grave entre a de spam e o timeout do phishing;
+   - **plano B do banimento:** quando a punição aplicada é `ban`, a decisão guarda também a punição mais grave entre as das regras disparadas que não é `ban` (e o timeout do phishing, se confirmado), para o caso de o Discord recusar o banimento;
    - **janela de exclusão:** a maior `deleteMinutes` entre as regras disparadas; `0` significa apagar só as entradas que fizeram as regras dispararem e a própria mensagem;
    - se todas as regras disparadas têm `punishment: none` e não há phishing confirmado, o caso é `open` e só há alerta;
    - a exclusão e a punição só acontecem quando o nível está confirmado (regra com punição diferente de `none` ou phishing confirmado); um caso só de alerta não apaga nem pune.
@@ -120,10 +121,13 @@ Cada mensagem é avaliada uma única vez. A decisão combina a análise de phish
 ### 4.6. Execução da resposta
 
 - **Exclusão:** as mensagens do autor dentro da janela, mais a mensagem atual, agrupadas por canal e enviadas a `bulkDeleteMessages` em lotes de até 100.
-- **Banimento com `deleteMinutes` maior que 0:** em vez da exclusão em lote, usa `ban(userId, reason, deleteMinutes × 60)`, que apaga as mensagens da pessoa em todos os canais pelo próprio Discord.
-- **Expulsão e timeout:** a exclusão em lote e a punição rodam **em paralelo**, pois são independentes: uma falha não impede a outra.
-- **Banimento com `deleteMinutes` 0:** o `deleteMessageSeconds` 0 do `ban` não apaga nada; por isso as mensagens que dispararam (`deleteMessageIds`) ainda são apagadas com `bulkDeleteMessages`.
-- Uma punição recusada pelo Discord (`forbidden`) não consome degrau de reincidência, porque o caso não fica `actioned`.
+- **Exclusão e punição em paralelo:** a exclusão em lote sempre roda junto com a punição, pois são independentes: uma falha não impede a outra.
+- **Banimento com `deleteMinutes` maior que 0:** além da exclusão em lote da janela, usa `ban(userId, reason, deleteMinutes × 60)`, que apaga as mensagens da pessoa em todos os canais pelo próprio Discord. Assim, um banimento recusado não deixa o flood no ar; mensagens que o banimento já apagou contam como apagadas (`not_found`).
+- **Banimento com `deleteMinutes` 0:** o `deleteMessageSeconds` 0 do `ban` não apaga nada; as mensagens que dispararam (`deleteMessageIds`) são apagadas com `bulkDeleteMessages`.
+- **Banimento recusado (`forbidden` ou `not_found`):** aplica o plano B da decisão (timeout ou expulsão), registrado em `outcome` como `fallback: 'timeout' | 'kick'` e o resultado dele. O `action` do caso passa a ser o do plano B (`delete_timeout` ou `kick`), para que `/mod case revert` desfaça o que foi aplicado. O caso fica `actioned` se o plano B deu certo. Sem plano B (todas as regras com `ban`), o caso fica `open`.
+- **Timeout com `failed`** (limite de 10 s do bot; pode ter chegado ao Discord): como na etapa 1, o caso fica `actioned` e guarda `timeoutUntil`. Só `forbidden` e `not_found` deixam o caso `open`.
+- Uma punição recusada pelo Discord (`forbidden` ou `not_found`) não consome degrau de reincidência, porque o caso não fica `actioned`.
+- **Phishing confirmado sem regra de spam:** depois de apagar a mensagem (`ok` ou `not_found`), ela sai do registro de atividade, para que um caso de spam seguinte não a envie de novo.
 
 ### 4.7. Persistência (`migrations/0002-spam.sql`)
 
@@ -174,7 +178,9 @@ Todos exigem `moderation.config.manage` e respondem de forma efêmera.
 | Lote recusado por falta de permissão                      | Sem plano B; o caso registra a falha, o alerta mostra, e a punição segue independente.                |
 | Lote com erro temporário ou mensagens com mais de 14 dias | Plano B, uma por uma.                                                                                 |
 | Mensagem já apagada pelo autor                            | Conta como apagada.                                                                                   |
-| Punição recusada (`forbidden`)                            | O caso registra a falha, não fica `actioned` e não conta para reincidência.                           |
+| Punição recusada (`forbidden` ou `not_found`)             | O caso registra a falha, não fica `actioned` e não conta para reincidência.                           |
+| Timeout com `failed` (limite de 10 s)                     | Pode ter sido aplicado: o caso fica `actioned` e guarda `timeoutUntil`, como na etapa 1.              |
+| Banimento recusado (`forbidden` ou `not_found`)           | A exclusão em lote já rodou; aplica o plano B (timeout ou expulsão da regra) e registra `fallback`.   |
 | Uma regra lança erro                                      | A análise de spam daquela mensagem é descartada e o phishing segue; o log registra só o nome do erro. |
 | Configuração inválida por comando                         | Resposta efêmera com o campo; nada é gravado.                                                         |
 | Reinício do bot                                           | O registro de atividade zera; a reincidência continua pelos casos no banco.                           |
@@ -207,7 +213,7 @@ Se o PR F crescer demais, ele se divide em detecção e resposta num PR e comand
 - Degraus 1, 2 e 3 em 24 h; casos revertidos, descartados ou com punição recusada não contam; regra com `none` nunca pune; a punição final é a mais grave.
 - Mensagem com phishing confirmado e flood gera um único caso, com a punição mais grave e as duas causas.
 
-**Execução:** IDs agrupados por canal e em lotes de 100; banimento usa `deleteMessageSeconds` e não chama a exclusão em lote; exclusão parcial aparece no caso e no alerta.
+**Execução:** IDs agrupados por canal e em lotes de 100; banimento usa `deleteMessageSeconds` e também chama a exclusão em lote; banimento recusado aplica o plano B; timeout com `failed` deixa o caso `actioned`; exclusão parcial aparece no caso e no alerta.
 
 **Comandos:** os três comandos novos, a validação de `steps` e de `seconds` em `mentions`, o `view` dentro de 2 000 caracteres e a permissão de cada rota.
 

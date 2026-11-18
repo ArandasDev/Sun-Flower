@@ -97,21 +97,22 @@ npm run staff -- grant moderation.actions.kick <ID do cargo>
 npm run staff -- grant moderation.actions.ban <ID do cargo>
 ```
 
-`npm run staff -- grants` lista as associações e `npm run staff -- revoke <permissão> <ID do cargo>` remove uma delas. Membros com um cargo que tenha qualquer permissão `moderation.*` ficam protegidos das ações manuais.
+`npm run staff -- grants` lista as associações e `npm run staff -- revoke <permissão> <ID do cargo>` remove uma delas. Membros com um cargo que tenha qualquer permissão `moderation.*` ficam protegidos **somente das ações manuais** (`/mod warn`, `timeout`, `kick` e `ban`); as regras automáticas de phishing e spam continuam valendo para eles. Para que a equipe não seja punida pelas regras automáticas, isente o cargo dela com `/mod config exempt-role <cargo da equipe> add`.
 
 **Teste manual no servidor real:**
 
 1. Ative os intents privilegiados **Server Members** e **Message Content** no Discord Developer Portal (**Bot → Privileged Gateway Intents**).
 2. Associe as permissões `moderation.*` necessárias a um cargo de teste com `npm run staff -- grant moderation.<…> <ID do cargo>`, uma por permissão, como no bloco acima.
 3. Inicie o bot com `npm start` e, com uma conta que tenha o cargo, configure o canal de alertas com `/mod config alert-channel`.
-4. Bloqueie um domínio de teste com `/mod domain block`.
-5. Com uma conta **sem** o cargo, envie uma mensagem com um link desse domínio: a mensagem é apagada, a conta recebe timeout e o alerta aparece no canal configurado, com o número do caso.
-6. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
+4. Isente o cargo da equipe das regras automáticas com `/mod config exempt-role <cargo da equipe> add`. As permissões `moderation.*` protegem só das ações manuais; sem esta etapa, a própria equipe pode ser punida por flood ou phishing durante o teste.
+5. Bloqueie um domínio de teste com `/mod domain block`.
+6. Com uma conta **sem** o cargo, envie uma mensagem com um link desse domínio: a mensagem é apagada, a conta recebe timeout e o alerta aparece no canal configurado, com o número do caso.
+7. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
 
-**Teste manual de spam:**
+**Teste manual de spam** (depois das etapas 1 a 4 acima):
 
-1. Com uma conta **sem** o cargo, envie 8 mensagens rápidas (por exemplo, `oi` 8 vezes em poucos segundos): as mensagens somem, a conta recebe timeout e o alerta aparece no canal configurado, com as regras que dispararam.
-2. Repita o surto depois do timeout: o alerta mostra a reincidência 2 e a punição do segundo degrau (por padrão, timeout de 1 hora).
+1. Com uma conta **sem** o cargo, envie 8 mensagens rápidas (por exemplo, `oi` 8 vezes em poucos segundos): as mensagens somem, a conta recebe timeout e o alerta aparece no canal configurado, com as regras que dispararam. Se o cliente do Discord segurar o envio (limite de mensagens por canal), distribua as mensagens por mais de um canal: o flood soma os canais. Uma mensagem enviada logo depois do disparo, antes de o timeout ser aplicado, pode continuar no canal.
+2. Para a reincidência, **não** reverta o primeiro caso: um caso revertido não conta. Espere o timeout terminar (10 minutos no padrão) e repita o surto: o alerta mostra a reincidência 2 e a punição do segundo degrau (por padrão, timeout de 1 hora).
 3. Confira a configuração com `/mod config view` e ajuste com `/mod config spam-rule`, `spam-escalation` ou `spam-ignore` se necessário.
 4. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
 

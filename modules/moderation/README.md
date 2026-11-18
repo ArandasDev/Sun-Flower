@@ -55,13 +55,16 @@ Cada mensagem criada alimenta um registro de atividade por autor (só um hash do
 - A resposta apaga as mensagens do autor dentro da janela `deleteMinutes` (em lote, com plano B mensagem a mensagem) e aplica a punição da regra: `none`, `timeout`, `kick` ou `ban`. Com `none` em todas as regras disparadas, o caso fica `open` e só há alerta, sem apagar nem punir.
 - **Reincidência:** com `spam.escalation.enabled`, a punição sobe pelos degraus (padrão `10m,1h,ban`) conforme o número de casos de spam do autor com status `actioned` (e dos ainda em andamento) nas últimas `windowHours` horas; vale a mais grave entre a punição da regra e a do degrau. Casos revertidos, descartados ou com punição recusada pelo Discord não contam.
 - Phishing confirmado e spam na mesma mensagem geram um único caso, com a punição mais grave e as duas causas.
-- Banimento com `deleteMinutes` maior que 0 usa a exclusão do próprio Discord (mensagens da pessoa em todos os canais).
+- Exclusão em lote e punição rodam em paralelo. Banimento com `deleteMinutes` maior que 0 usa também a exclusão do próprio Discord (mensagens da pessoa em todos os canais), e a exclusão em lote da janela roda mesmo assim, para que um banimento recusado não deixe o flood no ar.
+- Se o Discord recusar o banimento (`forbidden` ou `not_found`), o módulo aplica como plano B a punição mais grave das regras disparadas que não é `ban` (por exemplo, o timeout da regra) e registra `fallback` no `outcome`; o `action` do caso passa a ser o do plano B, e o caso fica `actioned` se ele deu certo.
+- Um timeout com resultado `failed` (limite de 10 s do bot) pode ter sido aplicado: o caso fica `actioned`, como na etapa 1. Só `forbidden` e `not_found` deixam o caso `open`.
 
 ## 3. Requisitos e dependências
 
 - `apiVersion` `1.2.0` do contrato do Core (exclusão de mensagens em lote, decisão 0016).
 - Nenhuma dependência de outro módulo.
 - Intents privilegiados **Server Members** e **Message Content** ativos (README do projeto).
+- **Antes de testar ou de usar em produção:** isente o cargo da equipe das regras automáticas com `/mod config exempt-role <cargo da equipe> add`. As permissões `moderation.*` protegem o membro **somente das ações manuais** (`/mod warn`, `timeout`, `kick` e `ban`), não das regras automáticas de phishing e spam; sem a isenção, a própria equipe pode ser punida.
 
 ## 4. Configurações disponíveis
 
@@ -174,6 +177,11 @@ O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), cort
 ## 9. Limitações conhecidas
 
 - O registro de atividade de spam fica em memória e se perde ao reiniciar o bot; a reincidência continua, pois vem dos casos gravados.
+- Mensagens enviadas depois do disparo de uma regra, mas antes de a punição ser aplicada, podem continuar no canal: a exclusão só leva as mensagens registradas até o disparo.
+- `spam.ignoredChannelIds` vale para o canal exato: um tópico (thread) tem ID próprio e precisa ser ignorado separadamente.
+- Num surto na velocidade de um bot, dois casos simultâneos do mesmo autor podem aplicar dois timeouts; vale o último que o Discord aplicar.
+- Menções espalhadas em várias mensagens, cada uma abaixo do limite de `mentions`, não são detectadas; nem textos quase iguais (com contador, homóglifos ou outras variações) pela regra `repeat`.
+- Permissões `moderation.*` não isentam das regras automáticas; use `exemptRoleIds` (§3).
 - Mensagens fora do registro (anteriores ao início do bot ou já expiradas) só somem no banimento com `deleteMinutes` maior que 0.
 - Se uma regra de spam lançar erro, a análise de spam daquela mensagem é descartada e o phishing segue normalmente.
 - Alertas só de spam não trazem as linhas `Domínios` e `Sinais`; mostram `Regras` e `Ação`.
