@@ -15,6 +15,8 @@ import {
   configTimeout,
   configView,
 } from './config.ts';
+import { caseDismiss, caseList, caseRevert, caseView } from './case.ts';
+import { domainAllow, domainBlock, domainList, domainRemove } from './domain.ts';
 import { COMMAND_UNAVAILABLE, NO_PERMISSION } from './replies.ts';
 
 export interface ModCommandDeps {
@@ -52,14 +54,14 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'config/timeout': { permission: CONFIG, handler: configTimeout },
   'config/thresholds': { permission: CONFIG, handler: configThresholds },
   'config/exempt-role': { permission: CONFIG, handler: configExemptRole },
-  'domain/block': { permission: DOMAINS, handler: unavailable },
-  'domain/allow': { permission: DOMAINS, handler: unavailable },
-  'domain/remove': { permission: DOMAINS, handler: unavailable },
-  'domain/list': { permission: DOMAINS, handler: unavailable },
-  'case/view': { permission: CASES_READ, handler: unavailable },
-  'case/list': { permission: CASES_READ, handler: unavailable },
-  'case/revert': { permission: CASES_REVERT, handler: unavailable },
-  'case/dismiss': { permission: CASES_REVERT, handler: unavailable },
+  'domain/block': { permission: DOMAINS, handler: domainBlock },
+  'domain/allow': { permission: DOMAINS, handler: domainAllow },
+  'domain/remove': { permission: DOMAINS, handler: domainRemove },
+  'domain/list': { permission: DOMAINS, handler: domainList },
+  'case/view': { permission: CASES_READ, handler: caseView },
+  'case/list': { permission: CASES_READ, handler: caseList },
+  'case/revert': { permission: CASES_REVERT, handler: caseRevert },
+  'case/dismiss': { permission: CASES_REVERT, handler: caseDismiss },
   '/warn': { permission: 'moderation.actions.warn', handler: unavailable },
   '/timeout': { permission: 'moderation.actions.timeout', handler: unavailable },
   '/kick': { permission: 'moderation.actions.kick', handler: unavailable },

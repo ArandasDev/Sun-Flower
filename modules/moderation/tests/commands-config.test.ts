@@ -17,24 +17,29 @@ const CHANNEL = '333333333333333333';
 const ROLE_A = '444444444444444444';
 const ROLE_B = '555555555555555555';
 
-const ALL_SUBCOMMANDS: readonly [string | undefined, string][] = [
-  ['config', 'view'],
-  ['config', 'alert-channel'],
-  ['config', 'timeout'],
-  ['config', 'thresholds'],
-  ['config', 'exempt-role'],
-  ['domain', 'block'],
-  ['domain', 'allow'],
-  ['domain', 'remove'],
-  ['domain', 'list'],
-  ['case', 'view'],
-  ['case', 'list'],
-  ['case', 'revert'],
-  ['case', 'dismiss'],
-  [undefined, 'warn'],
-  [undefined, 'timeout'],
-  [undefined, 'kick'],
-  [undefined, 'ban'],
+const CONFIG = 'moderation.config.manage';
+const DOMAINS = 'moderation.domains.manage';
+const READ = 'moderation.cases.read';
+const REVERT = 'moderation.cases.revert';
+
+const ALL_SUBCOMMANDS: readonly [string | undefined, string, string][] = [
+  ['config', 'view', CONFIG],
+  ['config', 'alert-channel', CONFIG],
+  ['config', 'timeout', CONFIG],
+  ['config', 'thresholds', CONFIG],
+  ['config', 'exempt-role', CONFIG],
+  ['domain', 'block', DOMAINS],
+  ['domain', 'allow', DOMAINS],
+  ['domain', 'remove', DOMAINS],
+  ['domain', 'list', DOMAINS],
+  ['case', 'view', READ],
+  ['case', 'list', READ],
+  ['case', 'revert', REVERT],
+  ['case', 'dismiss', REVERT],
+  [undefined, 'warn', 'moderation.actions.warn'],
+  [undefined, 'timeout', 'moderation.actions.timeout'],
+  [undefined, 'kick', 'moderation.actions.kick'],
+  [undefined, 'ban', 'moderation.actions.ban'],
 ];
 
 function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
@@ -94,12 +99,13 @@ function interaction(
 describe('/mod permissions', () => {
   it.each(ALL_SUBCOMMANDS)(
     '%s %s without permission replies NO_PERMISSION and has no side effects',
-    async (group, subcommand) => {
-      const { command, deps, set, guild } = setup({}, false);
+    async (group, subcommand, permission) => {
+      const { command, deps, set, guild, check } = setup({}, false);
       const cases = vi.spyOn(deps.cases, 'create');
       const domains = vi.spyOn(deps.domains, 'set');
       const { value, reply } = interaction(group, subcommand);
       await command.handle(value);
+      expect(check).toHaveBeenCalledExactlyOnceWith(ACTOR, permission);
       expect(reply).toHaveBeenCalledExactlyOnceWith('Você não tem permissão para isso.', {
         ephemeral: true,
       });
@@ -117,14 +123,16 @@ describe('/mod permissions', () => {
       ...(command.subcommands ?? []).map((s) => [undefined, s.name]),
     ];
     expect(declared).toHaveLength(ALL_SUBCOMMANDS.length);
-    expect(declared).toEqual(expect.arrayContaining(ALL_SUBCOMMANDS.map((e) => [...e])));
+    expect(declared).toEqual(
+      expect.arrayContaining(ALL_SUBCOMMANDS.map(([group, subcommand]) => [group, subcommand])),
+    );
   });
 
   it('replies "Comando indisponível." for placeholder subcommands after the permission check', async () => {
     const { command, check } = setup();
-    const { value, reply } = interaction('case', 'view', { number: 1 });
+    const { value, reply } = interaction(undefined, 'warn');
     await command.handle(value);
-    expect(check).toHaveBeenCalledWith(ACTOR, 'moderation.cases.read');
+    expect(check).toHaveBeenCalledWith(ACTOR, 'moderation.actions.warn');
     expect(reply).toHaveBeenCalledWith('Comando indisponível.', { ephemeral: true });
   });
 });
