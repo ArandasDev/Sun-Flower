@@ -70,7 +70,7 @@ interface GuildActions {
 - `fingerprint`: `sha256` (de `node:crypto`), em hexadecimal, do texto normalizado — minúsculas, `NFD` sem marcas (`\p{M}`) e sem caracteres de formatação (`\p{Cf}`), espaços colapsados e aparados. Textos com menos de 10 caracteres depois da normalização recebem `fingerprint` nulo e não contam para `repeat`. O texto em si nunca é guardado.
 - Limites: 200 entradas por autor (a mais antiga sai primeiro) e 2 000 autores (o autor menos recente sai primeiro).
 - As entradas expiram depois da maior janela configurada entre as regras (`seconds` e `deleteMinutes`), com teto de 60 minutos. Uma limpeza roda a cada 60 segundos, junto com a do rastreador de vários canais.
-- As entradas apagadas por um caso são removidas do registro, para que um caso posterior na mesma janela não as reenvie.
+- Todos os IDs enviados para exclusão são esquecidos pelo registro **antes** de aguardar a exclusão, para que um caso concorrente na mesma janela não os reenvie. Casos de spam ainda em andamento (em processamento) contam para a reincidência.
 - O registro se perde ao reiniciar o bot.
 
 ### 4.3. Regras (`spam/rules.ts`)
@@ -102,7 +102,7 @@ interface GuildActions {
 | `spam.escalation.windowHours`           | `integer`, 1 a 168                 | `24`                                |
 | `spam.escalation.steps`                 | lista de 1 a 5 degraus             | `timeout 10` → `timeout 60` → `ban` |
 
-Um degrau é `{ punishment: 'timeout', timeoutMinutes }`, `{ punishment: 'kick' }` ou `{ punishment: 'ban' }`.
+Um degrau é `{ kind: 'timeout', minutes } | { kind: 'kick' } | { kind: 'ban' }`.
 
 ### 4.5. Decisão por mensagem (`decision.ts`)
 
@@ -114,7 +114,8 @@ Cada mensagem é avaliada uma única vez. A decisão combina a análise de phish
    - **reincidência:** se `spam.escalation.enabled` e a punição da regra não é `none`, o degrau é o de índice `min(n, steps.length − 1)`, onde `n` é o número de casos automáticos de spam do autor com `status` `actioned` nos últimos `windowHours`; a punição aplicada é a mais grave entre a da regra e a do degrau;
    - **phishing confirmado na mesma mensagem:** a punição aplicada é a mais grave entre a de spam e o timeout do phishing;
    - **janela de exclusão:** a maior `deleteMinutes` entre as regras disparadas; `0` significa apagar só as entradas que fizeram as regras dispararem e a própria mensagem;
-   - se todas as regras disparadas têm `punishment: none` e não há phishing confirmado, o caso é `open` e só há alerta.
+   - se todas as regras disparadas têm `punishment: none` e não há phishing confirmado, o caso é `open` e só há alerta;
+   - a exclusão e a punição só acontecem quando o nível está confirmado (regra com punição diferente de `none` ou phishing confirmado); um caso só de alerta não apaga nem pune.
 
 ### 4.6. Execução da resposta
 
@@ -147,6 +148,7 @@ Ação: 23 mensagens apagadas, timeout de 60 min (reincidência 2)
 ```
 
 - Falhas aparecem como na etapa 1, por exemplo `exclusão parcial: 18 de 23 apagadas`.
+- Alertas só de spam omitem as linhas `Domínios` e `Sinais`.
 - O limite de 2 000 caracteres continua valendo.
 
 ### 4.9. Comandos `/mod config`
@@ -167,15 +169,15 @@ Todos exigem `moderation.config.manage` e respondem de forma efêmera.
 
 ## 5. Erros
 
-| Situação                                                  | Comportamento                                                                          |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Lote recusado por falta de permissão                      | Sem plano B; o caso registra a falha, o alerta mostra, e a punição segue independente. |
-| Lote com erro temporário ou mensagens com mais de 14 dias | Plano B, uma por uma.                                                                  |
-| Mensagem já apagada pelo autor                            | Conta como apagada.                                                                    |
-| Punição recusada (`forbidden`)                            | O caso registra a falha, não fica `actioned` e não conta para reincidência.            |
-| Uma regra lança erro                                      | As demais regras e o phishing seguem; o log registra só o nome do erro.                |
-| Configuração inválida por comando                         | Resposta efêmera com o campo; nada é gravado.                                          |
-| Reinício do bot                                           | O registro de atividade zera; a reincidência continua pelos casos no banco.            |
+| Situação                                                  | Comportamento                                                                                         |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Lote recusado por falta de permissão                      | Sem plano B; o caso registra a falha, o alerta mostra, e a punição segue independente.                |
+| Lote com erro temporário ou mensagens com mais de 14 dias | Plano B, uma por uma.                                                                                 |
+| Mensagem já apagada pelo autor                            | Conta como apagada.                                                                                   |
+| Punição recusada (`forbidden`)                            | O caso registra a falha, não fica `actioned` e não conta para reincidência.                           |
+| Uma regra lança erro                                      | A análise de spam daquela mensagem é descartada e o phishing segue; o log registra só o nome do erro. |
+| Configuração inválida por comando                         | Resposta efêmera com o campo; nada é gravado.                                                         |
+| Reinício do bot                                           | O registro de atividade zera; a reincidência continua pelos casos no banco.                           |
 
 ## 6. Divisão em Pull Requests
 

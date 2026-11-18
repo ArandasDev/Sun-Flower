@@ -11,6 +11,9 @@ import type { DomainStore } from '../domains.ts';
 import {
   configAlertChannel,
   configExemptRole,
+  configSpamEscalation,
+  configSpamIgnore,
+  configSpamRule,
   configThresholds,
   configTimeout,
   configView,
@@ -51,6 +54,9 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'config/timeout': { permission: CONFIG, handler: configTimeout },
   'config/thresholds': { permission: CONFIG, handler: configThresholds },
   'config/exempt-role': { permission: CONFIG, handler: configExemptRole },
+  'config/spam-rule': { permission: CONFIG, handler: configSpamRule },
+  'config/spam-escalation': { permission: CONFIG, handler: configSpamEscalation },
+  'config/spam-ignore': { permission: CONFIG, handler: configSpamIgnore },
   'domain/block': { permission: DOMAINS, handler: domainBlock },
   'domain/allow': { permission: DOMAINS, handler: domainAllow },
   'domain/remove': { permission: DOMAINS, handler: domainRemove },
@@ -141,6 +147,88 @@ const configGroup: SubcommandGroup = {
       description: 'Adiciona ou remove um cargo isento',
       options: [
         { name: 'role', description: 'Cargo', type: 'role', required: true },
+        {
+          name: 'action',
+          description: 'Adicionar ou remover',
+          type: 'string',
+          required: true,
+          choices: ['add', 'remove'],
+        },
+      ],
+    },
+    {
+      name: 'spam-rule',
+      description: 'Configura uma regra de spam',
+      options: [
+        {
+          name: 'rule',
+          description: 'Regra',
+          type: 'string',
+          required: true,
+          choices: ['flood', 'repeat', 'mentions'],
+        },
+        { name: 'enabled', description: 'Ligar ou desligar a regra', type: 'boolean' },
+        {
+          name: 'limit',
+          description: 'Limite de ocorrências',
+          type: 'integer',
+          minValue: 2,
+          maxValue: 50,
+        },
+        {
+          name: 'seconds',
+          description: 'Janela em segundos (flood e repeat)',
+          type: 'integer',
+          minValue: 2,
+          maxValue: 600,
+        },
+        {
+          name: 'delete-minutes',
+          description: 'Minutos de mensagens a apagar',
+          type: 'integer',
+          minValue: 0,
+          maxValue: 60,
+        },
+        {
+          name: 'punishment',
+          description: 'Punição',
+          type: 'string',
+          choices: ['none', 'timeout', 'kick', 'ban'],
+        },
+        {
+          name: 'timeout-minutes',
+          description: 'Duração do timeout em minutos',
+          type: 'integer',
+          minValue: 1,
+          maxValue: 40320,
+        },
+      ],
+    },
+    {
+      name: 'spam-escalation',
+      description: 'Configura a escalada de punições por reincidência',
+      options: [
+        { name: 'enabled', description: 'Ligar ou desligar a escalada', type: 'boolean' },
+        {
+          name: 'window-hours',
+          description: 'Janela de reincidência em horas',
+          type: 'integer',
+          minValue: 1,
+          maxValue: 168,
+        },
+        {
+          name: 'steps',
+          description: 'Degraus, por exemplo 10m,1h,ban',
+          type: 'string',
+          maxLength: 100,
+        },
+      ],
+    },
+    {
+      name: 'spam-ignore',
+      description: 'Adiciona ou remove um canal ignorado pelo spam',
+      options: [
+        { name: 'channel', description: 'Canal', type: 'channel', required: true },
         {
           name: 'action',
           description: 'Adicionar ou remover',

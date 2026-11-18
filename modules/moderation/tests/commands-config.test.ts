@@ -28,6 +28,9 @@ const ALL_SUBCOMMANDS: readonly [string | undefined, string, string][] = [
   ['config', 'timeout', CONFIG],
   ['config', 'thresholds', CONFIG],
   ['config', 'exempt-role', CONFIG],
+  ['config', 'spam-rule', CONFIG],
+  ['config', 'spam-escalation', CONFIG],
+  ['config', 'spam-ignore', CONFIG],
   ['domain', 'block', DOMAINS],
   ['domain', 'allow', DOMAINS],
   ['domain', 'remove', DOMAINS],
@@ -204,6 +207,37 @@ describe('/mod config', () => {
     expect(absent.reply).toHaveBeenCalledWith('Configuração atualizada.', { ephemeral: true });
   });
 
+  it('view shows the spam summary within 2000 characters', async () => {
+    const { command } = setup();
+    const { value, reply } = interaction('config', 'view');
+    await command.handle(value);
+    const text = reply.mock.calls[0]?.[0] ?? '';
+    expect(text).toContain('flood ligada');
+    expect(text).toContain('limite 7');
+    expect(text).toContain('janela 5 s');
+    expect(text).toContain('timeout 10 min');
+    expect(text).toContain('mentions ligada');
+    expect(text).toContain('Reincidência: ligada, janela 24 h, degraus 10m,1h,ban');
+    expect(text).toContain('Canais ignorados (spam): nenhum');
+    expect(text.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('view truncates a long ignored-channel list to stay within 2000 characters', async () => {
+    const ids = Array.from({ length: 200 }, (_, i) => String(100000000000000000 + i));
+    const { command, deps } = setup();
+    const full = {
+      ...configSchema.parse({}),
+      spam: { ...configSchema.parse({}).spam, ignoredChannelIds: ids },
+    };
+    // The schema caps the list at 25, so bypass it to exercise the defensive truncation.
+    (deps.config as { get: unknown }).get = () => full;
+    const { value, reply } = interaction('config', 'view');
+    await command.handle(value);
+    const text = reply.mock.calls[0]?.[0] ?? '';
+    expect(text.length).toBeLessThanOrEqual(2000);
+    expect(text).toMatch(/… \(\+\d+\)/);
+  });
+
   it('rethrows unexpected errors from config.set', async () => {
     const { command, set } = setup();
     set.mockImplementation(() => {
@@ -211,5 +245,109 @@ describe('/mod config', () => {
     });
     const { value } = interaction('config', 'timeout', { minutes: 5 });
     await expect(command.handle(value)).rejects.toThrow('boom');
+  });
+});
+
+describe('/mod config spam-*', () => {
+  const UPDATED = ['Configuração atualizada.', { ephemeral: true }] as const;
+
+  it('spam-rule changes only the provided fields of one rule', async () => {
+    const { command, set, current } = setup();
+    const before = current().spam;
+    const { value, reply } = interaction('config', 'spam-rule', { rule: 'flood', limit: 10 });
+    await command.handle(value);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(current().spam).toEqual({ ...before, flood: { ...before.flood, limit: 10 } });
+    expect(reply).toHaveBeenCalledWith(...UPDATED);
+  });
+
+  it('spam-rule applies every provided field', async () => {
+    const { command, current } = setup();
+    const { value } = interaction('config', 'spam-rule', {
+      rule: 'repeat',
+      enabled: false,
+      limit: 5,
+      seconds: 30,
+      'delete-minutes': 3,
+      punishment: 'kick',
+      'timeout-minutes': 90,
+    });
+    await command.handle(value);
+    expect(current().spam.repeat).toEqual({
+      enabled: false,
+      limit: 5,
+      seconds: 30,
+      deleteMinutes: 3,
+      punishment: 'kick',
+      timeoutMinutes: 90,
+    });
+  });
+
+  it('spam-rule mentions with seconds is INVALID_OPTION and writes nothing', async () => {
+    const { command, set } = setup();
+    const { value, reply } = interaction('config', 'spam-rule', { rule: 'mentions', seconds: 5 });
+    await command.handle(value);
+    expect(reply).toHaveBeenCalledWith('Opção inválida: seconds.', { ephemeral: true });
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('spam-rule without optional options replies updated and writes nothing', async () => {
+    const { command, set } = setup();
+    const { value, reply } = interaction('config', 'spam-rule', { rule: 'flood' });
+    await command.handle(value);
+    expect(reply).toHaveBeenCalledWith(...UPDATED);
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('spam-rule reports CONFIG_INVALID when the Core rejects the value', async () => {
+    const { command, set } = setup();
+    set.mockImplementation(() => {
+      const error = new Error('Invalid settings for module "moderation" at: spam.flood.limit');
+      error.name = 'InvalidModuleConfigError';
+      throw error;
+    });
+    const { value, reply } = interaction('config', 'spam-rule', { rule: 'flood', limit: 10 });
+    await command.handle(value);
+    expect(reply).toHaveBeenCalledWith('Configuração inválida: spam.flood.limit.', {
+      ephemeral: true,
+    });
+  });
+
+  it('spam-escalation writes the parsed steps and keeps the rest', async () => {
+    const { command, current } = setup();
+    const { value } = interaction('config', 'spam-escalation', {
+      steps: '10m,1h,ban',
+      'window-hours': 48,
+      enabled: false,
+    });
+    await command.handle(value);
+    expect(current().spam.escalation).toEqual({
+      enabled: false,
+      windowHours: 48,
+      steps: [{ kind: 'timeout', minutes: 10 }, { kind: 'timeout', minutes: 60 }, { kind: 'ban' }],
+    });
+  });
+
+  it('spam-escalation with invalid steps replies CONFIG_INVALID and writes nothing', async () => {
+    const { command, set } = setup();
+    const { value, reply } = interaction('config', 'spam-escalation', { steps: 'abc' });
+    await command.handle(value);
+    expect(reply).toHaveBeenCalledWith('Configuração inválida: steps.', { ephemeral: true });
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('spam-ignore add is idempotent and remove tolerates absent channels', async () => {
+    const { command, current } = setup();
+    const run = async (action: string) => {
+      const call = interaction('config', 'spam-ignore', { channel: CHANNEL, action });
+      await command.handle(call.value);
+      return call.reply;
+    };
+    await run('add');
+    await run('add');
+    expect(current().spam.ignoredChannelIds).toEqual([CHANNEL]);
+    await run('remove');
+    expect(current().spam.ignoredChannelIds).toEqual([]);
+    expect(await run('remove')).toHaveBeenCalledWith(...UPDATED);
   });
 });

@@ -79,7 +79,7 @@ O PR F parte da `main` depois do merge do PR E.
   - `GuildGateway.deleteMessage` já existe e é usado no plano B.
   - `createDiscordGateway.bulkDelete`: canal de texto do servidor; `channel.bulkDelete(ids, true)`; devolve as chaves da coleção.
 
-Algoritmo de `createGuildActions.bulkDeleteMessages` (cada chamada ao gateway com o limite de 10 s existente):
+Algoritmo de `createGuildActions.bulkDeleteMessages` (cada chamada ao gateway com o limite de 10 s existente). Nota: o algoritmo implementado acrescenta os códigos terminais e a parada após 3 falhas consecutivas descritos na spec §3.
 
 ```text
 ids.length === 1 → individual(ids)

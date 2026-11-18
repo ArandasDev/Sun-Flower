@@ -2,7 +2,7 @@
 
 ## 1. Descrição e finalidade
 
-Primeiro módulo real do Sun Flower. Detecta phishing em mensagens do servidor, apaga a mensagem e aplica timeout ao autor quando a violação é confirmada, registra um caso e alerta a equipe. A spec está em [docs/specs/2026-11-17-fase-2-moderacao-phishing.md](../../docs/specs/2026-11-17-fase-2-moderacao-phishing.md).
+Primeiro módulo real do Sun Flower. Detecta phishing e spam/flood em mensagens do servidor, apaga a mensagem e aplica a punição ao autor quando a violação é confirmada, registra um caso e alerta a equipe. As specs estão em [docs/specs/2026-11-17-fase-2-moderacao-phishing.md](../../docs/specs/2026-11-17-fase-2-moderacao-phishing.md) (phishing) e [docs/specs/2026-11-18-fase-2-moderacao-spam.md](../../docs/specs/2026-11-18-fase-2-moderacao-spam.md) (spam).
 
 ## 2. Funcionalidades disponibilizadas
 
@@ -10,6 +10,7 @@ Primeiro módulo real do Sun Flower. Detecta phishing em mensagens do servidor, 
 - Pontuação por sinais de phishing e classificação em dois níveis.
 - Resposta automática, registro de casos em `moderation_cases` e alerta no canal da equipe.
 - Listas de domínios bloqueados e permitidos em `moderation_domains`, com os domínios oficiais das marcas protegidas e os domínios conhecidos como seguros (§9.1) como lista inicial de permitidos.
+- Detecção de spam e flood (§2.3) com punição que escala para quem reincide.
 - Comando `/mod` (§7): configuração, listas de domínios, consulta, reversão e descarte de casos, e ações manuais (advertência, timeout, expulsão e banimento) com proteções.
 
 ### 2.1. Sinais e pesos
@@ -39,9 +40,26 @@ Cada sinal conta uma vez por mensagem e a pontuação é a soma. Links de domín
 - Uma mensagem gera no máximo um caso por nível: uma edição só cria caso novo se o nível subir.
 - Cada caso publica `moderation.case.created` com `{ caseId, kind, level, action }`.
 
+### 2.3. Spam e flood
+
+Cada mensagem criada alimenta um registro de atividade por autor (só um hash do texto normalizado, nunca o texto). Três regras analisam o registro, e cada uma pode ser ligada, ajustada e ter punição própria:
+
+| Regra      | Dispara quando                                                                     | Padrão    |
+| ---------- | ---------------------------------------------------------------------------------- | --------- |
+| `flood`    | o autor envia `limit` mensagens em `seconds` segundos, somando os canais           | 7 em 5 s  |
+| `repeat`   | o autor envia `limit` cópias do mesmo texto (10 caracteres ou mais) em `seconds` s | 4 em 60 s |
+| `mentions` | uma única mensagem soma `limit` menções (`@everyone` e `@here` valem 3)            | 6         |
+
+- Uma regra que disparou não dispara de novo para o mesmo autor por 30 segundos.
+- Autores com cargo de `exemptRoleIds`, desenvolvedores do bot e canais de `spam.ignoredChannelIds` não são analisados.
+- A resposta apaga as mensagens do autor dentro da janela `deleteMinutes` (em lote, com plano B mensagem a mensagem) e aplica a punição da regra: `none`, `timeout`, `kick` ou `ban`. Com `none` em todas as regras disparadas, o caso fica `open` e só há alerta, sem apagar nem punir.
+- **Reincidência:** com `spam.escalation.enabled`, a punição sobe pelos degraus (padrão `10m,1h,ban`) conforme o número de casos de spam do autor com status `actioned` (e dos ainda em andamento) nas últimas `windowHours` horas; vale a mais grave entre a punição da regra e a do degrau. Casos revertidos, descartados ou com punição recusada pelo Discord não contam.
+- Phishing confirmado e spam na mesma mensagem geram um único caso, com a punição mais grave e as duas causas.
+- Banimento com `deleteMinutes` maior que 0 usa a exclusão do próprio Discord (mensagens da pessoa em todos os canais).
+
 ## 3. Requisitos e dependências
 
-- `apiVersion` `1.1.0` do contrato do Core.
+- `apiVersion` `1.2.0` do contrato do Core (exclusão de mensagens em lote, decisão 0016).
 - Nenhuma dependência de outro módulo.
 - Intents privilegiados **Server Members** e **Message Content** ativos (README do projeto).
 
@@ -49,19 +67,29 @@ Cada sinal conta uma vez por mensagem e a pontuação é a soma. Links de domín
 
 O módulo exporta `configSchema` (`config.ts`). Todos os campos são opcionais e têm padrão; `{}` gera a configuração completa.
 
-| Campo                        | Padrão             | Regra                                    |
-| ---------------------------- | ------------------ | ---------------------------------------- |
-| `alertChannelId`             | ausente            | ID de canal (17 a 20 dígitos)            |
-| `timeoutMinutes`             | `60`               | 1 a 40320                                |
-| `thresholds.confirmed`       | `80`               | 1 a 1000, maior que `suspicious`         |
-| `thresholds.suspicious`      | `40`               | 1 a 1000                                 |
-| `weights.<sinal>`            | tabela de §2.1     | 0 a 1000                                 |
-| `exemptRoleIds`              | `[]`               | IDs de cargo, no máximo 25               |
-| `newAccountDays`             | `7`                | 0 a 365                                  |
-| `newMemberHours`             | `24`               | 0 a 720                                  |
-| `multiChannel.channels`      | `3`                | 2 a 25                                   |
-| `multiChannel.windowSeconds` | `60`               | 10 a 3600                                |
-| `baitTerms`                  | lista da spec §4.4 | no máximo 100, cada um com até 32 letras |
+| Campo                         | Padrão             | Regra                                    |
+| ----------------------------- | ------------------ | ---------------------------------------- |
+| `alertChannelId`              | ausente            | ID de canal (17 a 20 dígitos)            |
+| `timeoutMinutes`              | `60`               | 1 a 40320                                |
+| `thresholds.confirmed`        | `80`               | 1 a 1000, maior que `suspicious`         |
+| `thresholds.suspicious`       | `40`               | 1 a 1000                                 |
+| `weights.<sinal>`             | tabela de §2.1     | 0 a 1000                                 |
+| `exemptRoleIds`               | `[]`               | IDs de cargo, no máximo 25               |
+| `newAccountDays`              | `7`                | 0 a 365                                  |
+| `newMemberHours`              | `24`               | 0 a 720                                  |
+| `multiChannel.channels`       | `3`                | 2 a 25                                   |
+| `multiChannel.windowSeconds`  | `60`               | 10 a 3600                                |
+| `baitTerms`                   | lista da spec §4.4 | no máximo 100, cada um com até 32 letras |
+| `spam.ignoredChannelIds`      | `[]`               | IDs de canal, no máximo 25               |
+| `spam.<regra>.enabled`        | `true`             | `flood`, `repeat`, `mentions`            |
+| `spam.<regra>.limit`          | 7 / 4 / 6          | 2 a 50                                   |
+| `spam.<regra>.seconds`        | 5 / 60             | 2 a 600 (só `flood` e `repeat`)          |
+| `spam.<regra>.deleteMinutes`  | 2 / 10 / 0         | 0 a 60                                   |
+| `spam.<regra>.punishment`     | `timeout`          | `none`, `timeout`, `kick` ou `ban`       |
+| `spam.<regra>.timeoutMinutes` | `10`               | 1 a 40320                                |
+| `spam.escalation.enabled`     | `true`             |                                          |
+| `spam.escalation.windowHours` | `24`               | 1 a 168                                  |
+| `spam.escalation.steps`       | 10m, 1h, ban       | 1 a 5 degraus                            |
 
 Sem `alertChannelId`, os casos são gravados normalmente e o log registra um aviso uma vez por início.
 
@@ -89,24 +117,29 @@ O módulo começa ativo e age automaticamente desde o primeiro início. Defina o
 
 O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcomando exige a permissão indicada, associada a um cargo com `npm run staff -- grant <permissão> <ID do cargo>`. Sem ela, a resposta é `Você não tem permissão para isso.` e nada é executado.
 
-| Comando                                                                | Permissão                    |
-| ---------------------------------------------------------------------- | ---------------------------- |
-| `/mod config view`                                                     | `moderation.config.manage`   |
-| `/mod config alert-channel <canal>`                                    | `moderation.config.manage`   |
-| `/mod config timeout <minutos>`                                        | `moderation.config.manage`   |
-| `/mod config thresholds <confirmado> <suspeito>`                       | `moderation.config.manage`   |
-| `/mod config exempt-role <cargo> <add\|remove>`                        | `moderation.config.manage`   |
-| `/mod domain block <domínio>` · `allow <domínio>` · `remove <domínio>` | `moderation.domains.manage`  |
-| `/mod domain list [lista]`                                             | `moderation.domains.manage`  |
-| `/mod case view <número>`                                              | `moderation.cases.read`      |
-| `/mod case list [usuário]`                                             | `moderation.cases.read`      |
-| `/mod case revert <número> [allow-domain]`                             | `moderation.cases.revert`    |
-| `/mod case dismiss <número>`                                           | `moderation.cases.revert`    |
-| `/mod warn <usuário> <motivo>`                                         | `moderation.actions.warn`    |
-| `/mod timeout <usuário> <minutos> <motivo>`                            | `moderation.actions.timeout` |
-| `/mod kick <usuário> <motivo>`                                         | `moderation.actions.kick`    |
-| `/mod ban <usuário> <motivo> [delete-days]`                            | `moderation.actions.ban`     |
+| Comando                                                                                                    | Permissão                    |
+| ---------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `/mod config view`                                                                                         | `moderation.config.manage`   |
+| `/mod config alert-channel <canal>`                                                                        | `moderation.config.manage`   |
+| `/mod config timeout <minutos>`                                                                            | `moderation.config.manage`   |
+| `/mod config thresholds <confirmado> <suspeito>`                                                           | `moderation.config.manage`   |
+| `/mod config exempt-role <cargo> <add\|remove>`                                                            | `moderation.config.manage`   |
+| `/mod config spam-rule <rule> [enabled] [limit] [seconds] [delete-minutes] [punishment] [timeout-minutes]` | `moderation.config.manage`   |
+| `/mod config spam-escalation [enabled] [window-hours] [steps]`                                             | `moderation.config.manage`   |
+| `/mod config spam-ignore <canal> <add\|remove>`                                                            | `moderation.config.manage`   |
+| `/mod domain block <domínio>` · `allow <domínio>` · `remove <domínio>`                                     | `moderation.domains.manage`  |
+| `/mod domain list [lista]`                                                                                 | `moderation.domains.manage`  |
+| `/mod case view <número>`                                                                                  | `moderation.cases.read`      |
+| `/mod case list [usuário]`                                                                                 | `moderation.cases.read`      |
+| `/mod case revert <número> [allow-domain]`                                                                 | `moderation.cases.revert`    |
+| `/mod case dismiss <número>`                                                                               | `moderation.cases.revert`    |
+| `/mod warn <usuário> <motivo>`                                                                             | `moderation.actions.warn`    |
+| `/mod timeout <usuário> <minutos> <motivo>`                                                                | `moderation.actions.timeout` |
+| `/mod kick <usuário> <motivo>`                                                                             | `moderation.actions.kick`    |
+| `/mod ban <usuário> <motivo> [delete-days]`                                                                | `moderation.actions.ban`     |
 
+- `spam-rule` muda só os campos informados da regra (`flood`, `repeat` ou `mentions`); `seconds` não vale para `mentions` (`Opção inválida: seconds.`). `spam-escalation` aceita `steps` como texto (`10m,1h,ban`: `Nm` ou `Nh` é timeout, `kick` e `ban` as demais punições; 1 a 5 degraus); texto inválido responde `Configuração inválida: steps.` e nada é gravado. `spam-ignore` adiciona (sem duplicar) ou remove um canal ignorado.
+- `config view` inclui o resumo de spam: cada regra, a reincidência e os canais ignorados.
 - `domain block` e `allow` normalizam o domínio (`https://Golpe.COM/abc` vira `golpe.com`); bloquear um domínio permitido o move para a lista de bloqueados, e vice-versa. `domain list` mostra no máximo 50 domínios por lista.
 - `case list` mostra os 10 casos mais recentes, do usuário quando informado.
 - `case revert` vale para casos `actioned` ou `open`: remove o timeout (`delete_timeout`, `timeout`), desfaz o banimento (`ban`) ou só muda o status (`kick`, `warn`, `none`). A mensagem apagada não é recuperada. `allow-domain` move os domínios do caso para a lista de permitidos, exceto imitações de marcas protegidas, que são recusadas. `case dismiss` vale só para casos `open`.
@@ -140,6 +173,10 @@ O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), cort
 
 ## 9. Limitações conhecidas
 
+- O registro de atividade de spam fica em memória e se perde ao reiniciar o bot; a reincidência continua, pois vem dos casos gravados.
+- Mensagens fora do registro (anteriores ao início do bot ou já expiradas) só somem no banimento com `deleteMinutes` maior que 0.
+- Se uma regra de spam lançar erro, a análise de spam daquela mensagem é descartada e o phishing segue normalmente.
+- Alertas só de spam não trazem as linhas `Domínios` e `Sinais`; mostram `Regras` e `Ação`.
 - Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo com `/mod domain block`; o bloqueio prevalece. O mesmo vale para os domínios conhecidos como seguros.
 - O estado da regra de vários canais fica em memória (no máximo 1000 autores e 50 entradas por autor) e se perde ao reiniciar.
 - Variações de link com `\` ou espaços em volta do ponto não são reconstruídas.

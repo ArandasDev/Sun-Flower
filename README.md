@@ -6,7 +6,7 @@ Bot Discord modular e dedicado, que reúne moderação, funcionalidades sociais,
 
 - **Fase 0 — Base do repositório (concluída).** Projeto TypeScript, CI e ruleset da `main` ativos.
 - **Fase 1 — Core + Discord mínimo (em revisão).** O Core carrega os módulos, a interface Discord atua só no servidor configurado e o módulo de exemplo `ping` responde a `/ping`; falta a verificação manual de `/ping` no servidor real.
-- **Fase 2 — Moderação (em andamento).** Etapa 1 (phishing e ações manuais) implementada; falta a verificação manual no servidor real ([Moderação](#moderação)). Etapa 2 (spam e flood) pendente.
+- **Fase 2 — Moderação (em andamento).** Etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas; falta a verificação manual no servidor real ([Moderação](#moderação)).
 
 Veja o [ROADMAP](docs/ROADMAP.md).
 
@@ -82,7 +82,7 @@ O bot conecta ao Discord e registra os comandos dos módulos no servidor `DISCOR
 
 ## Moderação
 
-O módulo `moderation` detecta phishing, age automaticamente nas violações confirmadas e oferece o comando `/mod` para a equipe. Os comandos, as permissões e a configuração estão em [modules/moderation/README.md](modules/moderation/README.md).
+O módulo `moderation` detecta phishing e spam/flood, age automaticamente nas violações confirmadas e oferece o comando `/mod` para a equipe. Os comandos, as permissões e a configuração estão em [modules/moderation/README.md](modules/moderation/README.md).
 
 Nenhuma permissão `moderation.*` é concedida por padrão: associe cada uma ao cargo da equipe que deve usá-la, substituindo `<ID do cargo>` pelo ID real, sem os sinais `<` e `>`:
 
@@ -107,6 +107,13 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 4. Bloqueie um domínio de teste com `/mod domain block`.
 5. Com uma conta **sem** o cargo, envie uma mensagem com um link desse domínio: a mensagem é apagada, a conta recebe timeout e o alerta aparece no canal configurado, com o número do caso.
 6. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
+
+**Teste manual de spam:**
+
+1. Com uma conta **sem** o cargo, envie 8 mensagens rápidas (por exemplo, `oi` 8 vezes em poucos segundos): as mensagens somem, a conta recebe timeout e o alerta aparece no canal configurado, com as regras que dispararam.
+2. Repita o surto depois do timeout: o alerta mostra a reincidência 2 e a punição do segundo degrau (por padrão, timeout de 1 hora).
+3. Confira a configuração com `/mod config view` e ajuste com `/mod config spam-rule`, `spam-escalation` ou `spam-ignore` se necessário.
+4. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
 
 ## Documentação
 
