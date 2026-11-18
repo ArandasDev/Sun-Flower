@@ -123,6 +123,53 @@ describe('Responder', () => {
     expect(alert?.args[1]).toContain(`🚨 Caso #${String(record?.id)} — violação confirmada`);
   });
 
+  it.each(['forbidden', 'not_found'] as const)(
+    'leaves timeoutUntil empty when the timeout is refused (%s)',
+    async (error) => {
+      const guild = createFakeGuild({ timeout: { ok: false, error } });
+      await responder(guild).handle(payload(BLOCKED_CONTENT));
+      expect(cases.findLatestByMessage(MESSAGE)).toMatchObject({
+        outcome: { delete: 'ok', timeout: error },
+        timeoutUntil: null,
+      });
+    },
+  );
+
+  it('keeps timeoutUntil when the timeout failed without a refusal', async () => {
+    const guild = createFakeGuild({ timeout: { ok: false, error: 'failed' } });
+    await responder(guild).handle(payload(BLOCKED_CONTENT));
+    expect(cases.findLatestByMessage(MESSAGE)?.timeoutUntil).toBe('2026-11-17T13:00:00.000Z');
+  });
+
+  it('acts once when the same message is handled concurrently', async () => {
+    const guild = createFakeGuild();
+    const r = responder(guild);
+    await Promise.all([r.handle(payload(BLOCKED_CONTENT)), r.handle(payload(BLOCKED_CONTENT))]);
+
+    const count = (action: string) => guild.calls.filter((c) => c.action === action).length;
+    expect(count('deleteMessage')).toBe(1);
+    expect(count('timeout')).toBe(1);
+    expect(count('sendMessage')).toBe(1);
+    expect(cases.listRecent(10)).toHaveLength(1);
+    expect(published).toHaveLength(1);
+  });
+
+  it('acts once for a confirmed edit racing a suspicious analysis', async () => {
+    const guild = createFakeGuild();
+    const r = responder(guild);
+    await Promise.all([
+      r.handle(payload(SUSPICIOUS_CONTENT)),
+      r.handle(payload(CONFIRMED_EDIT)),
+      r.handle(payload(CONFIRMED_EDIT)),
+    ]);
+
+    const count = (action: string) => guild.calls.filter((c) => c.action === action).length;
+    expect(count('deleteMessage')).toBe(1);
+    expect(count('timeout')).toBe(1);
+    const levels = cases.listRecent(10).map((c) => c.level);
+    expect(levels.filter((l) => l === 'confirmed')).toHaveLength(1);
+  });
+
   it('still times out when deleteMessage fails', async () => {
     const guild = createFakeGuild({ deleteMessage: { ok: false, error: 'not_found' } });
     await responder(guild).handle(payload(BLOCKED_CONTENT));
@@ -271,7 +318,7 @@ describe('Responder', () => {
       lists,
       tracker: new MultiChannelTracker(),
       config: () => {
-        throw new Error('settings unavailable');
+        throw new RangeError('settings unavailable');
       },
       isDeveloper: () => false,
       publish: () => {},
@@ -281,9 +328,10 @@ describe('Responder', () => {
     await expect(r.handle(payload(BLOCKED_CONTENT))).resolves.toBeUndefined();
     expect(logger.entries).toContainEqual({
       level: 'error',
-      obj: { error: 'settings unavailable' },
+      obj: { error: 'RangeError' },
       msg: 'moderation analysis failed',
     });
+    expect(JSON.stringify(logger.entries)).not.toContain('settings unavailable');
   });
 
   it('never logs message content or user, channel or message IDs', async () => {

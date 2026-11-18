@@ -101,11 +101,14 @@ Reverter: /mod case revert 12
 
 Falhas aparecem na linha `Ação`, por exemplo `timeout não aplicado (sem permissão)`. Em casos suspeitos, a linha é `Ação: nenhuma`, seguida do link da mensagem e da sugestão `/mod case dismiss 12 ou /mod timeout`.
 
+O alerta lista no máximo 5 domínios (os demais aparecem como `e mais N`), corta cada domínio em 100 caracteres e nunca passa de 2000 caracteres, o limite do Discord.
+
 ## 9. Limitações conhecidas
 
 - Um domínio oficial removido da lista de permitidos volta no próximo início do bot. Para tirá-lo de vez, é preciso bloqueá-lo; o bloqueio prevalece.
 - O estado da regra de vários canais fica em memória (no máximo 1000 autores e 50 entradas por autor) e se perde ao reiniciar.
 - Variações de link com `\` ou espaços em volta do ponto não são reconstruídas.
+- Quando o Discord demora a responder, o Event Bus pode registrar `event handler failed` depois de 5 s, enquanto a resposta (ações, caso e alerta) ainda termina normalmente.
 
 ### 9.1. Falsos positivos conhecidos
 

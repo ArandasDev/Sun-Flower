@@ -52,6 +52,25 @@ describe('formatAlert', () => {
     expect(text).toContain('Domínios: `a.com`, `b.net`');
   });
 
+  it('stays within the Discord limit with many long domains', () => {
+    const domains = Array.from(
+      { length: 20 },
+      (_, i) => `${'a'.repeat(114)}${String(i).padStart(2, '0')}.com`,
+    );
+    expect(domains[0]).toHaveLength(120);
+    const text = formatAlert(record({ domains }), MESSAGE_URL);
+    expect(text.length).toBeLessThanOrEqual(2000);
+    expect(text).toContain('e mais 15');
+    expect(text).toContain(`\`${'a'.repeat(99)}…\``);
+    expect(text).toContain('Reverter: /mod case revert 12');
+  });
+
+  it('lists five domains without a remainder note', () => {
+    const domains = ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'];
+    const text = formatAlert(record({ domains }), MESSAGE_URL);
+    expect(text).toContain('Domínios: `a.com`, `b.com`, `c.com`, `d.com`, `e.com`\n');
+  });
+
   it('reports a failed timeout on the action line', () => {
     const text = formatAlert(
       record({ outcome: { delete: 'ok', timeout: 'forbidden' } }),

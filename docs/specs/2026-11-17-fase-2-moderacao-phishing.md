@@ -352,7 +352,7 @@ Formato do alerta:
 ```text
 🚨 Caso #12 — violação confirmada
 Usuário: <@ID> · Canal: <#ID>
-Domínios: dlscord-gift.com
+Domínios: `dlscord-gift.com`
 Sinais: lookalike (60), bait (30) = 90
 Ação: mensagem apagada, timeout de 60 min
 Reverter: /mod case revert 12
