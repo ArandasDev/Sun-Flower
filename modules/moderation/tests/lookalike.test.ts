@@ -45,6 +45,13 @@ describe('isLookalike', () => {
     'stearncommunity.com',
     domainToASCII('\u0501iscord.com'),
     'discord.com.golpe.ru',
+    'dlscord-nitro.com',
+    'discorcl-gift.com',
+    'dlscord.com.br',
+    'dlscord.co.uk',
+    'dlscord.golpe.ru',
+    domainToASCII('díśćord.com'),
+    'stearn.com',
     'disco.com', // accepted false positive (distance 2)
   ])('flags %s', (domain) => {
     expect(isLookalike(domain)).toBe(true);
@@ -58,6 +65,16 @@ describe('isLookalike', () => {
     'github.com',
     'record.com',
     'dis.com',
+    'team.com',
+    'teams.com',
+    'stream.com',
+    'dream.com',
+    'cream.com',
+    'steel.com',
+    'scam.com',
+    'spam.com',
+    'store.steampowered.com',
+    'x.discord.gift',
     '192.168.0.1',
   ])('does not flag %s', (domain) => {
     expect(isLookalike(domain)).toBe(false);

@@ -34,6 +34,8 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
   і: 'i',
   ԁ: 'd',
   ѕ: 's',
+  г: 'r',
+  ϲ: 'c',
   // Greek
   α: 'a',
   ο: 'o',
@@ -49,7 +51,8 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
 /** Reduces a value to a Latin-lookalike form with '-' and '.' removed. */
 export function skeleton(value: string): string {
   let out = '';
-  for (const ch of value.toLowerCase()) {
+  const folded = value.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+  for (const ch of folded) {
     if (ch === '-' || ch === '.') continue;
     out += CONFUSABLES[ch] ?? ch;
   }
@@ -73,17 +76,24 @@ function isOfficial(domain: string): boolean {
   return OFFICIAL_DOMAINS.some((o) => domain === o || domain.endsWith(`.${o}`));
 }
 
-function mainLabel(unicodeDomain: string): string {
-  const labels = unicodeDomain.split('.');
-  return labels.length >= 2 ? (labels[labels.length - 2] ?? '') : (labels[0] ?? '');
-}
-
 const MIN_LABEL_LETTERS = 4;
+/** Targets this short are only matched by rule 1: distance 1 would flag common words (team, steel). */
+const MAX_SHORT_TARGET = 5;
 
 const DISTANCE_TARGETS: readonly string[] = [
-  ...PROTECTED_BRANDS.map((b) => b.brand),
-  ...OFFICIAL_DOMAINS.map((o) => mainLabel(o)),
-];
+  ...new Set([
+    ...PROTECTED_BRANDS.map((b) => b.brand),
+    ...OFFICIAL_DOMAINS.map((o) => o.split('.').slice(0, -1).join('.')),
+  ]),
+].filter((t) => t.length > MAX_SHORT_TARGET);
+
+function nearTarget(part: string): boolean {
+  if (part.length < MIN_LABEL_LETTERS) return false;
+  return DISTANCE_TARGETS.some((target) => {
+    const d = levenshtein(part, target);
+    return d >= 1 && d <= 2;
+  });
+}
 
 /** True when the domain imitates a protected brand without being official. */
 export function isLookalike(domain: string): boolean {
@@ -94,10 +104,10 @@ export function isLookalike(domain: string): boolean {
   const whole = skeleton(unicode);
   if (PROTECTED_BRANDS.some((b) => whole.includes(b.brand))) return true;
 
-  const label = skeleton(mainLabel(unicode));
-  if (label.length < MIN_LABEL_LETTERS) return false;
-  return DISTANCE_TARGETS.some((target) => {
-    const d = levenshtein(label, target);
-    return d >= 1 && d <= 2;
+  const labels = unicode.split('.');
+  const candidates = labels.length >= 2 ? labels.slice(0, -1) : labels;
+  return candidates.some((label) => {
+    if (nearTarget(skeleton(label))) return true;
+    return label.split('-').some((part) => nearTarget(skeleton(part)));
   });
 }
