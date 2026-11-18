@@ -1,6 +1,6 @@
 import { SIGNAL_NAMES } from '../config.ts';
 import type { ModerationConfig, SignalName } from '../config.ts';
-import { extractLinks } from './links.ts';
+import { MAX_SCANNED_CHARS, extractLinks } from './links.ts';
 import { isLookalike } from './lookalike.ts';
 import type { MultiChannelTracker } from './multi-channel.ts';
 
@@ -37,10 +37,14 @@ const DAY_MS = 24 * HOUR_MS;
 const MASS_MENTION = /@(?:everyone|here)(?![\p{L}\p{N}_])/u;
 
 const SCHEME_URL = /https?:\/\/\S+/gi;
-const DOTTED_TOKEN = /[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
+const DOTTED_TOKEN = /(?<![\p{L}\p{N}-])[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu;
 
+/** Lowercases and drops accents and invisible format characters (zero-width, soft hyphen). */
 function fold(text: string): string {
-  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return text
+    .normalize('NFD')
+    .replace(/[\p{M}\p{Cf}]/gu, '')
+    .toLowerCase();
 }
 
 function escapeRegExp(text: string): string {
@@ -49,7 +53,7 @@ function escapeRegExp(text: string): string {
 
 function hasBait(content: string, terms: readonly string[]): boolean {
   // Link text is not message text: "discord.gift" must not match the "gift" bait.
-  const haystack = fold(content.replace(SCHEME_URL, ' ').replace(DOTTED_TOKEN, ' '));
+  const haystack = fold(content).replace(SCHEME_URL, ' ').replace(DOTTED_TOKEN, ' ');
   return terms.some((term) => {
     const needle = fold(term).trim();
     if (needle === '') return false;
@@ -72,7 +76,8 @@ export function analyzeMessage(
   deps: { lists: DomainLists; config: ModerationConfig; tracker: MultiChannelTracker },
 ): Analysis {
   const { lists, config, tracker } = deps;
-  const links = extractLinks(input.content);
+  const content = input.content.slice(0, MAX_SCANNED_CHARS);
+  const links = extractLinks(content);
 
   const domains: string[] = [];
   let blocked = false;
@@ -102,8 +107,8 @@ export function analyzeMessage(
     lookalike,
     masked,
     multiChannel,
-    bait: hasBait(input.content, config.baitTerms),
-    massMention: MASS_MENTION.test(input.content),
+    bait: hasBait(content, config.baitTerms),
+    massMention: MASS_MENTION.test(content),
     newAccount: isNewAuthor(input, config),
   };
 

@@ -5,7 +5,7 @@ export interface ExtractedLink {
   maskedTextDomain?: string;
 }
 
-const MAX_SCAN_CHARS = 4000;
+export const MAX_SCANNED_CHARS = 4000;
 const MAX_LINKS = 20;
 
 const MARKDOWN_LINK =
@@ -109,7 +109,7 @@ interface Candidate extends Found {
 }
 
 export function extractLinks(content: string): ExtractedLink[] {
-  let text = foldHostChars(content.slice(0, MAX_SCAN_CHARS));
+  let text = foldHostChars(content.slice(0, MAX_SCANNED_CHARS));
   const candidates: Candidate[] = [];
 
   for (const match of text.matchAll(MARKDOWN_LINK)) {

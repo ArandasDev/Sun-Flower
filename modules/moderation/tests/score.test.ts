@@ -160,3 +160,41 @@ describe('analyzeMessage', () => {
     expect(r.domains).toHaveLength(20);
   });
 });
+
+describe('analyzeMessage hardening', () => {
+  it('ignores text after the scan limit', () => {
+    const pad = ' '.repeat(4000);
+    const r = run(`https://exemplo.org${pad}@everyone nitro`);
+    const found = r.signals.map((s) => s.name);
+    expect(found).not.toContain('massMention');
+    expect(found).not.toContain('bait');
+  });
+
+  it('handles 100000 dot-less characters quickly', () => {
+    const start = performance.now();
+    const r = run('a'.repeat(100_000));
+    expect(performance.now() - start).toBeLessThan(200);
+    expect(r.score).toBe(0);
+  });
+
+  it('folds accents on either side', () => {
+    const lax = (terms: string[]) => configSchema.parse({ baitTerms: terms });
+    expect(
+      run('GRATIS https://exemplo.org', {}, lax(['grátis'])).signals.map((s) => s.name),
+    ).toContain('bait');
+    expect(
+      run('grátis https://exemplo.org', {}, lax(['gratis'])).signals.map((s) => s.name),
+    ).toContain('bait');
+  });
+
+  it('ignores invisible characters inside bait terms', () => {
+    expect(names('ni\u200Btro https://exemplo.org')).toContain('bait');
+    expect(names('ni\u00ADtro https://exemplo.org')).toContain('bait');
+  });
+
+  it('gives no signal to a masked link pointing to an allowed domain', () => {
+    const r = run('[golpe.gift](https://discord.com)');
+    expect(r.score).toBe(0);
+    expect(r.signals).toEqual([]);
+  });
+});

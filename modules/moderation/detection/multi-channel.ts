@@ -36,6 +36,10 @@ export class MultiChannelTracker {
     windowMs: number,
   ): number {
     const entries = (this.authors.get(authorId) ?? []).filter((e) => nowMs - e.atMs < windowMs);
+    // One entry per (domain, channel): repeats refresh the timestamp, so filler
+    // posts in one channel cannot push real sightings out of the bounded list.
+    const existing = entries.findIndex((e) => e.domain === domain && e.channelId === channelId);
+    if (existing !== -1) entries.splice(existing, 1);
     entries.push({ domain, channelId, atMs: nowMs });
     while (entries.length > this.maxEntries) entries.shift();
 

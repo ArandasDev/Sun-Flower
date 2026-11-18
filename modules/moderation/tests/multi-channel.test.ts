@@ -63,3 +63,24 @@ describe('MultiChannelTracker', () => {
     expect(tracker.authorCount).toBe(0);
   });
 });
+
+describe('MultiChannelTracker flooding', () => {
+  it('survives repeated filler links from the same channel', () => {
+    const tracker = new MultiChannelTracker();
+    tracker.record('a1', 'golpe.gift', 'c1', 1000, WINDOW);
+    tracker.record('a1', 'golpe.gift', 'c2', 1100, WINDOW);
+    for (let msg = 0; msg < 3; msg += 1) {
+      for (let i = 0; i < 20; i += 1) {
+        tracker.record('a1', `filler${String(i)}.org`, 'c1', 2000 + msg * 100 + i, WINDOW);
+      }
+    }
+    expect(tracker.record('a1', 'golpe.gift', 'c3', 3000, WINDOW)).toBe(3);
+  });
+
+  it('does not grow the entry count on same-channel repeats', () => {
+    const tracker = new MultiChannelTracker({ maxEntries: 3 });
+    tracker.record('a1', 'x.gift', 'c1', 1000, WINDOW);
+    for (let i = 0; i < 20; i += 1) tracker.record('a1', 'y.gift', 'c2', 1100 + i, WINDOW);
+    expect(tracker.record('a1', 'x.gift', 'c3', 2000, WINDOW)).toBe(2);
+  });
+});
