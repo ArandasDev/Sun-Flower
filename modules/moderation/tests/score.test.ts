@@ -118,7 +118,7 @@ describe('analyzeMessage', () => {
     );
     expect(r.signals.filter((s) => s.name === 'lookalike')).toHaveLength(1);
     expect(r.signals.filter((s) => s.name === 'masked')).toHaveLength(1);
-    expect(r.domains).toEqual(['dlscord.gift', 'dlscord.com', 'a1.org', 'b1.org']);
+    expect(r.domains).toEqual(['a1.org', 'b1.org', 'dlscord.gift', 'dlscord.com']);
   });
 
   it('uses weights and thresholds from config', () => {
@@ -239,5 +239,27 @@ describe('analyzeMessage brand names as bait', () => {
     expect(names('discord dlscord.gift')).not.toContain('bait');
     expect(names('steam gift https://steamcomunity.com/trade')).toContain('bait');
     expect(names('steam dlscord.gift')).not.toContain('bait');
+  });
+});
+
+describe('analyzeMessage link budget', () => {
+  it('analyzes the clickable link even after 20 bare fillers', () => {
+    const fillers = Array.from({ length: 20 }, (_, i) => `a${String(i + 1)}.discord.com`).join(' ');
+    const r = run(`${fillers} free nitro https://dlscord-gift.com/x`);
+    expect(r.level).toBe('confirmed');
+    expect(r.domains).toEqual(['dlscord-gift.com']);
+  });
+
+  it('analyzes at most 20 distinct non-allowed domains', () => {
+    const links = Array.from({ length: 30 }, (_, i) => `https://site${String(i)}.org`).join(' ');
+    const r = run(links);
+    expect(r.domains).toHaveLength(20);
+    expect(r.domains[0]).toBe('site0.org');
+  });
+
+  it('skips allowed domains before applying the cap', () => {
+    const allowed = Array.from({ length: 25 }, (_, i) => `https://x${String(i)}.discord.com`);
+    const r = run(`${allowed.join(' ')} https://golpe.gift`);
+    expect(r.domains).toEqual(['golpe.gift']);
   });
 });

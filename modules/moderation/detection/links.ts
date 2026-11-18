@@ -6,7 +6,8 @@ export interface ExtractedLink {
 }
 
 export const MAX_SCANNED_CHARS = 4000;
-const MAX_LINKS = 20;
+/** Candidates returned per message; scoring analyzes at most 20 non-allowed domains. */
+const MAX_LINKS = 50;
 
 const MARKDOWN_LINK =
   /\[([^\]]{1,256})\]\(\s*<?(https?:\/\/[^\s)>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/gi;
@@ -94,6 +95,8 @@ export function parentDomains(domain: string): string[] {
 interface Found {
   index: number;
   domain: string;
+  /** Markdown or scheme URL, as opposed to a bare token. */
+  clickable: boolean;
 }
 
 function blank(text: string, start: number, length: number): string {
@@ -107,13 +110,13 @@ function scanDomains(text: string): Found[] {
 
   for (const match of text.matchAll(SCHEME_URL)) {
     const domain = normalizeDomain(match[0]);
-    if (domain !== undefined) found.push({ index: match.index, domain });
+    if (domain !== undefined) found.push({ index: match.index, domain, clickable: true });
     rest = blank(rest, match.index, match[0].length);
   }
   for (const match of rest.matchAll(BARE_DOMAIN)) {
     const domain = normalizeDomain(match[1] ?? '');
     if (domain !== undefined && isBareLinkTld(domain)) {
-      found.push({ index: match.index, domain });
+      found.push({ index: match.index, domain, clickable: false });
     }
   }
   return found.sort((a, b) => a.index - b.index);
@@ -134,6 +137,7 @@ export function extractLinks(content: string): ExtractedLink[] {
     candidates.push({
       index: match.index,
       domain,
+      clickable: true,
       ...(textDomain !== undefined && textDomain !== domain
         ? { maskedTextDomain: textDomain }
         : {}),
@@ -143,7 +147,8 @@ export function extractLinks(content: string): ExtractedLink[] {
     text = blank(text, match.index, match[0].length);
   }
   candidates.push(...scanDomains(text));
-  candidates.sort((a, b) => a.index - b.index);
+  // Clickable links first, so bare fillers cannot use up the cap before the real link.
+  candidates.sort((a, b) => Number(b.clickable) - Number(a.clickable) || a.index - b.index);
 
   const seen = new Set<string>();
   const links: ExtractedLink[] = [];

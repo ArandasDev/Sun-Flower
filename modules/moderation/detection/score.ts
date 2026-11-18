@@ -34,6 +34,8 @@ export interface Analysis {
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
+/** Distinct non-allowed domains analyzed per message; allowed ones do not count. */
+const MAX_ANALYZED_DOMAINS = 20;
 const MASS_MENTION = /@(?:everyone|here)(?![\p{L}\p{N}_])/u;
 
 const SCHEME_URL = /https?:\/\/\S+/gi;
@@ -89,7 +91,10 @@ export function analyzeMessage(
   for (const link of links) {
     const isBlocked = lists.isBlocked(link.domain);
     if (!isBlocked && lists.isAllowed(link.domain)) continue;
-    if (!domains.includes(link.domain)) domains.push(link.domain);
+    if (!domains.includes(link.domain)) {
+      if (domains.length === MAX_ANALYZED_DOMAINS) continue;
+      domains.push(link.domain);
+    }
     if (isBlocked) blocked = true;
     if (isLookalike(link.domain)) lookalike = true;
     if (link.maskedTextDomain !== undefined) masked = true;

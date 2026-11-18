@@ -64,20 +64,13 @@ describe('extractLinks', () => {
     expect(extractLinks('fale com joao.silva@exemplo.com.br')).toEqual([]);
   });
 
-  it('deduplicates unmasked links but keeps masked ones, in order', () => {
+  it('deduplicates unmasked links but keeps masked ones, clickable first', () => {
     expect(extractLinks('b.com a.com b.com')).toEqual([{ domain: 'b.com' }, { domain: 'a.com' }]);
     expect(extractLinks('a.com [x.com](https://a.com) [y.com](https://a.com)')).toEqual([
-      { domain: 'a.com' },
       { domain: 'a.com', maskedTextDomain: 'x.com' },
       { domain: 'a.com', maskedTextDomain: 'y.com' },
+      { domain: 'a.com' },
     ]);
-  });
-
-  it('caps at 20 links', () => {
-    const content = Array.from({ length: 25 }, (_, i) => `site${String(i)}.com`).join(' ');
-    const links = extractLinks(content);
-    expect(links).toHaveLength(20);
-    expect(links[0]).toEqual({ domain: 'site0.com' });
   });
 
   it('scans only the first 4000 characters', () => {
@@ -165,5 +158,23 @@ describe('extractLinks bare TLD rule', () => {
   it('keeps any valid TLD for scheme and markdown URLs', () => {
     expect(extractLinks('https://disco.amei/x')).toEqual([{ domain: 'disco.amei' }]);
     expect(extractLinks('[aqui](https://arquivo.txt)')).toEqual([{ domain: 'arquivo.txt' }]);
+  });
+});
+
+describe('extractLinks order and cap', () => {
+  it('returns clickable links before bare tokens', () => {
+    expect(extractLinks('a.com https://b.com [c.com](https://d.com) e.com')).toEqual([
+      { domain: 'b.com' },
+      { domain: 'd.com', maskedTextDomain: 'c.com' },
+      { domain: 'a.com' },
+      { domain: 'e.com' },
+    ]);
+  });
+
+  it('caps at 50 candidates', () => {
+    const content = Array.from({ length: 60 }, (_, i) => `site${String(i)}.com`).join(' ');
+    const links = extractLinks(content);
+    expect(links).toHaveLength(50);
+    expect(links[0]).toEqual({ domain: 'site0.com' });
   });
 });
