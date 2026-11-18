@@ -104,6 +104,11 @@ const escalationStepSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ban') }),
 ]);
 
+// Compile-time check: a parsed escalation step is always a valid Punishment.
+const _stepIsPunishment: (step: z.output<typeof escalationStepSchema>) => Punishment = (step) =>
+  step;
+void _stepIsPunishment;
+
 const escalationSchema = z.object({
   enabled: z.boolean().default(true),
   windowHours: z.number().int().min(1).max(168).default(24),
