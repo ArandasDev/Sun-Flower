@@ -9,7 +9,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 ### Atenção: ação necessária antes de atualizar
 
 - O bot passa a solicitar os intents privilegiados **Server Members** e **Message Content**. Ative-os no Discord Developer Portal (**Bot → Privileged Gateway Intents**) antes de atualizar; sem isso o login falha com `DisallowedIntents`.
-- O módulo `moderation` começa ativo e age automaticamente: em violação confirmada, apaga a mensagem e aplica timeout sem revisão da equipe. `alertChannelId` e as listas de domínios são gerenciados pelos comandos `/mod`, que chegam no próximo Pull Request. Até lá, defina `alertChannelId` direto na tabela `module_config` ou mantenha o bot desligado.
+- O módulo `moderation` começa ativo e age automaticamente: em violação confirmada, apaga a mensagem e aplica timeout sem revisão da equipe. Logo após atualizar, associe as permissões `moderation.*` aos cargos da equipe (`npm run staff -- grant`) e defina o canal de alertas com `/mod config alert-channel`; até lá, os casos são gravados sem alerta.
 
 ### Added
 
@@ -51,6 +51,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Listas de domínios bloqueados e permitidos, com os domínios oficiais e os domínios conhecidos como seguros (`discord.js.org`, `steamdb.info` e outros) inseridos a cada início, e registro de casos sem o conteúdo das mensagens.
   - Proteção contra falsos positivos: nomes das marcas não contam como isca, domínios sem esquema só contam com TLD de país ou TLD genérico comum, e todo link não permitido é avaliado, sem teto de candidatos, para que links de enchimento não escondam o link real. O caso guarda até 20 domínios, primeiro os que produziram sinal.
   - Resposta automática: em `confirmed`, apaga a mensagem e aplica timeout de forma independente; grava o caso, publica `moderation.case.created` e alerta a equipe no canal `alertChannelId`, com o resultado de cada etapa e o link da mensagem quando ela não foi apagada. Em `suspicious`, apenas alerta.
+- Módulo `moderation`, comando `/mod` (Fase 2, etapa 1), com respostas efêmeras e uma permissão por subcomando, checada antes de qualquer outra coisa:
+  - `config view | alert-channel | timeout | thresholds | exempt-role` para a configuração em tempo de execução.
+  - `domain block | allow | remove | list` para as listas de domínios, com normalização do domínio informado.
+  - `case view | list | revert | dismiss` para consultar, reverter (remover timeout, desbanir e, opcionalmente, permitir os domínios do caso, exceto imitações de marcas) e descartar casos.
+  - Ações manuais `warn`, `timeout`, `kick` e `ban`, que gravam um caso `manual`; `warn` envia mensagem direta ao membro. Recusam agir contra a própria pessoa, desenvolvedores do bot, cargos isentos e cargos com permissão `moderation.*`; `warn`, `timeout` e `kick` exigem um membro do servidor. Se o Discord recusar a ação, nenhum caso é gravado.
+- README: seção "Moderação" com as permissões a associar e o passo a passo do teste manual no servidor real.
 
 ### Changed
 

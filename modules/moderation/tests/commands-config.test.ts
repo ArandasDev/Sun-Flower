@@ -127,14 +127,6 @@ describe('/mod permissions', () => {
       expect.arrayContaining(ALL_SUBCOMMANDS.map(([group, subcommand]) => [group, subcommand])),
     );
   });
-
-  it('replies "Comando indisponível." for placeholder subcommands after the permission check', async () => {
-    const { command, check } = setup();
-    const { value, reply } = interaction(undefined, 'warn');
-    await command.handle(value);
-    expect(check).toHaveBeenCalledWith(ACTOR, 'moderation.actions.warn');
-    expect(reply).toHaveBeenCalledWith('Comando indisponível.', { ephemeral: true });
-  });
 });
 
 describe('/mod config', () => {

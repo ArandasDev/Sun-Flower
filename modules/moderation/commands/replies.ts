@@ -1,7 +1,7 @@
 export const NO_PERMISSION = 'Você não tem permissão para isso.';
 export const CONFIG_UPDATED = 'Configuração atualizada.';
 export const CONFIG_INVALID = (fields: string): string => `Configuração inválida: ${fields}.`;
-export const COMMAND_UNAVAILABLE = 'Comando indisponível.';
+export const INVALID_OPTION = (name: string): string => `Opção inválida: ${name}.`;
 export const INVALID_DOMAIN = 'Domínio inválido.';
 export const DOMAIN_SET = (list: 'block' | 'allow', domain: string): string =>
   `Domínio ${list === 'block' ? 'bloqueado' : 'permitido'}: \`${domain}\`.`;

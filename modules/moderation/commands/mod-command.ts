@@ -15,9 +15,10 @@ import {
   configTimeout,
   configView,
 } from './config.ts';
+import { actionBan, actionKick, actionTimeout, actionWarn } from './actions.ts';
 import { caseDismiss, caseList, caseRevert, caseView } from './case.ts';
 import { domainAllow, domainBlock, domainList, domainRemove } from './domain.ts';
-import { COMMAND_UNAVAILABLE, NO_PERMISSION } from './replies.ts';
+import { NO_PERMISSION } from './replies.ts';
 
 export interface ModCommandDeps {
   readonly permissions: ModuleContext['permissions'];
@@ -38,16 +39,12 @@ interface Route {
 
 const EPHEMERAL = { ephemeral: true } as const;
 
-const unavailable: Handler = async (interaction) => {
-  await interaction.reply(COMMAND_UNAVAILABLE, EPHEMERAL);
-};
-
 const CONFIG = 'moderation.config.manage';
 const DOMAINS = 'moderation.domains.manage';
 const CASES_READ = 'moderation.cases.read';
 const CASES_REVERT = 'moderation.cases.revert';
 
-/** (group/subcommand) -> permission and handler. Later tasks replace `unavailable` entries. */
+/** (group/subcommand) -> permission and handler. */
 const ROUTES: Readonly<Record<string, Route>> = {
   'config/view': { permission: CONFIG, handler: configView },
   'config/alert-channel': { permission: CONFIG, handler: configAlertChannel },
@@ -62,10 +59,10 @@ const ROUTES: Readonly<Record<string, Route>> = {
   'case/list': { permission: CASES_READ, handler: caseList },
   'case/revert': { permission: CASES_REVERT, handler: caseRevert },
   'case/dismiss': { permission: CASES_REVERT, handler: caseDismiss },
-  '/warn': { permission: 'moderation.actions.warn', handler: unavailable },
-  '/timeout': { permission: 'moderation.actions.timeout', handler: unavailable },
-  '/kick': { permission: 'moderation.actions.kick', handler: unavailable },
-  '/ban': { permission: 'moderation.actions.ban', handler: unavailable },
+  '/warn': { permission: 'moderation.actions.warn', handler: actionWarn },
+  '/timeout': { permission: 'moderation.actions.timeout', handler: actionTimeout },
+  '/kick': { permission: 'moderation.actions.kick', handler: actionKick },
+  '/ban': { permission: 'moderation.actions.ban', handler: actionBan },
 };
 
 const user = { name: 'user', description: 'Usuário alvo', type: 'user', required: true } as const;
