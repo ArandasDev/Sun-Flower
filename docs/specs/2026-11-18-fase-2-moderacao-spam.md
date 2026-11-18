@@ -231,9 +231,9 @@ Se o PR F crescer demais, ele se divide em detecção e resposta num PR e comand
 
 ## 9. Critérios de conclusão desta etapa
 
-- [ ] Um flood de uma conta sem cargo é apagado, a conta recebe a punição configurada e o alerta chega.
-- [ ] A reincidência aplica o degrau seguinte dentro da janela.
-- [ ] Cada regra tem testes com casos positivos e negativos.
-- [ ] Toda ação automática de spam gera um caso e pode ser revertida por `/mod case revert`.
-- [ ] Nenhum comando novo executa sem `moderation.config.manage`.
-- [ ] Nenhum conteúdo de mensagem aparece em log ou no banco.
+- [x] Um flood de uma conta sem cargo é apagado, a conta recebe a punição configurada e o alerta chega.
+- [x] A reincidência aplica o degrau seguinte dentro da janela.
+- [x] Cada regra tem testes com casos positivos e negativos.
+- [x] Toda ação automática de spam gera um caso e pode ser revertida por `/mod case revert`.
+- [x] Nenhum comando novo executa sem `moderation.config.manage`.
+- [x] Nenhum conteúdo de mensagem aparece em log ou no banco.

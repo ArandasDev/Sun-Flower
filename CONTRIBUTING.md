@@ -61,6 +61,8 @@ Verificação obrigatória antes de abrir um Pull Request: **`npm run check`**, 
 
 Um teste só é declarado aprovado se foi efetivamente executado. Quando um teste não puder ser executado, isso é dito explicitamente no Pull Request, com o motivo.
 
+Testes que dependem de tempo usam folga de pelo menos dez vezes o tempo esperado, e testes de desempenho fazem uma execução de aquecimento antes de medir. Um teste instável é corrigido; ele nunca é reexecutado até passar.
+
 ## 6. Documentação
 
 Atualize no mesmo Pull Request o documento correspondente à alteração:
@@ -109,7 +111,11 @@ As informações abaixo nunca entram no repositório, em nenhum desses lugares:
 | Infraestrutura             | IPs, hostnames internos, URLs privadas, caminhos locais da máquina de desenvolvimento. |
 | Conteúdo do servidor       | Mensagens, nomes de canais ou cargos privados, dados de membros.                       |
 
-Esses valores ficam somente no `.env` local ou no ambiente de execução. Documentação, exemplos e testes usam o nome da variável de ambiente (`DISCORD_GUILD_ID`) ou valores fictícios claramente falsos (`000000000000000000`).
+Esses valores ficam somente no `.env` local ou no ambiente de execução. Documentação, exemplos e testes usam o nome da variável de ambiente (`DISCORD_GUILD_ID`) ou valores fictícios claramente falsos:
+
+- IDs do Discord: dígitos repetidos (`000000000000000000`, `111111111111111111`).
+- Domínios e e-mails: `example.com`, `.example` ou `.test` (`contato@exemplo.example.com`). Domínios de golpe inventados (`dlscord.gift`) são permitidos nos testes de detecção.
+- IPs: as faixas de documentação `192.0.2.0/24`, `198.51.100.0/24` e `203.0.113.0/24`.
 
 Commits usam como e-mail de autor o endereço _noreply_ do GitHub ([GIT.md §8](docs/GIT.md#8-higiene-do-repositório)).
 
@@ -134,6 +140,8 @@ Agentes de IA seguem todas as regras deste documento e de `docs/GIT.md`, mais as
 
 **Autorização explícita** significa um pedido direto da pessoa mantenedora, na tarefa atual, para aquela ação específica. Uma autorização não vale para tarefas seguintes nem para ações diferentes.
 
+Exceção: quando a pessoa mantenedora aprova um plano de implementação e escolhe como executá-lo, isso autoriza, para aquele plano, commits e push nas branches de trabalho do plano e a abertura dos Pull Requests dele. Com a correção automática de Pull Request ligada pela pessoa mantenedora, autoriza também enviar ao Pull Request as correções de CI. Merge, tag, release e qualquer outra branch continuam exigindo autorização explícita.
+
 ### 8.1. O agente sempre
 
 - Lê os documentos da seção 2 antes de alterar o projeto.
@@ -148,7 +156,7 @@ Agentes de IA seguem todas as regras deste documento e de `docs/GIT.md`, mais as
 ### 8.2. O agente nunca, sem autorização explícita
 
 - Faz commit, push, merge, tag ou release.
-- Executa comandos destrutivos (`git reset --hard`, `git clean -fd`, force push, exclusão de branches ou arquivos de outras pessoas).
+- Executa comandos destrutivos (`git reset --hard`, `git clean -fd`, force push, exclusão de branches ou arquivos de outras pessoas). Depois do merge, o agente pode excluir a própria branch de trabalho e os seus arquivos temporários ([GIT.md §4](docs/GIT.md#4-pull-requests)).
 - Altera configurações protegidas, workflows de CI, permissões ou dependências.
 
 ### 8.3. O agente nunca, em nenhuma hipótese
@@ -157,13 +165,21 @@ Agentes de IA seguem todas as regras deste documento e de `docs/GIT.md`, mais as
 - Afirma que algo funciona sem ter executado ou validado.
 - Remove testes ou reduz verificações para fazer uma alteração passar.
 
+### 8.4. Revisão de código produzido por agente
+
+- Cada tarefa é revisada por um revisor independente, que não é quem implementou, antes da tarefa seguinte.
+- Ao fim de cada Pull Request, a branch inteira passa por uma revisão independente.
+- Código de segurança ou de detecção (permissões, ações de moderação, validação de entrada) é revisado com tentativas de burla, executadas contra o código real.
+- Quem implementa nunca aprova o próprio trabalho.
+- Toda decisão que o agente tomar no lugar da pessoa mantenedora é listada para ela ao fim do trabalho, com o custo caso esteja errada.
+
 A revisão humana é responsável por aceitar ou rejeitar a contribuição. Código produzido por IA não recebe tratamento especial nem dispensa testes.
 
 ## 9. Governança
 
 Alterações nestas regras são feitas por Pull Request, com justificativa, e aprovadas pela pessoa mantenedora.
 
-Estas diretrizes são revisadas ao fim da Fase 1 do [ROADMAP](docs/ROADMAP.md), para corrigir regras que se mostrarem difíceis de aplicar.
+Estas diretrizes são revisadas ao fim da Fase 1 do [ROADMAP](docs/ROADMAP.md), para corrigir regras que se mostrarem difíceis de aplicar. Essa revisão foi feita em 2026-11-18.
 
 ---
 

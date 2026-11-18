@@ -68,3 +68,5 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Permissões em duas camadas: lista de desenvolvedores do bot para as permissões `core.*` e cargos do servidor para as permissões dos módulos; o dono e os administradores do servidor não recebem permissões automáticas.
 - Fase 3 do ROADMAP passa a exigir revisão ofensiva por três subagentes antes da release.
 - ROADMAP: Fase 0 concluída (ruleset `main-protection` ativo, CI obrigatória) e Fase 2 em andamento.
+- ROADMAP: Fases 1 e 2 concluídas, com `/ping` e a moderação (phishing, spam e flood) verificados no servidor real.
+- CONTRIBUTING revisado ao fim da Fase 1: autorização ao executar um plano aprovado, revisão independente de código produzido por agente (§8.4), regras para testes dependentes de tempo, valores fictícios para domínios, e-mails e IPs, e exclusão da própria branch de trabalho após o merge.

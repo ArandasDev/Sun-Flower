@@ -201,6 +201,6 @@ Todos com Vitest, banco SQLite em memória e IDs fictícios (`000000000000000000
 
 Os critérios da [Fase 1 no ROADMAP](../ROADMAP.md#fase-1--core--discord-mínimo), mais:
 
-- [ ] `npm run check` passa com todos os testes da seção 12.
-- [ ] Verificação de vazamento por subagentes antes de cada Pull Request ([CONTRIBUTING.md §7.2](../../CONTRIBUTING.md#72-verificação-de-vazamento-antes-do-pull-request)).
-- [ ] `/ping` respondido no servidor real, verificado pela pessoa mantenedora.
+- [x] `npm run check` passa com todos os testes da seção 12.
+- [x] Verificação de vazamento por subagentes antes de cada Pull Request ([CONTRIBUTING.md §7.2](../../CONTRIBUTING.md#72-verificação-de-vazamento-antes-do-pull-request)).
+- [x] `/ping` respondido no servidor real, verificado pela pessoa mantenedora.
