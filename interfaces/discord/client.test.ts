@@ -34,9 +34,9 @@ function fakeInteraction(member: unknown) {
       await Promise.resolve();
       calls.push({ reply: options });
     },
-    deferReply: async () => {
+    deferReply: async (options: unknown) => {
       await Promise.resolve();
-      calls.push('deferReply');
+      calls.push({ deferReply: options });
     },
     editReply: async (options: unknown) => {
       await Promise.resolve();
@@ -71,14 +71,14 @@ describe('toRawInteraction', () => {
     const raw = toRawInteraction(interaction);
     await raw.reply('a', true);
     await raw.reply('b', false);
-    await raw.deferReply();
+    await raw.deferReply(true);
     await raw.editReply('c');
 
     const noMentions = { parse: [] };
     expect(calls).toEqual([
       { reply: { content: 'a', flags: MessageFlags.Ephemeral, allowedMentions: noMentions } },
       { reply: { content: 'b', allowedMentions: noMentions } },
-      'deferReply',
+      { deferReply: { flags: MessageFlags.Ephemeral } },
       { editReply: { content: 'c', allowedMentions: noMentions } },
     ]);
   });

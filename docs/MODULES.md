@@ -431,6 +431,10 @@ Alterações de configuração não deverão exigir reinicialização completa d
 
 Um `CommandDefinition` pode declarar `options`, tanto no comando quanto em cada subcomando. Cada opção tem `name`, `description`, `type` (`string`, `integer`, `boolean`, `user`, `channel` ou `role`) e, opcionalmente, `required`, `minValue` e `maxValue` (inteiros), `maxLength` (texto) e `choices`. `choices` vale somente para opções `string`: é uma lista de textos em que o nome de cada escolha é igual ao valor. O handler lê os valores por `interaction.options` (`getString`, `getInteger`, `getBoolean`, `getUser`, `getChannel`, `getRole`).
 
+### Respostas de comando
+
+O handler responde uma única vez por `interaction.reply(content, { ephemeral })`; uma segunda resposta é ignorada. Se o handler não responder em 2,5 s, a interface adia a interação com uma resposta efêmera, e a resposta posterior edita essa resposta adiada. Como o Discord não permite mudar a visibilidade de uma resposta adiada, uma resposta lenta é sempre efêmera e nunca aparece para o canal. O comando que quiser uma resposta pública precisa responder em até 2,5 s.
+
 ## 9. Permissões
 
 O Core será responsável pela autorização centralizada das operações.

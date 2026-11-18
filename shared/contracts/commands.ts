@@ -5,9 +5,10 @@ export interface Actor {
 
 export interface ReplyOptions {
   /**
-   * Shows the reply only to the user who ran the command. A reply sent after the automatic
-   * deferral (2.5 s) is delivered as an edit of the deferred, non-ephemeral response, so it
-   * is visible to everyone regardless of this flag.
+   * Shows the reply only to the user who ran the command. The automatic deferral (2.5 s) is
+   * always ephemeral, so a reply sent after it is delivered as an edit of that ephemeral
+   * response and stays private regardless of this flag. A command that wants a public reply
+   * must answer within 2.5 s.
    */
   readonly ephemeral?: boolean;
 }
