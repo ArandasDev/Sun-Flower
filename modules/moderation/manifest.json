@@ -1,0 +1,25 @@
+{
+  "id": "moderation",
+  "name": "Moderation",
+  "description": "Phishing detection and moderation actions",
+  "version": "1.0.0",
+  "apiVersion": "1.1.0",
+  "entrypoint": "index.ts",
+  "enabledByDefault": true,
+  "dependencies": [],
+  "capabilities": ["guild.moderate", "guild.message"],
+  "permissions": [
+    "moderation.config.manage",
+    "moderation.domains.manage",
+    "moderation.cases.read",
+    "moderation.cases.revert",
+    "moderation.actions.warn",
+    "moderation.actions.timeout",
+    "moderation.actions.kick",
+    "moderation.actions.ban"
+  ],
+  "events": {
+    "subscribes": ["discord.message.created", "discord.message.updated"],
+    "publishes": ["moderation.case.created", "moderation.case.reverted"]
+  }
+}
