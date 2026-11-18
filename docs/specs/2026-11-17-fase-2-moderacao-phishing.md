@@ -102,8 +102,8 @@ interface GuildActions {
 - Ações contra um desenvolvedor do bot ou contra o próprio bot devolvem `forbidden` sem chamar o Discord.
 - `timeout` aceita de 1 minuto a 28 dias. Fora disso, devolve `failed` sem chamar o Discord.
 - `ban` aceita `deleteMessageSeconds` de 0 a 604800 (7 dias).
-- Toda ação executada gera um log `info` com `module`, `action` e `reason`. IDs de usuário não entram no log ([0008](../decisions/0008-logging-and-validation.md)).
-- O `reason` é enviado ao log de auditoria do Discord, truncado em 512 caracteres.
+- Toda ação executada gera um log `info` com `module`, `action` e `reason`. IDs de usuário não entram no log ([0008](../decisions/0008-logging-and-validation.md)): no `reason` registrado, toda sequência de 17 a 20 dígitos vira `[id]` (`<@id>` vira `<@[id]>`).
+- O `reason` é enviado sem máscara ao log de auditoria do Discord, truncado em 512 caracteres.
 - Mensagens enviadas usam `allowedMentions: { parse: [] }`.
 - Cada chamada ao Discord tem limite de 10 segundos e devolve `failed` se for excedido.
 - `getMemberRoleIds` devolve os cargos do membro (sem `@everyone`); `null` quando a pessoa não é membro (erros 10007 Unknown Member e 10013 Unknown User do Discord); `undefined` quando a consulta falhou (outro erro, limite de tempo, servidor indisponível ou módulo inativo).

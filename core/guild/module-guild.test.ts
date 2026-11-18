@@ -150,6 +150,20 @@ describe('createModuleGuild', () => {
     expect(entries[0]?.obj).toMatchObject({ reason: 'a'.repeat(512) });
   });
 
+  it('masks snowflakes in the logged reason but sends the original to the port', async () => {
+    const { guild, calls, entries } = setup(['guild.moderate']);
+    const reason = `golpe contra <@${dev}> e 12345678901234567890 (id 1234567890123456)`;
+    await guild.ban(target, reason, 0);
+    await guild.timeout(target, 60_000, reason);
+    await guild.kick(target, reason);
+    const masked = 'golpe contra <@[id]> e [id] (id 1234567890123456)';
+    for (const index of [0, 1, 2]) {
+      expect(calls[index]?.args).toContain(reason);
+      expect(entries[index]?.obj).toMatchObject({ reason: masked });
+    }
+    expect(JSON.stringify(entries)).not.toContain(dev);
+  });
+
   it('logs executed actions without identifiers', async () => {
     const { guild, entries } = setup(['guild.moderate', 'guild.message']);
     await guild.timeout(target, 60_000, 'spam');
