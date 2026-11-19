@@ -6,6 +6,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
 ### Atenção: ação necessária antes de atualizar
 
 - O bot passa a solicitar os intents privilegiados **Server Members** e **Message Content**. Ative-os no Discord Developer Portal (**Bot → Privileged Gateway Intents**) antes de atualizar; sem isso o login falha com `DisallowedIntents`.
@@ -15,30 +17,6 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 - Módulo `moderation`: detecção de spam e flood (regras `flood`, `repeat` e `mentions`) com exclusão em lote das mensagens do autor, punição configurável por regra e escalada para quem reincide (padrão `10m,1h,ban`). A exclusão em lote roda sempre em paralelo com a punição, inclusive no banimento; um banimento recusado aplica como plano B a punição mais grave das regras que não é `ban`. Novos comandos `/mod config spam-rule`, `spam-escalation` e `spam-ignore`, e resumo de spam em `/mod config view`.
 - Core 1.2.0 (aditivo): `bulkDeleteMessages` no serviço `guild` (capacidade `guild.moderate`), que apaga até 100 mensagens em lote e, quando o Discord recusa algumas (mais de 14 dias) ou o lote falha, apaga as restantes uma a uma. Devolve o total apagado e quantas saíram individualmente (decisão 0016).
-- Documentação inicial do projeto:
-  - `docs/ARCHITECTURE.md`: visão arquitetural, servidor de atuação e domínios funcionais (moderação, social, música, painel administrativo).
-  - `docs/MODULES.md`: contrato de módulo, `manifest.json`, ciclo de vida, Event Bus, permissões, configurações e testes.
-  - `docs/GIT.md`: branches, Conventional Commits, Pull Requests, Semantic Versioning, tags, releases e changelog.
-  - `docs/ROADMAP.md`: fases 0 a 5, decisões pendentes e critérios de conclusão.
-  - `CONTRIBUTING.md`: fluxo de trabalho, qualidade, documentação, segurança e regras para agentes de IA.
-  - `AGENTS.md`: resumo para agentes de IA.
-- Registros de decisão: Modular Monolith (0001), TypeScript + Node.js (0002), atuação exclusiva em um único servidor Discord (0003) e ferramentas de desenvolvimento (0004).
-- Spec da Fase 0 (base do repositório).
-- Projeto Node.js 26 + TypeScript (`strict`) com ESLint, Prettier e Vitest, executáveis por `npm run check`.
-- CI no GitHub Actions executando `npm run check` em todo Pull Request para `main`.
-- `.env.example` com as variáveis `DISCORD_TOKEN` e `DISCORD_GUILD_ID`.
-- Registros de decisão 0005 a 0009 (execução direta de TypeScript e SQLite, modelo de permissões, Event Bus, pino e zod, compatibilidade do `apiVersion`) e spec da Fase 1.
-- Core da Fase 1:
-  - Module Registry: descoberta de módulos, validação de manifesto e de `apiVersion`, ordem por dependências e ciclo de vida completo com limite de tempo por etapa; um módulo com falha não impede os demais.
-  - Event Bus local, assíncrono e isolado, com validação de prefixo e de eventos declarados no manifesto.
-  - Serviço de permissões: desenvolvedores do bot para `core.*` e cargos do servidor para as permissões dos módulos, com negação por padrão.
-  - Configuração: validação das variáveis de ambiente e da configuração de cada módulo pelo `configSchema`.
-  - Logs estruturados com pino, sem token nem IDs do Discord.
-  - Banco SQLite embutido (`SUNFLOWER_DB_PATH`) com migrações versionadas.
-  - Encerramento controlado em `SIGINT`/`SIGTERM`, com prazo de 15 segundos (código 1 se for excedido), e registro `fatal` com código 1 em erros não tratados.
-- Interface Discord: atuação exclusiva no servidor `DISCORD_GUILD_ID` (ignora interações de outros servidores e as mensagens diretas, sem sair dos servidores — decisão 0010), sincronização dos comandos dos módulos no servidor, adiamento automático e efêmero de respostas lentas (uma resposta lenta nunca fica pública), erros sem detalhes internos e respostas sem menções. Iniciada por `npm start`.
-- Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
-- Módulo `ping`: comando `/ping`, que responde `Pong!`.
 - Registros de decisão 0011 a 0015 (eventos do Discord no Event Bus, ações no servidor por capacidades, persistência dos módulos, opções de comando e configuração em tempo de execução, detecção de phishing) e spec da Fase 2, etapa 1 (moderação contra phishing).
 - Registro de decisão 0016 (exclusão de mensagens em lote) e spec da Fase 2, etapa 2 (moderação contra spam e flood).
 - Core da Fase 2, etapa 1:
@@ -63,10 +41,47 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ### Changed
 
+- Interface Discord: o adiamento automático de respostas lentas passa a ser efêmero, então uma resposta lenta nunca fica pública.
+- ROADMAP: Fase 0 concluída (ruleset `main-protection` ativo, CI obrigatória).
 - `CORE_API_VERSION` passa para 1.1.0, de forma aditiva: módulos com `apiVersion` 1.0.0 continuam compatíveis.
+- ROADMAP: Fases 1 e 2 concluídas, com `/ping` e a moderação (phishing, spam e flood) verificados no servidor real.
+- CONTRIBUTING revisado ao fim da Fase 1: autorização ao executar um plano aprovado, revisão independente de código produzido por agente (§8.4), regras para testes dependentes de tempo, valores fictícios para domínios, e-mails e IPs, e exclusão da própria branch de trabalho após o merge.
+
+## [0.1.0] - 2026-11-18
+
+### Added
+
+- Documentação inicial do projeto:
+  - `docs/ARCHITECTURE.md`: visão arquitetural, servidor de atuação e domínios funcionais (moderação, social, música, painel administrativo).
+  - `docs/MODULES.md`: contrato de módulo, `manifest.json`, ciclo de vida, Event Bus, permissões, configurações e testes.
+  - `docs/GIT.md`: branches, Conventional Commits, Pull Requests, Semantic Versioning, tags, releases e changelog.
+  - `docs/ROADMAP.md`: fases 0 a 5, decisões pendentes e critérios de conclusão.
+  - `CONTRIBUTING.md`: fluxo de trabalho, qualidade, documentação, segurança e regras para agentes de IA.
+  - `AGENTS.md`: resumo para agentes de IA.
+- Registros de decisão: Modular Monolith (0001), TypeScript + Node.js (0002), atuação exclusiva em um único servidor Discord (0003) e ferramentas de desenvolvimento (0004).
+- Spec da Fase 0 (base do repositório).
+- Projeto Node.js 26 + TypeScript (`strict`) com ESLint, Prettier e Vitest, executáveis por `npm run check`.
+- CI no GitHub Actions executando `npm run check` em todo Pull Request para `main`.
+- `.env.example` com as variáveis `DISCORD_TOKEN` e `DISCORD_GUILD_ID`.
+- Registros de decisão 0005 a 0009 (execução direta de TypeScript e SQLite, modelo de permissões, Event Bus, pino e zod, compatibilidade do `apiVersion`) e spec da Fase 1.
+- Core da Fase 1:
+  - Module Registry: descoberta de módulos, validação de manifesto e de `apiVersion`, ordem por dependências e ciclo de vida completo com limite de tempo por etapa; um módulo com falha não impede os demais.
+  - Event Bus local, assíncrono e isolado, com validação de prefixo e de eventos declarados no manifesto.
+  - Serviço de permissões: desenvolvedores do bot para `core.*` e cargos do servidor para as permissões dos módulos, com negação por padrão.
+  - Configuração: validação das variáveis de ambiente e da configuração de cada módulo pelo `configSchema`.
+  - Logs estruturados com pino, sem token nem IDs do Discord.
+  - Banco SQLite embutido (`SUNFLOWER_DB_PATH`) com migrações versionadas.
+  - Encerramento controlado em `SIGINT`/`SIGTERM`, com prazo de 15 segundos (código 1 se for excedido), e registro `fatal` com código 1 em erros não tratados.
+- Interface Discord: atuação exclusiva no servidor `DISCORD_GUILD_ID` (ignora interações de outros servidores e as mensagens diretas, sem sair dos servidores — decisão 0010), sincronização dos comandos dos módulos no servidor, adiamento automático de respostas lentas, erros sem detalhes internos e respostas sem menções. Iniciada por `npm start`.
+- Comando `npm run staff -- add|remove|list` para gerenciar os desenvolvedores do bot sem conectar ao Discord.
+- Módulo `ping`: comando `/ping`, que responde `Pong!`.
+
+### Changed
+
 - **BREAKING:** `apiVersion` do manifesto passa a ser a versão SemVer completa do contrato do Core (`"1.0.0"`), com compatibilidade por `MAJOR` igual e `MINOR.PATCH` menor ou igual ao do Core.
 - Permissões em duas camadas: lista de desenvolvedores do bot para as permissões `core.*` e cargos do servidor para as permissões dos módulos; o dono e os administradores do servidor não recebem permissões automáticas.
 - Fase 3 do ROADMAP passa a exigir revisão ofensiva por três subagentes antes da release.
-- ROADMAP: Fase 0 concluída (ruleset `main-protection` ativo, CI obrigatória) e Fase 2 em andamento.
-- ROADMAP: Fases 1 e 2 concluídas, com `/ping` e a moderação (phishing, spam e flood) verificados no servidor real.
-- CONTRIBUTING revisado ao fim da Fase 1: autorização ao executar um plano aprovado, revisão independente de código produzido por agente (§8.4), regras para testes dependentes de tempo, valores fictícios para domínios, e-mails e IPs, e exclusão da própria branch de trabalho após o merge.
+
+[Unreleased]: https://github.com/ArandasDev/Sun-Flower/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ArandasDev/Sun-Flower/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/ArandasDev/Sun-Flower/releases/tag/v0.1.0
