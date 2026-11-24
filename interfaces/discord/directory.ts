@@ -1,5 +1,6 @@
-import { Events, type Client } from 'discord.js';
+import { Events, type Client, type ClientEvents } from 'discord.js';
 
+import type { CoreHandle } from '../../core/application/core.ts';
 import { withTimeout } from '../../core/infrastructure/timeout.ts';
 import type {
   BotStatus,
@@ -36,17 +37,41 @@ export function createMemberDirectory(client: Client, guildId: string): MemberDi
   };
 }
 
+/** The client events that change the connection state, and the state each one means. */
+const CONNECTION_EVENTS: readonly (readonly [keyof ClientEvents, ConnectionState])[] = [
+  [Events.ClientReady, 'ready'],
+  [Events.ShardResume, 'ready'],
+  [Events.ShardDisconnect, 'disconnected'],
+  [Events.ShardReconnecting, 'connecting'],
+];
+
+/** Calls `listener` with the new state on every connection event of the client. */
+export function onConnectionChange(
+  client: Client,
+  listener: (state: ConnectionState) => void,
+): void {
+  for (const [event, state] of CONNECTION_EVENTS) {
+    client.on(event, () => {
+      listener(state);
+    });
+  }
+}
+
+/** Publishes `core.discord.connection.changed` on every connection event of the client. */
+export function publishConnectionChanges(
+  client: Client,
+  core: Pick<CoreHandle, 'publishCoreEvent'>,
+): void {
+  onConnectionChange(client, (state) => {
+    core.publishCoreEvent('core.discord.connection.changed', { state });
+  });
+}
+
 /** Tracks the latest connection state from the client events; `now` is injectable for tests. */
 export function createBotStatus(client: Client, now: () => number = Date.now): BotStatus {
   let state: ConnectionState = 'connecting';
-  client.on(Events.ClientReady, () => {
-    state = 'ready';
-  });
-  client.on(Events.ShardDisconnect, () => {
-    state = 'disconnected';
-  });
-  client.on(Events.ShardReconnecting, () => {
-    state = 'connecting';
+  onConnectionChange(client, (next) => {
+    state = next;
   });
   return { connection: () => state, startedAt: now() };
 }

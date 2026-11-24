@@ -14,6 +14,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Eventos `core.*` e `subscribe` para as interfaces.
 - Versão das configurações de módulo, com detecção de conflito.
 - Validação das variáveis do painel (`PANEL_*`, `DISCORD_CLIENT_*` e `SESSION_SECRET`).
+- Interface `dashboard`, iniciada com o bot quando `PANEL_PUBLIC_URL` está definida:
+  - servidor Fastify só em `127.0.0.1`, com cabeçalhos de segurança, limites de requisições e corpo só em JSON;
+  - login com Discord OAuth2 e PKCE, sessões com CSRF, `GET /api/me` e `POST /api/logout`;
+  - `GET /api/status` (conexão com o Discord, módulos e tempo no ar) para desenvolvedores e o dono;
+  - canal ao vivo `/api/live` (WebSocket) com presença e estado do bot, filtrado pelas permissões de cada pessoa.
+- Diretório de membros e estado da conexão na interface Discord, que publica `core.discord.connection.changed`.
 
 ### Changed
 

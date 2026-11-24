@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Client } from 'discord.js';
 
-import { createBotStatus, createMemberDirectory } from './directory.ts';
+import {
+  createBotStatus,
+  createMemberDirectory,
+  onConnectionChange,
+  publishConnectionChanges,
+} from './directory.ts';
 
 const GUILD = '999999999999999999';
 const OWNER = '111111111111111111';
@@ -110,5 +115,40 @@ describe('createBotStatus', () => {
     expect(status.connection()).toBe('disconnected');
     emitter.emit('shardReconnecting');
     expect(status.connection()).toBe('connecting');
+    emitter.emit('shardResume');
+    expect(status.connection()).toBe('ready');
+  });
+});
+
+describe('onConnectionChange', () => {
+  it('maps every connection event to a state', () => {
+    const emitter = new EventEmitter();
+    const states: string[] = [];
+    onConnectionChange(emitter as unknown as Client, (state) => states.push(state));
+    emitter.emit('clientReady');
+    emitter.emit('shardDisconnect');
+    emitter.emit('shardReconnecting');
+    emitter.emit('shardResume');
+    expect(states).toEqual(['ready', 'disconnected', 'connecting', 'ready']);
+  });
+});
+
+describe('publishConnectionChanges', () => {
+  it('publishes core.discord.connection.changed for ready, disconnect, reconnecting and resume', () => {
+    const emitter = new EventEmitter();
+    const published: { type: string; payload: unknown }[] = [];
+    publishConnectionChanges(emitter as unknown as Client, {
+      publishCoreEvent: (type, payload) => published.push({ type, payload }),
+    });
+    emitter.emit('clientReady');
+    emitter.emit('shardDisconnect');
+    emitter.emit('shardReconnecting');
+    emitter.emit('shardResume');
+    expect(published).toEqual([
+      { type: 'core.discord.connection.changed', payload: { state: 'ready' } },
+      { type: 'core.discord.connection.changed', payload: { state: 'disconnected' } },
+      { type: 'core.discord.connection.changed', payload: { state: 'connecting' } },
+      { type: 'core.discord.connection.changed', payload: { state: 'ready' } },
+    ]);
   });
 });

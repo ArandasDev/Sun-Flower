@@ -3,12 +3,22 @@ import { Events, type Client, type Guild, type Interaction, type Message } from 
 
 import { startCore, type CoreHandle } from '../../core/application/core.ts';
 import { installShutdownHandlers } from '../../core/application/shutdown.ts';
-import { EnvironmentError, loadEnvironment } from '../../core/configuration/environment.ts';
+import {
+  EnvironmentError,
+  loadEnvironment,
+  type Source,
+} from '../../core/configuration/environment.ts';
+import {
+  loadPanelEnvironment,
+  type PanelEnvironment,
+} from '../../core/configuration/panel-environment.ts';
 import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import { createDiscordOAuth } from '../dashboard/oauth.ts';
+import { startDashboard, type DashboardHandle } from '../dashboard/server.ts';
 import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
-import type { ConnectionState } from '../dashboard/ports.ts';
+import { createBotStatus, createMemberDirectory, publishConnectionChanges } from './directory.ts';
 import { createDiscordGateway, createGuildActions } from './guild-actions.ts';
 import { isAllowedInteraction } from './guild-guard.ts';
 import {
@@ -19,6 +29,10 @@ import {
 } from './messages.ts';
 
 export const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
+/** The compiled panel the dashboard serves. */
+export const DASHBOARD_STATIC_DIR = fileURLToPath(
+  new URL('../dashboard/app/dist/', import.meta.url),
+);
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -72,18 +86,7 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     enqueue(sync);
   });
 
-  const publishConnection = (state: ConnectionState): void => {
-    core.publishCoreEvent('core.discord.connection.changed', { state });
-  };
-  client.on(Events.ClientReady, () => {
-    publishConnection('ready');
-  });
-  client.on(Events.ShardDisconnect, () => {
-    publishConnection('disconnected');
-  });
-  client.on(Events.ShardReconnecting, () => {
-    publishConnection('connecting');
-  });
+  publishConnectionChanges(client, core);
 
   client.on(Events.GuildCreate, (guild: Guild) => {
     if (guild.id === guildId) enqueue(sync);
@@ -131,7 +134,52 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
   });
 }
 
-/** Starts the bot: environment, logger, Core, shutdown handlers, Discord client and login. */
+export interface StartPanelOptions {
+  readonly source: Source;
+  readonly client: Client;
+  readonly guildId: string;
+  readonly core: CoreHandle;
+  readonly logger: Logger;
+}
+
+/**
+ * Starts the web panel when PANEL_PUBLIC_URL is set. Never throws: an invalid configuration or a
+ * failed start is logged (variable names or the error name only) and the bot runs without a panel.
+ * Call it before the login, so the connection status sees the first events.
+ */
+export async function startPanel(options: StartPanelOptions): Promise<DashboardHandle | null> {
+  const { client, logger } = options;
+  let env: PanelEnvironment | null;
+  try {
+    env = loadPanelEnvironment(options.source);
+  } catch (error) {
+    if (error instanceof EnvironmentError) {
+      logger.error({ variables: error.variables }, 'panel configuration is invalid; panel off');
+    } else {
+      logger.error({ error: errorSummary(error).name }, 'panel configuration failed; panel off');
+    }
+    return null;
+  }
+  if (env === null) return null;
+  try {
+    const handle = await startDashboard({
+      env,
+      core: options.core,
+      directory: createMemberDirectory(client, options.guildId),
+      status: createBotStatus(client, () => Math.round(performance.timeOrigin)),
+      oauth: createDiscordOAuth(env),
+      logger,
+      staticDir: DASHBOARD_STATIC_DIR,
+    });
+    logger.info({ port: env.port }, 'panel started');
+    return handle;
+  } catch (error) {
+    logger.error({ error: errorSummary(error).name }, 'panel failed to start; panel off');
+    return null;
+  }
+}
+
+/** Starts the bot: environment, logger, Core, panel, shutdown handlers, Discord client and login. */
 export async function main(): Promise<void> {
   let environment;
   try {
@@ -165,10 +213,19 @@ export async function main(): Promise<void> {
     return;
   }
 
+  let dashboard: DashboardHandle | null = null;
   const shutdown = async (): Promise<void> => {
-    // Stop feeding events, let the modules drain while REST still works, then disconnect.
+    // Stop feeding events, close the panel, let the modules drain while REST still works, then
+    // disconnect.
     client.removeAllListeners();
     try {
+      if (dashboard !== null) {
+        try {
+          await dashboard.close();
+        } catch (error) {
+          logger.error({ error: errorSummary(error).name }, 'panel failed to close');
+        }
+      }
       await core.stop();
     } finally {
       await client.destroy();
@@ -176,6 +233,13 @@ export async function main(): Promise<void> {
   };
   const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
   wireClient(client, core, environment.guildId, logger);
+  dashboard = await startPanel({
+    source: process.env,
+    client,
+    guildId: environment.guildId,
+    core,
+    logger,
+  });
 
   try {
     await client.login(environment.discordToken);

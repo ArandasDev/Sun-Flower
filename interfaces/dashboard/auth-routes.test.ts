@@ -103,6 +103,7 @@ async function build(overrides: Partial<DashboardDeps> = {}): Promise<FastifyIns
     permissions,
     sessions,
     declaredPermissions: () => DECLARED,
+    subscribe: () => () => undefined,
   } as unknown as CoreHandle;
   const staticDir = join(root, 'public');
   app = await buildDashboard({

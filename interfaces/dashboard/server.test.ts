@@ -37,7 +37,7 @@ function makeEnv(trustProxy: string[] = []): PanelEnvironment {
 function makeDeps(overrides: Partial<DashboardDeps> = {}): DashboardDeps {
   return {
     env: makeEnv(),
-    core: {} as CoreHandle,
+    core: { subscribe: () => () => undefined } as unknown as CoreHandle,
     directory: { lookup: () => Promise.resolve(undefined) },
     status: { connection: () => 'ready', startedAt: 0 },
     oauth: {} as OAuthClient,

@@ -13,8 +13,10 @@ import type { PanelEnvironment } from '../../core/configuration/panel-environmen
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
 import { apiError } from './errors.ts';
+import { LiveHub, type LiveClock } from './live.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
 import { CHANGING_METHODS, createSessionAuth, type SessionAuth } from './session.ts';
+import { registerStatusRoute, statusSnapshot } from './status-route.ts';
 
 export { SESSION_COOKIE } from './session.ts';
 
@@ -58,11 +60,22 @@ export interface DashboardDeps {
   /** The directory with the compiled panel (index.html and assets). */
   readonly staticDir: string;
   readonly now?: () => number;
+  /** Time and timers of the live channel; tests pass a clock they advance by hand. */
+  readonly liveClock?: LiveClock;
   /**
-   * Called with the session's idHash after `POST /api/logout` deleted it; the seam Task 8 uses to
-   * close that session's live connections. Errors it throws are logged, never sent.
+   * Called with the session's idHash after `POST /api/logout` deleted it, after the live
+   * connections of that session were closed. Errors it throws are logged, never sent.
    */
   readonly onLogout?: (idHash: string) => void;
+}
+
+const liveHubs = new WeakMap<FastifyInstance, LiveHub>();
+
+/** The live channel of a dashboard built by `buildDashboard`. */
+export function liveHubOf(app: FastifyInstance): LiveHub {
+  const hub = liveHubs.get(app);
+  if (hub === undefined) throw new Error('not a dashboard instance');
+  return hub;
 }
 
 export interface DashboardHandle {
@@ -265,6 +278,19 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     },
   );
 
+  const now = deps.now ?? Date.now;
+  const live = new LiveHub({
+    core: deps.core,
+    auth,
+    directory: deps.directory,
+    publicUrl: env.publicUrl,
+    statusSnapshot: () => statusSnapshot(deps.core, deps.status, now),
+    logger,
+    ...(deps.liveClock === undefined ? {} : { clock: deps.liveClock }),
+  });
+  liveHubs.set(app, live);
+  await live.register(app);
+
   registerAuthRoutes(app, {
     env,
     core: deps.core,
@@ -272,9 +298,13 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     oauth: deps.oauth,
     logger,
     auth,
-    now: deps.now ?? Date.now,
-    ...(deps.onLogout === undefined ? {} : { onLogout: deps.onLogout }),
+    now,
+    onLogout: (idHash) => {
+      live.revokeSession(idHash);
+      deps.onLogout?.(idHash);
+    },
   });
+  registerStatusRoute(app, { core: deps.core, status: deps.status, auth, now });
 
   await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
 
