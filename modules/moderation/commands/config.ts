@@ -1,5 +1,6 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
 import type { ModerationConfig, Punishment, SpamRuleName } from '../config.ts';
+import type { ConfigSnapshot } from '../operations/config.ts';
 import { formatSteps, parseSteps } from '../spam/escalation.ts';
 import type { ModCommandDeps } from './mod-command.ts';
 import { CONFIG_INVALID, CONFIG_UPDATED, INVALID_OPTION } from './replies.ts';
@@ -67,7 +68,12 @@ export async function configView(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const config = deps.config.get<ModerationConfig>();
+  const result = await deps.operations.execute('moderation.config.view', interaction.actor, {});
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
+    return;
+  }
+  const { config } = result.data as ConfigSnapshot;
   const channel =
     config.alertChannelId === undefined ? 'não configurado' : `<#${config.alertChannelId}>`;
   const roles =

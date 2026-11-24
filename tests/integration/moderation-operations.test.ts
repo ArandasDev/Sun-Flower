@@ -47,6 +47,12 @@ const run = (name: string, actor: Actor, input: unknown) =>
 describe('moderation operations through the Core', () => {
   it('forbids a member without grants on every guarded operation and writes no case', async () => {
     const calls: [string, unknown][] = [
+      ['moderation.config.view', {}],
+      ['moderation.config.update', { expectedVersion: 0, changes: {} }],
+      ['moderation.domains.list', { list: 'block' }],
+      ['moderation.domains.block', { domain: 'golpe.example' }],
+      ['moderation.domains.allow', { domain: 'golpe.example' }],
+      ['moderation.domains.remove', { domain: 'golpe.example' }],
       ['moderation.cases.list', {}],
       ['moderation.cases.view', { id: 1 }],
       ['moderation.cases.revert', { id: 1 }],

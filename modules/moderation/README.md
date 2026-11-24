@@ -181,7 +181,7 @@ O módulo registra estas operações no Core (contrato em [docs/MODULES.md §5.3
 | `moderation.actions.kick`    | `moderation.actions.kick`    | `{ userId, reason }`                                      | `{ caseId }`                                                                                              |
 | `moderation.actions.ban`     | `moderation.actions.ban`     | `{ userId, reason, deleteDays? (0 a 7) }`                 | `{ caseId }`                                                                                              |
 
-- `reason` tem de 1 a 512 caracteres, sem espaços nas pontas. As ações aceitam ainda `channelId` opcional (informativo: qualquer chamador pode enviar, e aparece como o canal do caso; o `/mod` envia o canal onde rodou).
+- `reason` tem de 1 a 512 caracteres; é aparado (espaços nas pontas são removidos) e texto com caracteres de controle ou só com caracteres invisíveis é recusado. As ações aceitam ainda `channelId` opcional (informativo: qualquer chamador pode enviar, e aparece como o canal do caso; o `/mod` envia o canal onde rodou).
 - As ações aplicam as proteções descritas acima. Contra a própria pessoa ou um alvo protegido: `forbidden`; contra quem não é membro (`warn`, `timeout`, `kick`): `not_found`; consulta de cargos com falha: `unavailable`; recusa do Discord: `forbidden`, `not_found` ou `failed`. Nenhum caso é gravado quando a operação falha.
 
 ## 8. Exemplos de utilização

@@ -1,5 +1,5 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
-import type { CaseDetail } from '../operations/cases.ts';
+import type { CaseDetail, CaseSummary } from '../operations/cases.ts';
 import type { ModCommandDeps } from './mod-command.ts';
 import { CASE_DISMISSED, CASE_NOT_FOUND, CASE_REVERTED } from './replies.ts';
 
@@ -73,7 +73,14 @@ export async function caseList(
   deps: ModCommandDeps,
 ): Promise<void> {
   const user = interaction.options.getUser('user');
-  const records = deps.cases.listRecent(RECENT_LIMIT, user);
+  const result = await deps.operations.execute('moderation.cases.list', interaction.actor, {
+    ...(user === undefined ? {} : { targetUserId: user }),
+  });
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
+    return;
+  }
+  const records = (result.data as { cases: CaseSummary[] }).cases.slice(0, RECENT_LIMIT);
   if (records.length === 0) {
     await interaction.reply('Nenhum caso.', EPHEMERAL);
     return;

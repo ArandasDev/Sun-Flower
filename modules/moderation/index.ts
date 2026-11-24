@@ -79,12 +79,6 @@ const createModeration: ModuleFactory = () => {
           config: ctx.config,
           operations: ctx.operations,
           guild: ctx.guild,
-          get cases() {
-            return required(caseStore);
-          },
-          get domains() {
-            return required(domainStore);
-          },
           publish: (type, payload) => {
             ctx.events.publish(type, payload);
           },

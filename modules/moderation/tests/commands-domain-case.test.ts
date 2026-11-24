@@ -7,7 +7,6 @@ import type { GuildActionResult } from '../../../shared/contracts/guild.ts';
 import { createFakeGuild } from '../../../tests/helpers/fake-guild.ts';
 import { createTestModuleStorage } from '../../../tests/helpers/module-storage.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { CaseStore } from '../cases.ts';
 import type { CaseAction, CaseStatus, NewCase } from '../cases.ts';
 import { configSchema } from '../config.ts';
@@ -30,7 +29,7 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const domains = new DomainStore(ctx.storage);
   const cases = new CaseStore(ctx.storage);
   const permissions = { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false };
-  const deps: ModCommandDeps = {
+  const deps = {
     permissions,
     config: configApi,
     operations: createLocalOperations({
@@ -156,6 +155,15 @@ describe('/mod domain', () => {
     expect(text).toBe('Bloqueados:\n`golpe.com`\nPermitidos:\nNenhum domínio.');
   });
 
+  it('list reads through moderation.domains.list', async () => {
+    const t = setup();
+    const execute = vi.spyOn(t.deps.operations, 'execute');
+    await run(t, 'domain', 'list', { list: 'allow' });
+    expect(execute).toHaveBeenCalledExactlyOnceWith('moderation.domains.list', ACTOR, {
+      list: 'allow',
+    });
+  });
+
   it('list block shows only that list and at most 50 domains', async () => {
     const t = setup();
     for (let i = 0; i < 60; i += 1) {
@@ -233,6 +241,15 @@ describe('/mod case view and list', () => {
     expect(text.length).toBeLessThanOrEqual(2000);
     expect(text).toContain('e mais 15');
     expect(text).toContain('…');
+  });
+
+  it('list reads through moderation.cases.list with the user filter', async () => {
+    const t = setup();
+    const execute = vi.spyOn(t.deps.operations, 'execute');
+    await run(t, 'case', 'list', { user: OTHER });
+    expect(execute).toHaveBeenCalledWith('moderation.cases.list', ACTOR, { targetUserId: OTHER });
+    await run(t, 'case', 'list');
+    expect(execute).toHaveBeenLastCalledWith('moderation.cases.list', ACTOR, {});
   });
 
   it('list replies with an empty marker', async () => {

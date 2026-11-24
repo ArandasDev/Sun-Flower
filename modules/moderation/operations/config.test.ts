@@ -84,6 +84,25 @@ describe('moderation.config.update', () => {
     expect(config().get<ModerationConfig>().timeoutMinutes).toBe(120);
   });
 
+  it('strips unknown nested keys before storing', async () => {
+    const result = await run('moderation.config.update', {
+      expectedVersion: 0,
+      changes: { thresholds: { confirmed: 90, suspicious: 30, junk: 1 } },
+    });
+    expect(result).toMatchObject({ ok: true, data: { version: 1 } });
+    expect(stored).toEqual({ thresholds: { confirmed: 90, suspicious: 30 } });
+  });
+
+  it('writes nothing and keeps the version when there are no changes', async () => {
+    const result = await run('moderation.config.update', { expectedVersion: 0, changes: {} });
+    expect(result).toEqual({
+      ok: true,
+      data: { version: 0, config: configSchema.parse({}) },
+    });
+    expect(stored).toEqual({});
+    expect(version).toBe(0);
+  });
+
   it('rejects an unknown top-level key', async () => {
     const result = await run('moderation.config.update', {
       expectedVersion: 0,

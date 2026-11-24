@@ -49,8 +49,23 @@ export function registerConfigOperations(ctx: Pick<ModuleContext, 'config' | 'op
     permission: CONFIG_PERMISSION,
     input: updateInput,
     handler: (_actor, input: z.output<typeof updateInput>) => {
+      // Validate against the schema first: it drops unknown nested keys before they are stored.
+      const parsed = configSchema.safeParse({
+        ...ctx.config.get<ModerationConfig>(),
+        ...input.changes,
+      });
+      if (!parsed.success) {
+        const paths = [...new Set(parsed.error.issues.map((issue) => issue.path.join('.')))];
+        return Promise.resolve(fail('invalid', CONFIG_INVALID(paths.join(', '))));
+      }
+      const clean: Record<string, unknown> = {};
+      for (const key of Object.keys(input.changes)) {
+        if (Object.hasOwn(parsed.data, key))
+          clean[key] = (parsed.data as Record<string, unknown>)[key];
+      }
+      if (Object.keys(clean).length === 0) return Promise.resolve(ok(snapshot()));
       try {
-        ctx.config.set(input.changes, input.expectedVersion);
+        ctx.config.set(clean, input.expectedVersion);
       } catch (error) {
         if (error instanceof Error && error.name === 'ConfigVersionConflictError') {
           return Promise.resolve(fail('conflict', CONFIG_CONFLICT));

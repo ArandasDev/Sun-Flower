@@ -65,10 +65,21 @@ export async function domainList(
   const lists: readonly DomainList[] =
     chosen === 'block' ? ['block'] : chosen === 'allow' ? ['allow'] : ['block', 'allow'];
   const budget = Math.floor(REPLY_BUDGET / lists.length);
-  const sections = lists.map((list) => {
+  const sections: string[] = [];
+  for (const list of lists) {
     const header = list === 'block' ? 'Bloqueados:' : 'Permitidos:';
-    const domains = deps.domains.list(list, LIST_LIMIT);
-    if (domains.length === 0) return `${header}\nNenhum domínio.`;
+    const result = await deps.operations.execute('moderation.domains.list', interaction.actor, {
+      list,
+    });
+    if (!result.ok) {
+      await interaction.reply(result.error.message, EPHEMERAL);
+      return;
+    }
+    const domains = (result.data as { domains: string[] }).domains.slice(0, LIST_LIMIT);
+    if (domains.length === 0) {
+      sections.push(`${header}\nNenhum domínio.`);
+      continue;
+    }
     const lines: string[] = [];
     let used = header.length + MORE_RESERVE;
     for (const domain of domains) {
@@ -80,7 +91,7 @@ export async function domainList(
     if (lines.length < domains.length) {
       lines.push(`… (+${String(domains.length - lines.length)})`);
     }
-    return [header, ...lines].join('\n');
-  });
+    sections.push([header, ...lines].join('\n'));
+  }
   await interaction.reply(sections.join('\n'), EPHEMERAL);
 }

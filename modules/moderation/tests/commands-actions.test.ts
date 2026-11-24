@@ -9,7 +9,6 @@ import { createTestModuleStorage } from '../../../tests/helpers/module-storage.t
 import { CaseStore } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
 import { createLocalOperations } from './operations-harness.ts';
 
@@ -46,7 +45,7 @@ function setup(options: SetupOptions = {}) {
     hasAnyGrant: (roleIds: readonly string[], prefix: string) =>
       prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
   };
-  const deps: ModCommandDeps = {
+  const deps = {
     permissions,
     config: configApi,
     operations: createLocalOperations({

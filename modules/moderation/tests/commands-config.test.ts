@@ -9,7 +9,6 @@ import { CaseStore } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
 import { createLocalOperations } from './operations-harness.ts';
 
@@ -66,7 +65,7 @@ function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
   const cases = new CaseStore(ctx.storage);
   const publish = vi.fn();
   const permissions = { check, isDeveloper: () => false, hasAnyGrant: () => false };
-  const deps: ModCommandDeps = {
+  const deps = {
     permissions,
     config,
     operations: createLocalOperations({ config, permissions, domains, cases, guild, publish }),
@@ -156,6 +155,14 @@ describe('/mod config', () => {
     expect(text).toContain('suspeito 50');
     expect(text).toContain(`<@&${ROLE_A}>, <@&${ROLE_B}>`);
     expect(reply.mock.calls[0]?.[1]).toEqual({ ephemeral: true });
+  });
+
+  it('view reads through moderation.config.view', async () => {
+    const { command, deps } = setup();
+    const execute = vi.spyOn(deps.operations, 'execute');
+    const { value } = interaction('config', 'view');
+    await command.handle(value);
+    expect(execute).toHaveBeenCalledWith('moderation.config.view', ACTOR, {});
   });
 
   it('view shows placeholders when unset', async () => {
