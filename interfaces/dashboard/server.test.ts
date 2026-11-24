@@ -457,4 +457,23 @@ describe('every request form', () => {
     expect(lower).toContain('content-type: application/json');
     expect(lower).toContain('connection: close');
   });
+
+  it('closes the server side of a half-open client after a client error', async () => {
+    const port = await listen();
+    const server = app!.server;
+    const socket = connect({ host: '127.0.0.1', port, allowHalfOpen: true });
+    socket.on('error', () => undefined);
+    const answered = new Promise<void>((resolve) => socket.once('data', () => resolve()));
+    socket.write('garbage\r\n\r\n');
+    await answered;
+    const open = (): Promise<number> =>
+      new Promise((resolve) => server.getConnections((_e, n) => resolve(n)));
+    let count = await open();
+    for (let i = 0; i < 40 && count > 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      count = await open();
+    }
+    socket.destroy();
+    expect(count).toBe(0);
+  });
 });

@@ -120,10 +120,20 @@ function clientErrorHandler(error: Error & { code?: string }, socket: Socket): v
     socket.destroy(error);
     return;
   }
-  const status = error.code === 'HPE_HEADER_OVERFLOW' ? 431 : 400;
+  const status =
+    error.code === 'HPE_HEADER_OVERFLOW'
+      ? 431
+      : error.code === 'ERR_HTTP_REQUEST_TIMEOUT'
+        ? 408
+        : 400;
+  const reason = {
+    400: 'Bad Request',
+    408: 'Request Timeout',
+    431: 'Request Header Fields Too Large',
+  }[status];
   const body = JSON.stringify({ error: { code: 'bad_request', message: 'Requisição inválida.' } });
   const lines = [
-    `HTTP/1.1 ${status} ${status === 431 ? 'Request Header Fields Too Large' : 'Bad Request'}`,
+    `HTTP/1.1 ${status} ${reason}`,
     ...Object.entries(SECURITY_HEADERS).map(([name, value]) => `${name}: ${value}`),
     'Content-Type: application/json; charset=utf-8',
     `Content-Length: ${Buffer.byteLength(body)}`,
@@ -131,7 +141,8 @@ function clientErrorHandler(error: Error & { code?: string }, socket: Socket): v
     '',
     body,
   ];
-  socket.end(lines.join('\r\n'));
+  // end() only half-closes; destroy once flushed so half-open clients cannot hold the connection.
+  socket.end(lines.join('\r\n'), () => socket.destroy());
 }
 
 // Malformed URLs fail before routing, so no hook runs: answer them here, uniformly. These replies are
