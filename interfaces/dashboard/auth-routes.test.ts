@@ -394,6 +394,8 @@ describe('GET /auth/callback', () => {
     expect(res.headers.location).toBe(`${PUBLIC_URL}/`);
     expect(sessions.resolve(previous)).toBeNull();
     expect(sessionCount()).toBe(1);
+    // The live connections of the replaced session are closed through the same seam as logout.
+    expect(loggedOut).toEqual([hashSessionToken(previous)]);
   });
 
   it('sends to failed when deleting the previous session throws', async () => {

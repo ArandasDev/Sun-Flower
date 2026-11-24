@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
@@ -13,7 +14,7 @@ import type { PanelEnvironment } from '../../core/configuration/panel-environmen
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
 import { apiError } from './errors.ts';
-import { LiveHub, type LiveClock } from './live.ts';
+import { LIVE_PATH, LiveHub, type LiveClock } from './live.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
 import { CHANGING_METHODS, createSessionAuth, type SessionAuth } from './session.ts';
 import { registerStatusRoute, statusSnapshot } from './status-route.ts';
@@ -49,6 +50,8 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 120;
 const RATE_MAX_CHANGES = 30;
 const RATE_MAX_LOGIN = 10;
+/** A refused or stalled upgrade request is dropped after this long without traffic. */
+const UPGRADE_IDLE_MS = 10_000;
 
 export interface DashboardDeps {
   readonly env: PanelEnvironment;
@@ -172,23 +175,69 @@ function clientErrorHandler(error: Error & { code?: string }, socket: Socket): v
   socket.end(lines.join('\r\n'), () => socket.destroy());
 }
 
+/**
+ * Raw upgrade requests and the ones that became WebSockets. Any other upgrade socket is destroyed
+ * as soon as its HTTP answer is sent: nothing else would ever close it, whichever hook answered.
+ */
+class UpgradeSockets {
+  readonly #requests = new WeakSet<IncomingMessage>();
+  readonly #upgraded = new WeakSet<IncomingMessage>();
+
+  /** Prepended to the server's `upgrade` listeners, so it runs before any routing. */
+  readonly onUpgrade = (request: IncomingMessage, socket: Socket): void => {
+    this.#requests.add(request);
+    const drop = (): void => {
+      if (!this.#upgraded.has(request)) socket.destroy();
+    };
+    // Backstops for a peer that goes silent or half-closes; ws clears the timeout on upgrade.
+    socket.setTimeout(UPGRADE_IDLE_MS, drop);
+    socket.once('end', drop);
+  };
+
+  isUpgrade(request: IncomingMessage): boolean {
+    return this.#requests.has(request);
+  }
+
+  markUpgraded(request: IncomingMessage): void {
+    this.#upgraded.add(request);
+  }
+
+  /** Destroys the socket of an upgrade request that was answered over HTTP instead. */
+  closeStray(request: IncomingMessage): void {
+    if (this.#requests.has(request) && !this.#upgraded.has(request)) request.socket.destroy();
+  }
+}
+
 // Malformed URLs fail before routing, so no hook runs: answer them here, uniformly. These replies are
 // not rate-limited, and FST_ERR_MAX_PARAM_LENGTH / FST_ERR_ASYNC_CONSTRAINT also become 400 bad_request.
-function frameworkErrors(_error: Error, _request: unknown, reply: FastifyReply): void {
-  reply.headers(SECURITY_HEADERS);
-  apiError(reply, 400, 'bad_request', 'Requisição inválida.');
+function frameworkErrorsFor(upgrades: UpgradeSockets) {
+  return (_error: Error, request: FastifyRequest, reply: FastifyReply): void => {
+    if (upgrades.isUpgrade(request.raw)) {
+      reply.raw.once('finish', () => {
+        upgrades.closeStray(request.raw);
+      });
+    }
+    reply.headers(SECURITY_HEADERS);
+    apiError(reply, 400, 'bad_request', 'Requisição inválida.');
+  };
 }
 
 /** Builds the server without listening; tests use `inject`. */
 export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstance> {
   const { env, logger, staticDir } = deps;
+  const upgrades = new UpgradeSockets();
   const app = Fastify({
     logger: false,
     trustProxy: env.trustProxy.length > 0 ? env.trustProxy : false,
     bodyLimit: BODY_LIMIT,
-    frameworkErrors,
+    frameworkErrors: frameworkErrorsFor(upgrades),
     clientErrorHandler,
     rewriteUrl: originForm,
+  });
+  app.server.prependListener('upgrade', upgrades.onUpgrade);
+  app.addHook('onResponse', (request, _reply, done) => {
+    upgrades.closeStray(request.raw);
+    done();
   });
 
   // Only application/json bodies are accepted; Fastify answers 415 to any other type with a body.
@@ -254,6 +303,13 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     }
     return undefined;
   });
+  // Only /api/live upgrades; any other route answers an upgrade request with a plain 404.
+  app.addHook('onRequest', async (request, reply) => {
+    if (upgrades.isUpgrade(request.raw) && request.routeOptions.url !== LIVE_PATH) {
+      return apiError(reply, 404, 'not_found', 'Não encontrado.');
+    }
+    return undefined;
+  });
 
   app.setErrorHandler(
     (error: { name: string; code?: string; statusCode?: number }, _req, reply) => {
@@ -290,6 +346,9 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   });
   liveHubs.set(app, live);
   await live.register(app);
+  app.websocketServer.on('connection', (_socket: unknown, request: IncomingMessage) => {
+    upgrades.markUpgraded(request);
+  });
 
   registerAuthRoutes(app, {
     env,
@@ -299,6 +358,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     logger,
     auth,
     now,
+    // Logout, or a new login replacing the session the browser held.
     onLogout: (idHash) => {
       live.revokeSession(idHash);
       deps.onLogout?.(idHash);
@@ -329,6 +389,12 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
 /** Starts the panel on the loopback interface only; a reverse proxy exposes it. */
 export async function startDashboard(deps: DashboardDeps): Promise<DashboardHandle> {
   const app = await buildDashboard(deps);
-  await app.listen({ host: '127.0.0.1', port: deps.env.port });
+  try {
+    await app.listen({ host: '127.0.0.1', port: deps.env.port });
+  } catch (error) {
+    // Releases the live hub's subscriptions and timers before reporting the failure.
+    await app.close();
+    throw error;
+  }
   return { close: () => app.close() };
 }

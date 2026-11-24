@@ -93,6 +93,8 @@ interface Connection {
   windowCount: number;
   violations: number;
   ended: boolean;
+  /** Whether a pong arrived since the last heartbeat ping. */
+  alive: boolean;
 }
 
 interface PresenceState {
@@ -262,8 +264,12 @@ export class LiveHub {
       windowCount: 0,
       violations: 0,
       ended: false,
+      alive: true,
     };
     this.#connections.add(connection);
+    socket.on('pong', () => {
+      connection.alive = true;
+    });
     const state = this.#presence.get(record.userId);
     if (state?.leaveTimer !== undefined) {
       this.#clock.clearTimeout(state.leaveTimer);
@@ -284,23 +290,19 @@ export class LiveHub {
     isBinary: boolean,
   ): void {
     if (connection.ended) return;
-    const now = this.#clock.now();
-    if (now - connection.windowStart >= MESSAGE_INTERVAL_MS) {
-      connection.windowStart = now;
-      connection.windowCount = 0;
-    }
-    connection.windowCount += 1;
-    if (connection.windowCount > 1 || toBuffer(data).length > MAX_MESSAGE_BYTES) {
-      this.#violation(connection);
-      return;
-    }
+    // Protocol errors close at once, whatever the rate; oversize text is dropped unparsed.
     if (isBinary) {
       this.#closeWith(connection, CLOSE_INVALID);
       return;
     }
+    const bytes = toBuffer(data);
+    if (bytes.length > MAX_MESSAGE_BYTES) {
+      this.#violation(connection);
+      return;
+    }
     let value: unknown;
     try {
-      value = JSON.parse(toBuffer(data).toString('utf8'));
+      value = JSON.parse(bytes.toString('utf8'));
     } catch {
       this.#closeWith(connection, CLOSE_INVALID);
       return;
@@ -311,6 +313,16 @@ export class LiveHub {
       (value as { type?: unknown }).type !== 'presence'
     ) {
       this.#closeWith(connection, CLOSE_INVALID);
+      return;
+    }
+    const now = this.#clock.now();
+    if (now - connection.windowStart >= MESSAGE_INTERVAL_MS) {
+      connection.windowStart = now;
+      connection.windowCount = 0;
+    }
+    connection.windowCount += 1;
+    if (connection.windowCount > 1) {
+      this.#violation(connection);
       return;
     }
     const parsed = presenceMessage.safeParse(value);
@@ -345,11 +357,14 @@ export class LiveHub {
     const state = this.#presence.get(userId);
     if (state === undefined || this.connectionCount(userId) > 0 || this.#closed) return;
     if (state.leaveTimer !== undefined) this.#clock.clearTimeout(state.leaveTimer);
-    state.leaveTimer = this.#clock.setTimeout(() => {
+    const timer = this.#clock.setTimeout(() => {
+      // Only the entry this timer was set for, and only if nobody came back.
+      if (this.#presence.get(userId) !== state || state.leaveTimer !== timer) return;
       if (this.connectionCount(userId) > 0) return;
       this.#presence.delete(userId);
       this.#enqueue(() => this.#broadcastPresence(userId));
     }, PRESENCE_GRACE_MS);
+    state.leaveTimer = timer;
   }
 
   #onConfigChanged(event: SunFlowerEvent): void {
@@ -383,7 +398,7 @@ export class LiveHub {
       const member = await lookupMember(this.#directory, userId);
       if (member === null) {
         this.#endUser(userId);
-        this.#presence.delete(userId);
+        this.#dropPresence(userId);
         actors.set(userId, undefined);
       } else {
         actors.set(userId, member === undefined ? undefined : actorFor(userId, member));
@@ -441,6 +456,7 @@ export class LiveHub {
 
   /** Checks every connection's session and membership again, closing the invalid ones. */
   async #revalidate(): Promise<void> {
+    this.#heartbeat();
     for (const connection of [...this.#connections]) {
       let valid: boolean;
       try {
@@ -451,6 +467,33 @@ export class LiveHub {
       if (!valid) this.#end(connection);
     }
     await this.#actors([...this.#connections].map((connection) => connection.userId));
+  }
+
+  /**
+   * A connection that did not answer the previous tick's ping is dropped (a silent, half-open peer
+   * would otherwise hold a session slot and its presence forever); the others are pinged again.
+   */
+  #heartbeat(): void {
+    for (const connection of [...this.#connections]) {
+      if (!connection.alive) {
+        connection.ended = true;
+        connection.socket.terminate();
+        continue;
+      }
+      connection.alive = false;
+      try {
+        connection.socket.ping();
+      } catch (error) {
+        this.#logger.error({ error: errorName(error) }, 'live ping failed');
+      }
+    }
+  }
+
+  /** Removes a person from the presence list, with any pending leave timer. */
+  #dropPresence(userId: string): void {
+    const state = this.#presence.get(userId);
+    if (state?.leaveTimer !== undefined) this.#clock.clearTimeout(state.leaveTimer);
+    this.#presence.delete(userId);
   }
 
   /** Every session of a person who left the server is deleted and its connections end. */

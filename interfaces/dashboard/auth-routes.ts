@@ -38,7 +38,10 @@ export interface AuthRoutesDeps {
   readonly logger: Logger;
   readonly auth: SessionAuth;
   readonly now: () => number;
-  /** Called with the session's idHash after a logout, so live connections can be closed. */
+  /**
+   * Called with the idHash of every session these routes end (a logout, or the previous session
+   * of a browser that logs in again), so its live connections can be closed.
+   */
   readonly onLogout?: (idHash: string) => void;
 }
 
@@ -112,6 +115,18 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     }
   };
 
+  /** Runs the session-ended hook; its errors are logged, never sent. */
+  const sessionEnded = (idHash: string): void => {
+    try {
+      deps.onLogout?.(idHash);
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.name : 'unknown' },
+        'logout hook failed',
+      );
+    }
+  };
+
   app.get('/auth/login', async (_request, reply) => {
     const state = randomToken();
     const verifier = randomToken();
@@ -150,7 +165,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       // once the new one exists, so a failure here never leaves the browser without either.
       const previous = auth.peek(request);
       const { token } = core.sessions.create(userId);
-      if (previous !== null) core.sessions.deleteByHash(previous.idHash);
+      if (previous !== null) {
+        core.sessions.deleteByHash(previous.idHash);
+        sessionEnded(previous.idHash);
+      }
       reply.setCookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
       logger.info('panel login succeeded');
       return reply.redirect(home, 302);
@@ -184,14 +202,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     if (!auth.hasValidCsrf(request, record.idHash)) return forbidden(reply);
     core.sessions.deleteByHash(record.idHash);
     reply.clearCookie(SESSION_COOKIE, SESSION_COOKIE_OPTIONS);
-    try {
-      deps.onLogout?.(record.idHash);
-    } catch (error) {
-      logger.error(
-        { error: error instanceof Error ? error.name : 'unknown' },
-        'logout hook failed',
-      );
-    }
+    sessionEnded(record.idHash);
     return noStore(reply).code(204).send();
   });
 }

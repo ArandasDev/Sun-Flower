@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import type { AddressInfo } from 'node:net';
+import { connect as netConnect, createServer, type AddressInfo, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -19,7 +19,7 @@ import type { EventHandler } from '../../shared/contracts/events.ts';
 import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
 import type { LiveClock, LiveHub } from './live.ts';
 import type { MemberInfo } from './ports.ts';
-import { buildDashboard, liveHubOf } from './server.ts';
+import { buildDashboard, liveHubOf, startDashboard, type DashboardDeps } from './server.ts';
 
 const PUBLIC_URL = 'https://painel.example.com';
 const SESSION_SECRET = Buffer.alloc(32, 7);
@@ -57,6 +57,11 @@ class FakeClock implements LiveClock {
   clearInterval = (handle: unknown): void => {
     this.#timers.delete(handle as number);
   };
+
+  /** Timers and intervals still scheduled. */
+  pending(): number {
+    return this.#timers.size;
+  }
 
   advance(ms: number): void {
     const target = this.time + ms;
@@ -100,6 +105,10 @@ let app: FastifyInstance;
 let hub: LiveHub;
 let url: string;
 let clients: WebSocket[];
+let rawClients: Socket[];
+let serverSockets: Socket[];
+let deps: DashboardDeps;
+let closed: boolean;
 
 function member(overrides: Partial<MemberInfo> = {}): MemberInfo {
   return { roleIds: [], isOwner: false, displayName: 'Pessoa', avatarUrl: null, ...overrides };
@@ -153,6 +162,9 @@ beforeEach(async () => {
   ]);
   handlers = new Map();
   clients = [];
+  rawClients = [];
+  serverSockets = [];
+  closed = false;
   const core = {
     permissions,
     sessions,
@@ -170,7 +182,7 @@ beforeEach(async () => {
       };
     },
   } as unknown as CoreHandle;
-  app = await buildDashboard({
+  deps = {
     env: env(),
     core,
     directory: {
@@ -186,7 +198,9 @@ beforeEach(async () => {
     staticDir: join(root, 'public'),
     now: clock.now,
     liveClock: clock,
-  });
+  };
+  app = await buildDashboard(deps);
+  app.server.on('connection', (socket: Socket) => serverSockets.push(socket));
   await app.listen({ host: '127.0.0.1', port: 0 });
   hub = liveHubOf(app);
   url = `ws://127.0.0.1:${(app.server.address() as AddressInfo).port}/api/live`;
@@ -194,17 +208,22 @@ beforeEach(async () => {
 
 afterEach(async () => {
   for (const ws of clients) ws.terminate();
-  await app.close();
+  for (const raw of rawClients) raw.destroy();
+  if (!closed) await app.close();
   db.close();
   rmSync(root, { recursive: true, force: true });
 });
 
 /** `origin: null` sends no Origin header at all. */
-function socket(token: string | undefined, origin: string | null = PUBLIC_URL): WebSocket {
+function socket(
+  token: string | undefined,
+  origin: string | null = PUBLIC_URL,
+  autoPong = true,
+): WebSocket {
   const headers: Record<string, string> = {};
   if (token !== undefined) headers['cookie'] = `${SESSION_COOKIE}=${token}`;
   if (origin !== null) headers['origin'] = origin;
-  const ws = new WebSocket(url, { headers });
+  const ws = new WebSocket(url, { headers, autoPong });
   clients.push(ws);
   return ws;
 }
@@ -228,8 +247,8 @@ function withTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
 }
 
 /** Opens a live connection and resolves once it is open. */
-async function connect(token: string): Promise<Client> {
-  const ws = socket(token);
+async function connect(token: string, autoPong = true): Promise<Client> {
+  const ws = socket(token, PUBLIC_URL, autoPong);
   const messages: LiveMessage[] = [];
   ws.on('message', (data) => {
     messages.push(JSON.parse((data as Buffer).toString('utf8')) as LiveMessage);
@@ -317,6 +336,77 @@ async function until(condition: () => boolean, what: string): Promise<void> {
     if (Date.now() - started > WAIT_MS) throw new Error(`timed out waiting for ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+/** Resolves when the server's next heartbeat ping reaches this client (its pong is already sent). */
+function pinged(client: Client): Promise<void> {
+  return withTimeout(
+    new Promise<void>((resolve) => {
+      client.ws.once('ping', () => {
+        resolve();
+      });
+    }),
+    'ping',
+  );
+}
+
+/** A raw upgrade request; resolves with the status once the response head arrived. */
+function rawUpgrade(
+  path: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; socket: Socket }> {
+  const port = (app.server.address() as AddressInfo).port;
+  return withTimeout(
+    new Promise<{ status: number; socket: Socket }>((resolve) => {
+      const raw = netConnect(port, '127.0.0.1');
+      rawClients.push(raw);
+      let head = '';
+      raw.on('error', () => undefined);
+      raw.on('data', (chunk: Buffer) => {
+        head += chunk.toString('latin1');
+        const match = /^HTTP\/1\.1 (\d{3})/.exec(head);
+        if (match !== null && head.includes('\r\n\r\n')) {
+          resolve({ status: Number(match[1]), socket: raw });
+        }
+      });
+      raw.on('connect', () => {
+        raw.write(
+          [
+            `GET ${path} HTTP/1.1`,
+            'Host: 127.0.0.1',
+            'Connection: Upgrade',
+            'Upgrade: websocket',
+            'Sec-WebSocket-Version: 13',
+            'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==',
+            ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
+            '',
+            '',
+          ].join('\r\n'),
+        );
+      });
+    }),
+    'the upgrade response',
+  );
+}
+
+/** Resolves once the server closed this raw client's connection; the client never ends it. */
+function closedByServer(raw: Socket): Promise<void> {
+  return withTimeout(
+    new Promise<void>((resolve) => {
+      if (raw.destroyed) resolve();
+      else
+        raw.once('close', () => {
+          resolve();
+        });
+    }),
+    'the server to close the socket',
+  );
+}
+
+async function expectNoServerSockets(): Promise<void> {
+  await until(() => serverSockets.every((s) => s.destroyed), 'server-side sockets to close');
+  closed = true;
+  await withTimeout(app.close(), 'app.close()');
 }
 
 function presenceOf(message: LiveMessage): { userId: string; screen: string }[] {
@@ -577,7 +667,7 @@ describe('browser messages', () => {
   });
 });
 
-describe('session end', () => {
+describe('session end', { timeout: 20_000 }, () => {
   it('logout sends session.ended and closes every connection of the session', async () => {
     const { token, record } = sessions.create(STAFF);
     const staff = await connect(token);
@@ -621,10 +711,12 @@ describe('session end', () => {
   it('revalidation keeps the connection while the directory cannot answer', async () => {
     const staff = await connect(sessions.create(STAFF).token);
     members.set(STAFF, undefined);
-    clock.advance(60_000);
-    await barrier(staff);
-    clock.advance(60_000);
-    await barrier(staff);
+    for (let tick = 0; tick < 2; tick++) {
+      const ping = pinged(staff);
+      clock.advance(60_000);
+      await ping;
+      await barrier(staff);
+    }
     expect(staff.ws.readyState).toBe(WebSocket.OPEN);
   });
 
@@ -669,5 +761,118 @@ describe('GET /api/status', () => {
   it('answers 401 without a session', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/status' });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('stray upgrade sockets', { timeout: 20_000 }, () => {
+  it('closes the socket of an upgrade with a malformed URL (400); app.close() resolves', async () => {
+    const { status, socket: raw } = await rawUpgrade('/api/%zz');
+    expect(status).toBe(400);
+    await closedByServer(raw);
+    await expectNoServerSockets();
+  });
+
+  it('closes the socket of a rate-limited upgrade (429); app.close() resolves', async () => {
+    for (let i = 0; i < 120; i++) await app.inject({ method: 'GET', url: '/api/me' });
+    const { status, socket: raw } = await rawUpgrade('/api/live', { Origin: PUBLIC_URL });
+    expect(status).toBe(429);
+    await closedByServer(raw);
+    await expectNoServerSockets();
+  });
+
+  it('closes the socket of a refused upgrade (401)', async () => {
+    const { status, socket: raw } = await rawUpgrade('/api/live', { Origin: PUBLIC_URL });
+    expect(status).toBe(401);
+    await closedByServer(raw);
+    await expectNoServerSockets();
+  });
+
+  it('refuses an upgrade to any route but /api/live with a 404', async () => {
+    const { token } = sessions.create(OWNER);
+    for (const path of ['/api/me', '/api/status', '/', '/x/y']) {
+      const { status, socket: raw } = await rawUpgrade(path, {
+        Origin: PUBLIC_URL,
+        Cookie: `${SESSION_COOKIE}=${token}`,
+      });
+      expect(status).toBe(404);
+      await closedByServer(raw);
+    }
+    await expectNoServerSockets();
+  });
+});
+
+describe('live hub cleanup', { timeout: 20_000 }, () => {
+  it('closes the hub when listen fails', async () => {
+    const blocker = createServer();
+    await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));
+    const port = (blocker.address() as AddressInfo).port;
+    const subscriptions = (): number =>
+      [...handlers.values()].reduce((sum, list) => sum + list.length, 0);
+    const before = subscriptions();
+    const timers = new FakeClock();
+    try {
+      await expect(
+        startDashboard({ ...deps, env: { ...env(), port }, liveClock: timers }),
+      ).rejects.toThrow();
+    } finally {
+      await new Promise<void>((resolve) => blocker.close(() => resolve()));
+    }
+    expect(subscriptions()).toBe(before);
+    expect(timers.pending()).toBe(0);
+  });
+
+  it('terminates a connection that did not answer the previous heartbeat', async () => {
+    const alive = await connect(sessions.create(STAFF).token);
+    const silent = await connect(sessions.create(STAFF).token, false);
+    const first = Promise.all([pinged(alive), pinged(silent)]);
+    clock.advance(60_000);
+    await first;
+    await barrier(alive);
+    expect(silent.ws.readyState).toBe(WebSocket.OPEN);
+    const second = pinged(alive);
+    clock.advance(60_000);
+    expect((await withTimeout(silent.closed, 'close')).code).toBe(1006);
+    await second;
+    await barrier(alive);
+    expect(alive.ws.readyState).toBe(WebSocket.OPEN);
+    await until(() => hub.connectionCount(STAFF) === 1, 'the silent connection to be dropped');
+  });
+
+  it('clears the leave timer of a presence entry dropped for a member who left', async () => {
+    const dev = await connect(sessions.create(DEV).token);
+    const staff = await connect(sessions.create(STAFF).token);
+    sendPresence(staff, 'overview');
+    await until(() => hub.presentUsers().includes(STAFF), 'presence recorded');
+    staff.ws.close();
+    await until(() => hub.connectionCount(STAFF) === 0, 'connection closed');
+    // The first leave timer is due at +30 s; STAFF leaves the server and the entry is dropped.
+    members.set(STAFF, null);
+    sendPresence(dev, 'overview');
+    await until(() => !hub.presentUsers().includes(STAFF), 'entry dropped');
+    clock.advance(10_000);
+    members.set(STAFF, member({ roleIds: [STAFF_ROLE] }));
+    const again = await connect(sessions.create(STAFF).token);
+    sendPresence(again, 'profile');
+    await until(() => hub.presentUsers().includes(STAFF), 'presence recorded again');
+    again.ws.close();
+    await until(() => hub.connectionCount(STAFF) === 0, 'connection closed again');
+    clock.advance(20_000);
+    expect(hub.presentUsers()).toContain(STAFF);
+    clock.advance(10_000);
+    expect(hub.presentUsers()).not.toContain(STAFF);
+  });
+
+  it('closes with 4400 on a binary frame even inside the rate window', async () => {
+    const staff = await connect(sessions.create(STAFF).token);
+    sendPresence(staff, 'overview');
+    staff.ws.send(Buffer.from([1, 2, 3]));
+    expect((await withTimeout(staff.closed, 'close')).code).toBe(4400);
+  });
+
+  it('closes with 4400 on an unknown type even inside the rate window', async () => {
+    const staff = await connect(sessions.create(STAFF).token);
+    sendPresence(staff, 'overview');
+    staff.ws.send(JSON.stringify({ type: 'x' }));
+    expect((await withTimeout(staff.closed, 'close')).code).toBe(4400);
   });
 });
