@@ -3,6 +3,7 @@ import type { Logger } from '../../shared/contracts/logger.ts';
 import type { ModuleManifest } from '../../shared/contracts/module.ts';
 import {
   fail,
+  ok,
   type OperationDefinition,
   type OperationErrorCode,
   type OperationResult,
@@ -12,8 +13,20 @@ import {
 const SEGMENT = '[a-z][a-z0-9-]*';
 const MINE_SUFFIX = '.mine';
 const ROOT_PATH = '(raiz)';
-/** A path segment that is not a plain key (a record key, say) is masked: it may echo input. */
-const PLAIN_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_INVALID_PATHS = 10;
+const MAX_ERROR_NAME_LENGTH = 64;
+const MAX_UNWRAP_DEPTH = 32;
+/** zod 4 wrappers whose `innerType` shapes the input at the same path. */
+const WRAPPER_TYPES: ReadonlySet<string> = new Set([
+  'optional',
+  'nullable',
+  'default',
+  'prefault',
+  'nonoptional',
+  'readonly',
+  'catch',
+  'success',
+]);
 
 const NOT_FOUND = fail('not_found', 'Operação desconhecida.');
 const UNAVAILABLE = fail('unavailable', 'Módulo indisponível.');
@@ -36,11 +49,12 @@ export class InvalidOperationError extends Error {
 }
 
 interface SafeParseSchema {
-  safeParse(
-    value: unknown,
-  ):
+  safeParse(value: unknown):
     | { success: true; data: unknown }
-    | { success: false; error: { issues: readonly { path: readonly PropertyKey[] }[] } };
+    | {
+        success: false;
+        error: { issues: readonly { path: readonly PropertyKey[]; code?: unknown }[] };
+      };
 }
 
 interface RegisteredOperation {
@@ -70,22 +84,131 @@ function hasSafeParse(schema: unknown): schema is SafeParseSchema {
   );
 }
 
-function isResult(value: unknown): value is OperationResult {
-  if (typeof value !== 'object' || value === null) return false;
-  const { ok, error } = value as { ok?: unknown; error?: unknown };
-  if (ok === true) return 'data' in value;
-  if (ok !== false || typeof error !== 'object' || error === null) return false;
+/**
+ * Rebuilds a handler's return value as a fresh `OperationResult`, dropping any extra field.
+ * Returns `undefined` when the value is not a valid result.
+ */
+function rebuildResult(value: unknown): OperationResult | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { ok: success, data, error } = value as { ok?: unknown; data?: unknown; error?: unknown };
+  if (success === true) return 'data' in value ? ok(data) : undefined;
+  if (success !== false || typeof error !== 'object' || error === null) return undefined;
   const { code, message } = error as { code?: unknown; message?: unknown };
-  return typeof code === 'string' && ERROR_CODES.has(code) && typeof message === 'string';
+  if (typeof code !== 'string' || !ERROR_CODES.has(code) || typeof message !== 'string') {
+    return undefined;
+  }
+  return fail(code as OperationErrorCode, message);
 }
 
-function describeSegment(segment: PropertyKey): string {
-  const text = typeof segment === 'symbol' ? '' : String(segment);
-  return PLAIN_SEGMENT.test(text) ? text : '*';
-}
-
+/** Reads a thrown value's name without trusting it: only a string, capped, else `Error`. */
 function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
+  try {
+    const name: unknown = error instanceof Error ? error.name : undefined;
+    return typeof name === 'string' && name.length > 0
+      ? name.slice(0, MAX_ERROR_NAME_LENGTH)
+      : 'Error';
+  } catch {
+    return 'Error';
+  }
+}
+
+type SchemaDef = Readonly<Record<string, unknown>>;
+
+/** The zod 4 definition of a schema, or `undefined` when it is not a zod schema. */
+function defOf(schema: unknown): SchemaDef | undefined {
+  if (typeof schema !== 'object' || schema === null) return undefined;
+  const internals = (schema as { _zod?: { def?: unknown } })._zod;
+  const def = internals?.def;
+  return typeof def === 'object' && def !== null ? (def as SchemaDef) : undefined;
+}
+
+/** Strips wrappers (optional, default, pipe, lazy…) down to the schema that shapes the input. */
+function unwrap(schema: unknown): SchemaDef | undefined {
+  let current = schema;
+  for (let depth = 0; depth < MAX_UNWRAP_DEPTH; depth++) {
+    const def = defOf(current);
+    if (def === undefined) return undefined;
+    const type = def.type;
+    if (typeof type === 'string' && WRAPPER_TYPES.has(type)) current = def.innerType;
+    else if (type === 'pipe') current = def.in;
+    else if (type === 'lazy')
+      current = typeof def.getter === 'function' ? (def.getter as () => unknown)() : undefined;
+    else return def;
+  }
+  return undefined;
+}
+
+/**
+ * Whether `segment` under `schema` is a name the module wrote (an object key or an array or
+ * tuple index), and the schema below it. Record and map keys come from the input, so they are
+ * not visible; a segment the walk cannot resolve is not visible either, nor anything below it.
+ */
+function step(schema: unknown, segment: PropertyKey): { visible: boolean; next: unknown } {
+  const hidden = { visible: false, next: undefined };
+  const def = unwrap(schema);
+  switch (def?.type) {
+    case 'object': {
+      const shape = def.shape;
+      if (typeof segment !== 'string' || typeof shape !== 'object' || shape === null) return hidden;
+      return Object.hasOwn(shape, segment)
+        ? { visible: true, next: (shape as Record<string, unknown>)[segment] }
+        : hidden;
+    }
+    case 'array':
+      return typeof segment === 'number' ? { visible: true, next: def.element } : hidden;
+    case 'tuple': {
+      if (typeof segment !== 'number' || !Array.isArray(def.items)) return hidden;
+      return { visible: true, next: (def.items as unknown[])[segment] ?? def.rest };
+    }
+    case 'record':
+    case 'map':
+      return { visible: false, next: def.valueType };
+    default:
+      return hidden;
+  }
+}
+
+/** The issue path with every segment that may echo input masked as `*`. */
+function describePath(
+  schema: unknown,
+  issue: { readonly path: readonly PropertyKey[]; readonly code?: unknown },
+): string {
+  if (issue.path.length === 0) return ROOT_PATH;
+  const parts: string[] = [];
+  let current: unknown = schema;
+  issue.path.forEach((segment, index) => {
+    let visible = false;
+    try {
+      const result = step(current, segment);
+      visible = result.visible;
+      current = result.next;
+    } catch {
+      current = undefined;
+    }
+    const rejectedKey = issue.code === 'invalid_key' && index === issue.path.length - 1;
+    parts.push(visible && !rejectedKey ? String(segment) : '*');
+  });
+  return parts.join('.');
+}
+
+function invalidMessage(
+  schema: unknown,
+  issues: readonly { readonly path: readonly PropertyKey[]; readonly code?: unknown }[],
+): string {
+  const paths = new Set<string>();
+  let truncated = false;
+  for (const issue of issues) {
+    const path = describePath(schema, issue);
+    if (paths.has(path)) continue;
+    if (paths.size === MAX_INVALID_PATHS) {
+      truncated = true;
+      break;
+    }
+    paths.add(path);
+  }
+  const shown = [...paths];
+  if (truncated) shown.push('…');
+  return `Entrada inválida: ${shown.join(', ')}.`;
 }
 
 /**
@@ -219,14 +342,10 @@ export class OperationRegistry {
       return FORBIDDEN;
     }
     const parsed = operation.input.safeParse(input);
-    if (!parsed.success) {
-      const paths = parsed.error.issues.map((issue) =>
-        issue.path.length > 0 ? issue.path.map(describeSegment).join('.') : ROOT_PATH,
-      );
-      return fail('invalid', `Entrada inválida: ${[...new Set(paths)].join(', ')}.`);
-    }
-    const result: unknown = await operation.handler(actor, parsed.data);
-    if (!isResult(result)) {
+    if (!parsed.success)
+      return fail('invalid', invalidMessage(operation.input, parsed.error.issues));
+    const result = rebuildResult(await operation.handler(actor, parsed.data));
+    if (result === undefined) {
       const error = new Error('handler returned something other than an OperationResult');
       error.name = 'InvalidOperationResult';
       throw error;

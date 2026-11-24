@@ -200,6 +200,142 @@ describe('OperationRegistry.execute', () => {
     );
   });
 
+  describe('never echoes input keys', () => {
+    const invalidMessage = async (schema: unknown, input: unknown): Promise<string> => {
+      registry.register(manifest, definition({ input: schema }));
+      const result = await registry.execute('sample.items.mute', STAFF, input, 'dashboard');
+      if (result.ok) throw new Error('expected invalid');
+      return result.error.message;
+    };
+
+    it('masks a record key that fails the key schema', async () => {
+      const schema = z.object({ tags: z.record(z.string().regex(/^\d+$/), z.number()) });
+      await expect(invalidMessage(schema, { tags: { hunter2: 1 } })).resolves.toBe(
+        'Entrada inválida: tags.*.',
+      );
+    });
+
+    it('masks a valid plain-looking record key with an invalid value', async () => {
+      const schema = z.object({ tags: z.record(z.string(), z.number()) });
+      await expect(invalidMessage(schema, { tags: { tok_ABCdef123: 'v' } })).resolves.toBe(
+        'Entrada inválida: tags.*.',
+      );
+    });
+
+    it('masks map keys and keys below a record', async () => {
+      const schema = z.object({
+        byUser: z.record(z.string(), z.object({ score: z.number() })),
+        lookup: z.map(z.string(), z.number()),
+      });
+      await expect(
+        invalidMessage(schema, {
+          byUser: { secretUser: { score: 'x' } },
+          lookup: new Map([['secretKey', 'x']]),
+        }),
+      ).resolves.not.toMatch(/secret/);
+    });
+
+    it('still shows nested object keys and array indexes', async () => {
+      const schema = z.object({
+        a: z.object({ b: z.object({ c: z.array(z.object({ d: z.number() })) }) }).optional(),
+      });
+      await expect(invalidMessage(schema, { a: { b: { c: [{ d: 'x' }] } } })).resolves.toBe(
+        'Entrada inválida: a.b.c.0.d.',
+      );
+    });
+
+    it('masks a segment the schema walk cannot resolve', async () => {
+      const schema = z.union([
+        z.object({ kind: z.literal('a'), hidden: z.number() }),
+        z.object({ kind: z.literal('b') }),
+      ]);
+      const message = await invalidMessage(schema, { kind: 'a', hidden: 'x' });
+      expect(message).not.toMatch(/hidden/);
+    });
+
+    it('caps the message at the first 10 distinct paths', async () => {
+      const schema = z.array(z.number());
+      const message = await invalidMessage(
+        schema,
+        Array.from({ length: 1000 }, () => 'x'),
+      );
+      expect(message).toBe('Entrada inválida: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, ….');
+    });
+  });
+
+  it('logs a safe error name when the thrown name is hostile', async () => {
+    const hostile = new Error('boom');
+    Object.defineProperty(hostile, 'name', {
+      get() {
+        throw new Error('getter');
+      },
+    });
+    const objectName = new Error('boom');
+    Object.defineProperty(objectName, 'name', { value: { secret: 'x' } });
+    const longName = new Error('boom');
+    longName.name = 'N'.repeat(200);
+    const thrown = [hostile, objectName, longName, 'plain string'];
+    let index = 0;
+    registry.register(
+      manifest,
+      definition({
+        handler: () => {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- covers a non-Error throw
+          throw thrown[index++];
+        },
+      }),
+    );
+    for (let i = 0; i < thrown.length; i++) {
+      await expect(
+        registry.execute('sample.items.mute', STAFF, { minutes: 5 }, 'dashboard'),
+      ).resolves.toEqual(fail('failed', 'Erro interno.'));
+    }
+    expect(operationLogs().map((entry) => (entry as { error?: unknown }).error)).toEqual([
+      'Error',
+      'Error',
+      'N'.repeat(64),
+      'Error',
+    ]);
+  });
+
+  it('rebuilds handler results and drops extra fields', async () => {
+    registry.register(
+      manifest,
+      definition({
+        handler: () => Promise.resolve({ ok: true, data: 1, extra: 'leak' } as never),
+      }),
+    );
+    registry.register(
+      manifest,
+      definition({
+        name: 'sample.items.fail',
+        handler: () =>
+          Promise.resolve({
+            ok: false,
+            error: { code: 'conflict', message: 'Já existe.', stack: 'leak' },
+            extra: 'leak',
+          } as never),
+      }),
+    );
+    const okResult = await registry.execute(
+      'sample.items.mute',
+      STAFF,
+      { minutes: 5 },
+      'dashboard',
+    );
+    const failResult = await registry.execute(
+      'sample.items.fail',
+      STAFF,
+      { minutes: 5 },
+      'dashboard',
+    );
+    expect(okResult).toStrictEqual({ ok: true, data: 1 });
+    expect(failResult).toStrictEqual({
+      ok: false,
+      error: { code: 'conflict', message: 'Já existe.' },
+    });
+  });
+
   it('runs the handler with the actor and the parsed input', async () => {
     const op = definition({ input: z.object({ minutes: z.coerce.number() }) });
     registry.register(manifest, op);
