@@ -1,4 +1,7 @@
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
+import { resetCsrfToken } from '../api.ts';
 import { SeedMark } from '../components/SeedMark.tsx';
 
 const ERRORS: Record<string, { text: string; tone: 'alert' | 'seed' }> = {
@@ -15,6 +18,12 @@ const ERRORS: Record<string, { text: string; tone: 'alert' | 'seed' }> = {
 };
 
 export function Login() {
+  // Any way of arriving here means the session is over: nothing from it may stay in memory.
+  const client = useQueryClient();
+  useEffect(() => {
+    resetCsrfToken();
+    client.clear();
+  }, [client]);
   const [params] = useSearchParams();
   const code = params.get('error');
   const error = code !== null && Object.hasOwn(ERRORS, code) ? ERRORS[code] : undefined;

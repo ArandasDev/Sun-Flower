@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import { App } from './App.tsx';
 import { resetCsrfToken } from './api.ts';
+import type { LiveClock } from './live.ts';
 import { makeQueryClient } from './query-client.ts';
 
 export interface FakeResponse {
@@ -43,16 +44,17 @@ export function stubFetch(handler: Handler) {
   return fn;
 }
 
-export function renderApp(path: string) {
+export function renderApp(path: string, clock?: LiveClock) {
   resetCsrfToken();
   const client = makeQueryClient();
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <MotionConfig reducedMotion="always">
         <MemoryRouter initialEntries={[path]}>
-          <App />
+          <App {...(clock === undefined ? {} : { clock })} />
         </MemoryRouter>
       </MotionConfig>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }

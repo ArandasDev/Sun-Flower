@@ -6,7 +6,7 @@ import type { CoreHandle } from '../../core/application/core.ts';
 import type { Actor } from '../../shared/contracts/commands.ts';
 import type { SunFlowerEvent } from '../../shared/contracts/events.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
-import type { MemberDirectory } from './ports.ts';
+import type { MemberDirectory, MemberInfo } from './ports.ts';
 import {
   actorFor,
   forbidden,
@@ -85,6 +85,12 @@ export interface PresenceEntry {
   readonly screen: string;
 }
 
+/** What browsers receive: the presence entry with the person's name and avatar. */
+export interface PresenceUser extends PresenceEntry {
+  readonly name: string;
+  readonly avatarUrl: string | null;
+}
+
 interface Connection {
   readonly socket: WebSocket;
   readonly idHash: string;
@@ -104,8 +110,14 @@ interface PresenceState {
   leaveTimer?: unknown;
 }
 
-/** Actors looked up for one delivery; `undefined` when the directory could not answer. */
-type Actors = ReadonlyMap<string, Actor | undefined>;
+/** A person looked up for one delivery. */
+interface Known {
+  readonly actor: Actor;
+  readonly member: MemberInfo;
+}
+
+/** People looked up for one delivery; `undefined` when the directory could not answer. */
+type Actors = ReadonlyMap<string, Known | undefined>;
 
 function toBuffer(data: Buffer | ArrayBuffer | Buffer[]): Buffer {
   if (Array.isArray(data)) return Buffer.concat(data);
@@ -398,7 +410,7 @@ export class LiveHub {
    * connections; one the directory cannot answer for is skipped this time.
    */
   async #actors(userIds: Iterable<string>): Promise<Actors> {
-    const actors = new Map<string, Actor | undefined>();
+    const actors = new Map<string, Known | undefined>();
     for (const userId of new Set(userIds)) {
       const member = await lookupMember(this.#directory, userId);
       if (member === null) {
@@ -406,7 +418,10 @@ export class LiveHub {
         this.#dropPresence(userId);
         actors.set(userId, undefined);
       } else {
-        actors.set(userId, member === undefined ? undefined : actorFor(userId, member));
+        actors.set(
+          userId,
+          member === undefined ? undefined : { actor: actorFor(userId, member), member },
+        );
       }
     }
     return actors;
@@ -417,7 +432,7 @@ export class LiveHub {
     const actors = await this.#actors(connections.map((connection) => connection.userId));
     if (this.#closed) return;
     for (const connection of connections) {
-      const actor = actors.get(connection.userId);
+      const actor = actors.get(connection.userId)?.actor;
       if (actor !== undefined && entitled(actor)) this.#send(connection, type, data);
     }
   }
@@ -449,12 +464,19 @@ export class LiveHub {
       ...connections.map((connection) => connection.userId),
     ]);
     if (this.#closed) return;
-    const users = this.presence().filter((entry) => {
-      const actor = actors.get(entry.userId);
-      return actor !== undefined && this.#hasNamedPermission(actor);
-    });
+    const users: PresenceUser[] = [];
+    for (const entry of this.presence()) {
+      const known = actors.get(entry.userId);
+      if (known !== undefined && this.#hasNamedPermission(known.actor)) {
+        users.push({
+          ...entry,
+          name: known.member.displayName,
+          avatarUrl: known.member.avatarUrl,
+        });
+      }
+    }
     for (const connection of connections) {
-      const actor = actors.get(connection.userId);
+      const actor = actors.get(connection.userId)?.actor;
       if (actor !== undefined && this.#hasNamedPermission(actor)) {
         this.#send(connection, 'presence', { users });
       }

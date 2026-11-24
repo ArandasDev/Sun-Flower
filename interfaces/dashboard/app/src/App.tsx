@@ -1,16 +1,21 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Menu } from './components/Menu.tsx';
+import { ReconnectBanner } from './components/ReconnectBanner.tsx';
+import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
 import { Login } from './routes/Login.tsx';
 import { Overview } from './routes/Overview.tsx';
 import { Profile } from './routes/Profile.tsx';
 import { RequireSession } from './session.tsx';
 
-function Shell() {
+/** Below `RequireSession`, so the live connection only opens once `/api/me` succeeded. */
+function LiveShell({ clock }: { clock: LiveClock }) {
   const location = useLocation();
+  const live = useLiveConnection(clock);
   return (
-    <RequireSession>
+    <LiveContext.Provider value={live}>
       <div className="shell">
+        <ReconnectBanner />
         <Menu />
         <AnimatePresence mode="wait" initial={false}>
           <motion.main
@@ -29,15 +34,23 @@ function Shell() {
           </motion.main>
         </AnimatePresence>
       </div>
+    </LiveContext.Provider>
+  );
+}
+
+function Shell({ clock }: { clock: LiveClock }) {
+  return (
+    <RequireSession>
+      <LiveShell clock={clock} />
     </RequireSession>
   );
 }
 
-export function App() {
+export function App({ clock = realClock }: { clock?: LiveClock }) {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/*" element={<Shell />} />
+      <Route path="/*" element={<Shell clock={clock} />} />
     </Routes>
   );
 }

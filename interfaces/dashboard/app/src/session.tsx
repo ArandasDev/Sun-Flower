@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { ApiError, apiFetch, resetCsrfToken, setCsrfToken } from './api.ts';
 import type { Level } from './labels.ts';
@@ -37,14 +37,19 @@ export function useCurrentMe(): Me {
   return me;
 }
 
-export function useLogout() {
+/** Leaves the session for good: forgets the CSRF token and the whole cache, then goes to /login. */
+export function useLeaveSession(): () => void {
   const client = useQueryClient();
   const navigate = useNavigate();
-  const leave = () => {
+  return useCallback(() => {
     resetCsrfToken();
-    client.removeQueries({ queryKey: ['me'] });
+    client.clear();
     void navigate('/login');
-  };
+  }, [client, navigate]);
+}
+
+export function useLogout() {
+  const leave = useLeaveSession();
   return useMutation({
     mutationFn: () => apiFetch<void>('/api/logout', { method: 'POST' }),
     onSuccess: leave,

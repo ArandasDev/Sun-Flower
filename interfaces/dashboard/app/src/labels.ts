@@ -11,6 +11,15 @@ export function levelLabel(level: string): string {
   return Object.hasOwn(LEVELS, level) ? LEVELS[level as Level] : LEVELS.member;
 }
 
+const SCREENS: Record<string, string> = {
+  profile: 'Meu perfil',
+  overview: 'Visão geral',
+};
+
+export function screenLabel(screen: string): string {
+  return Object.hasOwn(SCREENS, screen) ? (SCREENS[screen] ?? screen) : screen;
+}
+
 const CONNECTIONS: Record<string, string> = {
   ready: 'Conectado',
   connecting: 'Conectando',

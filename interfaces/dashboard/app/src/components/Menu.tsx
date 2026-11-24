@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router';
 import { useCurrentMe, useLogout } from '../session.tsx';
+import { PresenceList } from './PresenceList.tsx';
 import { SeedMark } from './SeedMark.tsx';
 
 export function Menu() {
@@ -18,6 +19,7 @@ export function Menu() {
         </NavLink>
         {canSeeOverview ? <NavLink to="/visao-geral">Visão geral</NavLink> : null}
       </nav>
+      <PresenceList />
       <button type="button" className="button button-quiet" onClick={() => logout.mutate()}>
         Sair
       </button>
