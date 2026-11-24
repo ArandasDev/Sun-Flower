@@ -46,7 +46,8 @@ async function readError(response: Response): Promise<ApiError> {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
-  headers.set('Content-Type', 'application/json');
+  if (init.body !== undefined && init.body !== null)
+    headers.set('Content-Type', 'application/json');
   if (!SAFE_METHODS.has(method)) headers.set('X-CSRF-Token', csrfToken);
   const response = await fetch(path, { ...init, method, headers, credentials: 'same-origin' });
   if (!response.ok) throw await readError(response);

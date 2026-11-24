@@ -16,9 +16,18 @@ describe('apiFetch', () => {
     const post = fetchMock.mock.calls[0]?.[1];
     const get = fetchMock.mock.calls[1]?.[1];
     expect(new Headers(post?.headers).get('X-CSRF-Token')).toBe('csrf-token-1');
-    expect(new Headers(post?.headers).get('Content-Type')).toBe('application/json');
     expect(post?.credentials).toBe('same-origin');
     expect(new Headers(get?.headers).get('X-CSRF-Token')).toBeNull();
+  });
+
+  it('sends Content-Type only when the request has a body', async () => {
+    const fetchMock = stubFetch(() => ({ status: 204 }));
+    await apiFetch('/api/logout', { method: 'POST' });
+    await apiFetch('/api/thing', { method: 'POST', body: JSON.stringify({ a: 1 }) });
+    const empty = fetchMock.mock.calls[0]?.[1];
+    const withBody = fetchMock.mock.calls[1]?.[1];
+    expect(new Headers(empty?.headers).get('Content-Type')).toBeNull();
+    expect(new Headers(withBody?.headers).get('Content-Type')).toBe('application/json');
   });
 
   it('throws ApiError with status, code and message', async () => {

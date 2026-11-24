@@ -125,7 +125,7 @@ O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS (
 | Variável                | Conteúdo                                                                             |
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | `PANEL_PUBLIC_URL`      | Endereço público do painel, por exemplo `https://painel.example.com`.                |
-| `PANEL_PORT`            | Porta local (o servidor escuta só em `127.0.0.1`). Padrão do exemplo: `3000`.        |
+| `PANEL_PORT`            | Porta local (o servidor escuta só em `127.0.0.1`). Padrão: `3000`.                   |
 | `DISCORD_CLIENT_ID`     | ID da aplicação, no Discord Developer Portal.                                        |
 | `DISCORD_CLIENT_SECRET` | Segredo do OAuth2 da aplicação.                                                      |
 | `SESSION_SECRET`        | Segredo para assinar cookies e tokens CSRF. Gere um com o comando do `.env.example`. |
@@ -142,7 +142,7 @@ npm run build --prefix interfaces/dashboard/app
 
 **Hospedagem.** O bot não abre portas para a internet: coloque um proxy HTTPS na frente da porta local. O proxy precisa repassar o WebSocket de `/api/live`.
 
-- **Caddy** (o WebSocket e o IP do cliente já funcionam sem ajustes):
+- **Caddy** (o WebSocket não pede diretivas extras; o IP do cliente só é lido corretamente com `PANEL_TRUST_PROXY=127.0.0.1`):
 
   ```caddyfile
   painel.example.com {

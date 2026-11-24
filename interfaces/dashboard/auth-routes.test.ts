@@ -601,6 +601,19 @@ describe('POST /api/logout', () => {
     expect(sessionCount()).toBe(2);
   });
 
+  it('answers 204 with the CSRF token and no content-type, as the panel sends it', async () => {
+    const server = await build();
+    const token = await login(server);
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/logout',
+      cookies: { [SESSION_COOKIE]: token },
+      headers: { 'x-csrf-token': expectedCsrf(token) },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(sessionCount()).toBe(0);
+  });
+
   it('answers 401 without a session', async () => {
     const server = await build();
     const res = await server.inject({ method: 'POST', url: '/api/logout' });

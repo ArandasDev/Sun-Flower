@@ -233,6 +233,8 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     trustProxy: env.trustProxy.length > 0 ? env.trustProxy : false,
     bodyLimit: BODY_LIMIT,
     requestTimeout: REQUEST_TIMEOUT_MS,
+    // Node's default of 60 s would otherwise cap the headers phase above the request timeout.
+    http: { headersTimeout: REQUEST_TIMEOUT_MS },
     // close() must not wait for slow or idle clients: shutdown has a deadline.
     forceCloseConnections: true,
     frameworkErrors: frameworkErrorsFor(upgrades),

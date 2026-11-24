@@ -196,14 +196,14 @@ O formato de erro é sempre `{ "error": { "code", "message" } }`.
   - os eventos só avisam e trazem o mínimo (IDs e versões), e os dados completos vêm de uma operação, que checa a permissão de novo;
   - a permissão é recalculada a cada envio.
 
-| Evento enviado   | Origem                                  | Quem recebe                                  | `data`                        |
-| ---------------- | --------------------------------------- | -------------------------------------------- | ----------------------------- |
-| `status`         | conexão com o Discord, estado de módulo | desenvolvedor ou dono                        | estado resumido               |
-| `config.changed` | `core.config.changed`                   | quem tem permissão de módulo daquele prefixo | `{ moduleId, version }`       |
-| `case.created`   | `moderation.case.created`               | `moderation.cases.read`                      | `{ caseId }`                  |
-| `case.updated`   | `moderation.case.reverted` e descarte   | `moderation.cases.read`                      | `{ caseId }`                  |
-| `presence`       | presença                                | quem tem alguma permissão nomeada            | lista de `{ userId, screen }` |
-| `session.ended`  | logout, expiração, perda de acesso      | a própria conexão, antes de fechar           | —                             |
+| Evento enviado   | Origem                                  | Quem recebe                                  | `data`                                         |
+| ---------------- | --------------------------------------- | -------------------------------------------- | ---------------------------------------------- |
+| `status`         | conexão com o Discord, estado de módulo | desenvolvedor ou dono                        | estado resumido                                |
+| `config.changed` | `core.config.changed`                   | quem tem permissão de módulo daquele prefixo | `{ moduleId, version }`                        |
+| `case.created`   | `moderation.case.created`               | `moderation.cases.read`                      | `{ caseId }`                                   |
+| `case.updated`   | `moderation.case.reverted` e descarte   | `moderation.cases.read`                      | `{ caseId }`                                   |
+| `presence`       | presença                                | quem tem alguma permissão nomeada            | lista de `{ userId, screen, name, avatarUrl }` |
+| `session.ended`  | logout, expiração, perda de acesso      | a própria conexão, antes de fechar           | —                                              |
 
 - **Do navegador ao servidor:** só `{ "type": "presence", "screen": "<id>" }`.
   - `screen` segue `^[a-z0-9.-]{1,40}$`, e mensagens maiores que 256 bytes são recusadas.
