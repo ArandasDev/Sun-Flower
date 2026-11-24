@@ -6,6 +6,15 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ## [Unreleased]
 
+### Added
+
+- Registros de decisão 0017 a 0023 (níveis de acesso com dono automático e desenvolvedores com todas as permissões, login do painel com Discord OAuth2 e sessões, Fastify, React e Vite, tempo real por WebSocket filtrado por permissão, hospedagem atrás de um proxy HTTPS, operações de módulo e módulo `administration`) e spec da Fase 3 (painel administrativo).
+
+### Changed
+
+- Decisão 0006 substituída em parte pela 0017: o dono do servidor recebe as permissões de todos os módulos, e os desenvolvedores, todas as permissões.
+- ROADMAP: decisões da Fase 3 resolvidas, etapas definidas e critério de acesso ajustado, porque membros sem permissões passam a ver o próprio perfil.
+
 ## [0.2.0] - 2026-11-18
 
 ### Atenção: ação necessária antes de atualizar

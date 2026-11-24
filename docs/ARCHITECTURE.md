@@ -237,7 +237,7 @@ Todos os módulos deverão respeitar um modelo centralizado de identidade, auten
 
 **Requisitos:**
 
-- Controle de acesso baseado em permissões (RBAC), com permissões nomeadas conforme [MODULES.md §9](MODULES.md#9-permissões), em duas camadas independentes ([decisão 0006](decisions/0006-permission-model.md)): a **lista de desenvolvedores do bot**, que opera o próprio Sun Flower, e os **cargos do servidor**, que concedem as permissões dos módulos à equipe da comunidade. Ser dono ou administrador do servidor não concede controle sobre o bot.
+- Controle de acesso baseado em permissões (RBAC), com permissões nomeadas conforme [MODULES.md §9](MODULES.md#9-permissões), em duas camadas independentes ([decisão 0006](decisions/0006-permission-model.md)): a **lista de desenvolvedores do bot**, que opera o próprio Sun Flower, e os **cargos do servidor**, que concedem as permissões dos módulos à equipe da comunidade. Os desenvolvedores recebem todas as permissões, e o dono do servidor recebe as permissões de todos os módulos, mas nunca as do Core ([decisão 0017](decisions/0017-access-levels.md)). Ser administrador do servidor não concede nenhuma permissão, e ser dono não concede controle sobre o bot.
 - Restrição de atuação ao servidor autorizado, rejeitando eventos e comandos de qualquer outro servidor.
 - Proteção de credenciais e tokens.
 - Validação das operações administrativas.
