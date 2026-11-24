@@ -24,7 +24,12 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            interfaces/dashboard/app/package-lock.json
 
       - run: npm ci
+
+      - run: npm run app:install
 
       - run: npm run check

@@ -4,3 +4,4 @@ coverage/
 .env
 *.log
 data/
+interfaces/dashboard/app/dist/
