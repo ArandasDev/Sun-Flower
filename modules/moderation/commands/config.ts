@@ -8,27 +8,16 @@ const EPHEMERAL = { ephemeral: true } as const;
 const MAX_REPLY = 2000;
 const RULES = ['flood', 'repeat', 'mentions'] as const;
 
-function invalidFields(error: unknown): string | undefined {
-  if (!(error instanceof Error) || error.name !== 'InvalidModuleConfigError') return undefined;
-  const marker = ' at: ';
-  const index = error.message.indexOf(marker);
-  return index === -1 ? error.message : error.message.slice(index + marker.length);
-}
-
 async function applyConfig(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
-  partial: Record<string, unknown>,
+  changes: Record<string, unknown>,
 ): Promise<void> {
-  try {
-    deps.config.set(partial);
-  } catch (error) {
-    const fields = invalidFields(error);
-    if (fields === undefined) throw error;
-    await interaction.reply(CONFIG_INVALID(fields), EPHEMERAL);
-    return;
-  }
-  await interaction.reply(CONFIG_UPDATED, EPHEMERAL);
+  const result = await deps.operations.execute('moderation.config.update', interaction.actor, {
+    expectedVersion: deps.config.version(),
+    changes,
+  });
+  await interaction.reply(result.ok ? CONFIG_UPDATED : result.error.message, EPHEMERAL);
 }
 
 function describePunishment(p: Punishment): string {

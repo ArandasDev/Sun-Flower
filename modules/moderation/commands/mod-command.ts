@@ -26,6 +26,7 @@ import { NO_PERMISSION } from './replies.ts';
 export interface ModCommandDeps {
   readonly permissions: ModuleContext['permissions'];
   readonly config: ModuleContext['config'];
+  readonly operations: Pick<ModuleContext['operations'], 'execute'>;
   readonly guild: GuildActions;
   readonly cases: CaseStore;
   readonly domains: DomainStore;

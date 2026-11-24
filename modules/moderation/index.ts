@@ -10,6 +10,7 @@ import { buildModCommand } from './commands/mod-command.ts';
 import type { ModerationConfig } from './config.ts';
 import { MultiChannelTracker } from './detection/multi-channel.ts';
 import { DomainStore } from './domains.ts';
+import { registerModerationOperations } from './operations/index.ts';
 import { Responder } from './responder.ts';
 import { ActivityLog } from './spam/activity.ts';
 import { SpamCooldown } from './spam/rules.ts';
@@ -64,10 +65,12 @@ const createModeration: ModuleFactory = () => {
       context = ctx;
       ctx.events.subscribe(DISCORD_MESSAGE_CREATED, onCreated);
       ctx.events.subscribe(DISCORD_MESSAGE_UPDATED, onUpdated);
+      registerModerationOperations(ctx, { domains: () => required(domainStore) });
       ctx.commands.register(
         buildModCommand({
           permissions: ctx.permissions,
           config: ctx.config,
+          operations: ctx.operations,
           guild: ctx.guild,
           get cases() {
             return required(caseStore);

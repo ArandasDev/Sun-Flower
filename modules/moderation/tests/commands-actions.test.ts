@@ -11,6 +11,7 @@ import { configSchema } from '../config.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
 import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
+import { createLocalOperations } from './operations-harness.ts';
 
 const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const TARGET = '333333333333333333';
@@ -36,16 +37,19 @@ function setup(options: SetupOptions = {}) {
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const publish = vi.fn();
   const developers = new Set(options.developers ?? []);
+  const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
+  const domains = new DomainStore(ctx.storage);
   const deps: ModCommandDeps = {
     permissions: {
       check: () => true,
       isDeveloper: (userId) => developers.has(userId),
       hasAnyGrant: (roleIds, prefix) => prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
     },
-    config: { get: <T>() => config as T, set: vi.fn(), version: () => 0 },
+    config: configApi,
+    operations: createLocalOperations(configApi, domains, () => NOW),
     guild,
     cases: new CaseStore(ctx.storage),
-    domains: new DomainStore(ctx.storage),
+    domains,
     publish,
     now: () => NOW,
   };

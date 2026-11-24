@@ -27,3 +27,5 @@ export const KICKED = (n: number): string => `Membro expulso (caso #${String(n)}
 export const BANNED = (n: number): string => `Usuário banido (caso #${String(n)}).`;
 export const WARN_DM = (reason: string): string =>
   `Você recebeu uma advertência no servidor. Motivo: ${reason}`;
+export const CONFIG_CONFLICT =
+  'Outra pessoa alterou esta configuração. Recarregue para ver a versão atual.';

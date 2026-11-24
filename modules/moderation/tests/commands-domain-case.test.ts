@@ -12,6 +12,7 @@ import { CaseStore } from '../cases.ts';
 import type { CaseAction, CaseStatus, NewCase } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import { DomainStore } from '../domains.ts';
+import { createLocalOperations } from './operations-harness.ts';
 
 const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const TARGET = '333333333333333333';
@@ -25,12 +26,15 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const guild = createFakeGuild(guildOverrides);
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const publish = vi.fn();
+  const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
+  const domains = new DomainStore(ctx.storage);
   const deps: ModCommandDeps = {
     permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => config as T, set: vi.fn(), version: () => 0 },
+    config: configApi,
+    operations: createLocalOperations(configApi, domains, () => NOW),
     guild,
     cases: new CaseStore(ctx.storage),
-    domains: new DomainStore(ctx.storage),
+    domains,
     publish,
     now: () => NOW,
   };
