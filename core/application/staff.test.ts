@@ -139,14 +139,18 @@ describe('runStaff role grants', () => {
     expect(out).toEqual(['Nenhuma associação.']);
   });
 
-  it('warns after granting a permission no module declares', () => {
+  it('refuses a permission no module declares with code 1', () => {
     declared = new Set();
-    expect(runStaff(['grant', PERMISSION, ROLE], deps)).toBe(0);
-    expect(out).toEqual([
-      'Permissão associada ao cargo.',
-      'Aviso: nenhum módulo declara esta permissão.',
-    ]);
-    expect(deps.permissions.listGrants()).toHaveLength(1);
+    expect(runStaff(['grant', PERMISSION, ROLE], deps)).toBe(1);
+    expect(out).toEqual([`Nenhum módulo declara a permissão ${PERMISSION}.`]);
+    expect(deps.permissions.listGrants()).toEqual([]);
+  });
+
+  it('refuses administration.* permissions with code 2', () => {
+    declared = new Set(['administration.grants.manage']);
+    expect(runStaff(['grant', 'administration.grants.manage', ROLE], deps)).toBe(2);
+    expect(out.at(-1)).toBe('Permissões administration.* não podem ser associadas a cargos.');
+    expect(deps.permissions.listGrants()).toEqual([]);
   });
 
   it('rejects invalid role ids, invalid permissions and core permissions with code 2', () => {

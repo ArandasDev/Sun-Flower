@@ -1,5 +1,5 @@
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
-import type { EventContext } from '../../shared/contracts/events.ts';
+import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
@@ -9,6 +9,7 @@ import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import { ModuleRegistry, type ModuleStatus } from '../module-registry/registry.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
+import { PURGE_INTERVAL_MS, SessionStore } from '../sessions/session-store.ts';
 
 export interface StartCoreOptions {
   readonly dbPath: string;
@@ -25,8 +26,13 @@ export interface CoreHandle {
   commands(): ReadonlyMap<string, CommandDefinition>;
   status(): ReadonlyMap<string, ModuleStatus>;
   readonly permissions: PermissionService;
+  readonly sessions: SessionStore;
+  /** Subscribes an interface to an event type; the returned function cancels it. */
+  subscribe(type: string, handler: EventHandler): () => void;
+  /** The permissions declared by the manifests of the loaded modules. */
+  declaredPermissions(): ReadonlySet<string>;
   /**
-   * Publishes a `discord.*` event with source `core`. Once stop() has begun the event is
+   * Publishes a `discord.*` or `core.*` event with source `core`. Once stop() has begun the event is
    * dropped with a warning instead of thrown.
    */
   publishCoreEvent(type: string, payload: unknown, context?: EventContext): void;
@@ -45,8 +51,10 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
   const events = new EventBus(logger);
   let registry: ModuleRegistry | undefined;
   let stopping: Promise<void> | undefined;
+  let purgeTimer: NodeJS.Timeout | undefined;
 
   const shutdown = async (): Promise<void> => {
+    clearInterval(purgeTimer);
     try {
       if (registry !== undefined) await registry.stop();
       await events.idle();
@@ -58,6 +66,7 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
   try {
     runMigrations(db, options.migrationsDir ?? MIGRATIONS_DIR);
     const permissions = new PermissionService(db);
+    const sessions = new SessionStore(db);
     registry = new ModuleRegistry({
       modulesDir: options.modulesDir,
       logger,
@@ -71,12 +80,26 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
     await registry.load();
     await registry.start();
     const started = registry;
+    purgeTimer = setInterval(() => {
+      try {
+        sessions.purgeExpired();
+      } catch (error) {
+        logger.error(
+          { error: error instanceof Error ? error.message : String(error) },
+          'panel session purge failed',
+        );
+      }
+    }, PURGE_INTERVAL_MS);
+    purgeTimer.unref();
     logger.info({ modules: started.status().size }, 'core started');
 
     return {
       commands: () => started.commands(),
       status: () => started.status(),
       permissions,
+      sessions,
+      subscribe: (type, handler) => events.subscribeFromCore(type, handler),
+      declaredPermissions: () => started.declaredPermissions(),
       publishCoreEvent: (type, payload, context) => {
         if (stopping !== undefined) {
           logger.warn({ event: type }, 'core event dropped: core is stopping');

@@ -12,6 +12,8 @@ import {
   InvalidSnowflakeError,
   isValidPermission,
   PermissionService,
+  ProtectedPermissionGrantError,
+  UndeclaredPermissionError,
 } from '../permissions/permission-service.ts';
 
 const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
@@ -52,21 +54,23 @@ function changeDevelopers(
 function grantPermission(permission: string, roleId: string, deps: StaffDeps): number {
   const { permissions, logger, out } = deps;
   try {
-    permissions.grant(permission, roleId);
+    permissions.grant(permission, roleId, deps.declaredPermissions());
   } catch (error) {
     if (error instanceof InvalidSnowflakeError) out('ID de cargo inválido.');
     else if (error instanceof InvalidPermissionError) out('Permissão inválida.');
     else if (error instanceof CorePermissionGrantError) {
       out('Permissões core.* não podem ser associadas a cargos.');
+    } else if (error instanceof ProtectedPermissionGrantError) {
+      out('Permissões administration.* não podem ser associadas a cargos.');
+    } else if (error instanceof UndeclaredPermissionError) {
+      out(`Nenhum módulo declara a permissão ${permission}.`);
+      return 1;
     } else throw error;
     return 2;
   }
   // The role id stays out of the log, like user ids.
   logger.info({ action: 'grant', permission }, 'role grant updated');
   out('Permissão associada ao cargo.');
-  if (!deps.declaredPermissions().has(permission)) {
-    out('Aviso: nenhum módulo declara esta permissão.');
-  }
   return 0;
 }
 

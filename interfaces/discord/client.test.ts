@@ -66,6 +66,16 @@ describe('toRawInteraction', () => {
     expect(toRawInteraction(fakeInteraction(null).interaction).roleIds).toEqual([]);
   });
 
+  it('flags the guild owner and defaults to false without a cached guild', () => {
+    const owner = fakeInteraction(null);
+    (owner.interaction as unknown as { guild: unknown }).guild = { ownerId: roleId };
+    expect(toRawInteraction(owner.interaction).isOwner).toBe(true);
+    const other = fakeInteraction(null);
+    (other.interaction as unknown as { guild: unknown }).guild = { ownerId: '333333333333333333' };
+    expect(toRawInteraction(other.interaction).isOwner).toBe(false);
+    expect(toRawInteraction(fakeInteraction(null).interaction).isOwner).toBe(false);
+  });
+
   it('maps replies to discord.js calls with ephemeral flags and no mentions', async () => {
     const { calls, interaction } = fakeInteraction(null);
     const raw = toRawInteraction(interaction);

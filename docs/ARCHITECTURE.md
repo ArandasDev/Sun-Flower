@@ -171,6 +171,8 @@ O painel deverá funcionar como uma camada de gerenciamento independente da inte
 
 O painel deverá consumir as interfaces disponibilizadas pela aplicação central, sem acessar diretamente as implementações internas dos módulos.
 
+O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, no mesmo processo do bot, atrás de um proxy HTTPS e com atualização em tempo real por WebSocket. Veja as decisões [0017](decisions/0017-access-levels.md), [0018](decisions/0018-panel-authentication.md), [0019](decisions/0019-panel-stack.md), [0020](decisions/0020-panel-realtime.md) e [0021](decisions/0021-panel-hosting.md) e a [spec da Fase 3](specs/2026-11-24-fase-3-painel.md).
+
 ## 4. Princípios de Modularização
 
 A modularização é um dos fundamentos mais importantes do Sun Flower.

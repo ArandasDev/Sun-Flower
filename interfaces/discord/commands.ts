@@ -107,6 +107,7 @@ export interface RawInteraction {
   readonly commandName: string;
   readonly userId: string;
   readonly roleIds: string[];
+  readonly isOwner: boolean;
   readonly guildId: string | null;
   readonly channelId: string;
   readonly subcommandGroup: string | undefined;
@@ -182,7 +183,7 @@ export async function dispatchCommand(
   };
 
   const interaction: CommandInteraction = {
-    actor: { userId: raw.userId, roleIds: [...raw.roleIds] },
+    actor: { userId: raw.userId, roleIds: [...raw.roleIds], isOwner: raw.isOwner },
     channelId: raw.channelId,
     subcommandGroup: raw.subcommandGroup,
     subcommand: raw.subcommand,

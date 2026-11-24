@@ -36,7 +36,7 @@ describe('ping module', () => {
 
     const replies: string[] = [];
     await registered[0]?.handle({
-      actor: { userId: '000000000000000000', roleIds: [] },
+      actor: { userId: '000000000000000000', roleIds: [], isOwner: false },
       channelId: '111111111111111111',
       subcommandGroup: undefined,
       subcommand: undefined,

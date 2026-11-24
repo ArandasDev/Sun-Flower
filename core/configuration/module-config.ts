@@ -8,6 +8,15 @@ export class InvalidModuleConfigError extends Error {
   }
 }
 
+export class ConfigVersionConflictError extends Error {
+  constructor(moduleId: string, expected: number, actual: number) {
+    super(
+      `Settings of module "${moduleId}" changed: expected version ${expected}, current is ${actual}`,
+    );
+    this.name = 'ConfigVersionConflictError';
+  }
+}
+
 export class ModuleConfigStore {
   readonly #db: DatabaseSync;
 
@@ -33,11 +42,20 @@ export class ModuleConfigStore {
       .run(moduleId, value, new Date().toISOString());
   }
 
+  /** The settings version of a module; 0 while nothing has been stored. */
+  getVersion(moduleId: string): number {
+    const row = this.#db
+      .prepare('SELECT version FROM module_config WHERE module_id = ?')
+      .get(moduleId) as { version: number } | undefined;
+    return row?.version ?? 0;
+  }
+
   setSettings(moduleId: string, settings: unknown): void {
     this.#db
       .prepare(
-        `INSERT INTO module_config (module_id, settings, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(module_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`,
+        `INSERT INTO module_config (module_id, settings, updated_at, version) VALUES (?, ?, ?, 1)
+         ON CONFLICT(module_id) DO UPDATE SET settings = excluded.settings,
+           updated_at = excluded.updated_at, version = module_config.version + 1`,
       )
       .run(moduleId, JSON.stringify(settings), new Date().toISOString());
   }
@@ -55,11 +73,17 @@ export class ModuleConfigStore {
     moduleId: string,
     schema: z.ZodType<T> | undefined,
     partial: Record<string, unknown>,
+    expectedVersion?: number,
   ): T {
     if (schema === undefined) throw new InvalidModuleConfigError(moduleId, ['(no schema)']);
+    // The read, the version comparison and the write below run in one synchronous call on a
+    // synchronous SQLite driver, so no concurrent writer can slip in between them.
     const row = this.#db
-      .prepare('SELECT settings FROM module_config WHERE module_id = ?')
-      .get(moduleId) as { settings: string } | undefined;
+      .prepare('SELECT settings, version FROM module_config WHERE module_id = ?')
+      .get(moduleId) as { settings: string; version: number } | undefined;
+    if (expectedVersion !== undefined && expectedVersion !== (row?.version ?? 0)) {
+      throw new ConfigVersionConflictError(moduleId, expectedVersion, row?.version ?? 0);
+    }
     const parsed: unknown = row === undefined ? {} : JSON.parse(row.settings);
     const stored =
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)

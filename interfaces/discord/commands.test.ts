@@ -32,6 +32,7 @@ function fakeInteraction(
     commandName,
     userId,
     roleIds: [roleId],
+    isOwner: false,
     guildId: '000000000000000000',
     channelId: '222222222222222222',
     subcommandGroup: 'grp',
@@ -142,7 +143,7 @@ describe('dispatchCommand', () => {
       logger,
     );
 
-    expect(seen).toEqual({ userId, roleIds: [roleId] });
+    expect(seen).toEqual({ userId, roleIds: [roleId], isOwner: false });
     expect(raw.calls).toEqual([{ kind: 'reply', content: 'Pong!', ephemeral: false }]);
     expect(vi.getTimerCount()).toBe(0);
   });

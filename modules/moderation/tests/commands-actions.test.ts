@@ -12,7 +12,7 @@ import { buildModCommand } from '../commands/mod-command.ts';
 import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
 
-const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'] };
+const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const TARGET = '333333333333333333';
 const CHANNEL = '444444444444444444';
 const MEMBER_ROLE = '555555555555555555';

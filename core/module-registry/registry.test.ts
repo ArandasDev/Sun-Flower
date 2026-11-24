@@ -883,6 +883,62 @@ export default () => {
     await registry.stop();
   });
 
+  it('config.set publishes core.config.changed with the new version', async () => {
+    writeModule('a', {
+      rawSource: `${recorder()}
+${VALID_SCHEMA}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() { context.config.set({ greeting: 'hello' }); },
+    async start() {},
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+    });
+    const received: unknown[] = [];
+    bus.subscribeFromCore('core.config.changed', (event) => {
+      received.push(event.payload);
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    await bus.idle();
+    expect(received).toEqual([{ moduleId: 'a', version: 1 }]);
+    await registry.stop();
+  });
+
+  it('publishes core.module.state.changed on every transition', async () => {
+    writeModule('a');
+    const states: unknown[] = [];
+    bus.subscribeFromCore('core.module.state.changed', (event) => {
+      states.push(event.payload);
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    await bus.idle();
+    expect(states).toContainEqual({ moduleId: 'a', state: 'RUNNING' });
+    await registry.stop();
+    await bus.idle();
+    expect(states).toContainEqual({ moduleId: 'a', state: 'STOPPED' });
+  });
+
+  it('exposes the permissions declared by the loaded manifests', async () => {
+    writeModule('a', { manifest: { permissions: ['a.item.use'] } });
+    writeModule('b', { manifest: { permissions: ['b.item.use', 'b.item.edit'] } });
+    const registry = createRegistry();
+    await registry.load();
+    expect([...registry.declaredPermissions()].sort()).toEqual([
+      'a.item.use',
+      'b.item.edit',
+      'b.item.use',
+    ]);
+  });
+
   it('config.set before initialize throws', async () => {
     writeModule('a', {
       rawSource: `${recorder()}

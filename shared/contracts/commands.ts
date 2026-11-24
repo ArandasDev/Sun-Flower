@@ -1,6 +1,8 @@
 export interface Actor {
   readonly userId: string;
   readonly roleIds: readonly string[];
+  /** Whether the actor is the current owner of the guild. */
+  readonly isOwner: boolean;
 }
 
 export interface ReplyOptions {

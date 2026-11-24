@@ -9,11 +9,18 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 ### Added
 
 - Registros de decisão 0017 a 0023 (níveis de acesso com dono automático e desenvolvedores com todas as permissões, login do painel com Discord OAuth2 e sessões, Fastify, React e Vite, tempo real por WebSocket filtrado por permissão, hospedagem atrás de um proxy HTTPS, operações de módulo e módulo `administration`) e spec da Fase 3 (painel administrativo).
+- Níveis de acesso (desenvolvedor, dono, equipe e membro) no serviço de permissões.
+- Sessões do painel guardadas pelo sha256 do token (migração 0003).
+- Eventos `core.*` e `subscribe` para as interfaces.
+- Versão das configurações de módulo, com detecção de conflito.
+- Validação das variáveis do painel (`PANEL_*`, `DISCORD_CLIENT_*` e `SESSION_SECRET`).
 
 ### Changed
 
 - Decisão 0006 substituída em parte pela 0017: o dono do servidor recebe as permissões de todos os módulos, e os desenvolvedores, todas as permissões.
 - ROADMAP: decisões da Fase 3 resolvidas, etapas definidas e critério de acesso ajustado, porque membros sem permissões passam a ver o próprio perfil.
+- Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
+- `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
 
 ## [0.2.0] - 2026-11-18
 

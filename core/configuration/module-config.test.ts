@@ -4,7 +4,11 @@ import { z } from 'zod';
 
 import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
-import { InvalidModuleConfigError, ModuleConfigStore } from './module-config.ts';
+import {
+  ConfigVersionConflictError,
+  InvalidModuleConfigError,
+  ModuleConfigStore,
+} from './module-config.ts';
 
 let db: DatabaseSync;
 let store: ModuleConfigStore;
@@ -128,5 +132,25 @@ describe('ModuleConfigStore.updateSettings', () => {
     store.setSettings('ping', [1, 2]);
     expect(store.updateSettings('ping', schema, { greeting: 'yo' })).toEqual({ greeting: 'yo' });
     expect(store.isEnabled('ping', false)).toBe(true);
+  });
+
+  it('versions settings from 0 and increments on every write', () => {
+    expect(store.getVersion('ping')).toBe(0);
+    store.setSettings('ping', { greeting: 'a' });
+    expect(store.getVersion('ping')).toBe(1);
+    store.updateSettings('ping', schema, { greeting: 'b' });
+    expect(store.getVersion('ping')).toBe(2);
+  });
+
+  it('rejects a stale expectedVersion without writing', () => {
+    store.setSettings('ping', { greeting: 'a' });
+    expect(() => store.updateSettings('ping', schema, { greeting: 'b' }, 0)).toThrow(
+      ConfigVersionConflictError,
+    );
+    expect(store.loadSettings('ping', schema)).toEqual({ greeting: 'a' });
+    expect(store.getVersion('ping')).toBe(1);
+    store.updateSettings('ping', schema, { greeting: 'c' }, 1);
+    expect(store.loadSettings('ping', schema)).toEqual({ greeting: 'c' });
+    expect(store.getVersion('ping')).toBe(2);
   });
 });
