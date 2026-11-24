@@ -20,6 +20,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - `GET /api/status` (conexão com o Discord, módulos e tempo no ar) para desenvolvedores e o dono;
   - canal ao vivo `/api/live` (WebSocket) com presença e estado do bot, filtrado pelas permissões de cada pessoa.
 - Diretório de membros e estado da conexão na interface Discord, que publica `core.discord.connection.changed`.
+- App React do painel: login, perfil, visão geral, conexão ao vivo com reconexão automática (a espera só volta a 1 s depois de uma conexão estável) e presença de quem está no painel.
+- Documentação de hospedagem do painel (Caddy, Nginx e túnel), das variáveis, do endereço de retorno no Discord e do teste manual da etapa 1.
 
 ### Changed
 
@@ -27,6 +29,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - ROADMAP: decisões da Fase 3 resolvidas, etapas definidas e critério de acesso ajustado, porque membros sem permissões passam a ver o próprio perfil.
 - Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
 - `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
+- A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
 
 ## [0.2.0] - 2026-11-18
 

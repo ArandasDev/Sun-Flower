@@ -116,6 +116,80 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 3. Confira a configuração com `/mod config view` e ajuste com `/mod config spam-rule`, `spam-escalation` ou `spam-ignore` se necessário.
 4. Com a conta da equipe, execute `/mod case revert <número>`: o timeout é removido.
 
+## Painel
+
+O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel.
+
+**Variáveis** (todas no `.env`): o painel liga quando `PANEL_PUBLIC_URL` está definida, e então `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` e `SESSION_SECRET` passam a ser obrigatórias; `PANEL_PORT` (padrão `3000`) e `PANEL_TRUST_PROXY` são opcionais:
+
+| Variável                | Conteúdo                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| `PANEL_PUBLIC_URL`      | Endereço público do painel, por exemplo `https://painel.example.com`.                |
+| `PANEL_PORT`            | Porta local (o servidor escuta só em `127.0.0.1`). Padrão: `3000`.                   |
+| `DISCORD_CLIENT_ID`     | ID da aplicação, no Discord Developer Portal.                                        |
+| `DISCORD_CLIENT_SECRET` | Segredo do OAuth2 da aplicação.                                                      |
+| `SESSION_SECRET`        | Segredo para assinar cookies e tokens CSRF. Gere um com o comando do `.env.example`. |
+| `PANEL_TRUST_PROXY`     | Proxies confiáveis, separados por vírgula (veja abaixo). Vazio = nenhum.             |
+
+**Discord Developer Portal:** em **OAuth2 → Redirects**, cadastre `https://painel.example.com/auth/callback` (o endereço de `PANEL_PUBLIC_URL` seguido de `/auth/callback`).
+
+**Build do painel** (necessário antes de iniciar o bot com o painel ligado):
+
+```bash
+npm run app:install
+npm run build --prefix interfaces/dashboard/app
+```
+
+**Hospedagem.** O bot não abre portas para a internet: coloque um proxy HTTPS na frente da porta local. O proxy precisa repassar o WebSocket de `/api/live`.
+
+- **Caddy** (o WebSocket não pede diretivas extras; o IP do cliente só é lido corretamente com `PANEL_TRUST_PROXY=127.0.0.1`):
+
+  ```caddyfile
+  painel.example.com {
+    reverse_proxy 127.0.0.1:3000
+  }
+  ```
+
+- **Nginx** (com HTTPS configurado à parte):
+
+  ```nginx
+  server {
+    server_name painel.example.com;
+
+    location / {
+      proxy_pass http://127.0.0.1:3000;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api/live {
+      proxy_pass http://127.0.0.1:3000;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_read_timeout 1h;
+    }
+  }
+  ```
+
+- **Túnel** (por exemplo, Cloudflare Tunnel): sem abrir portas, apontando o domínio público para `http://127.0.0.1:3000`.
+
+**`PANEL_TRUST_PROXY`:** com um proxy na mesma máquina (Caddy ou Nginx), use `PANEL_TRUST_PROXY=127.0.0.1`. Com um túnel, use o IP de onde o conector (por exemplo, `cloudflared`) se conecta ao painel. Se ficar vazio, o painel avisa na inicialização e todos os clientes parecem vir do proxy: dividem os mesmos limites de requisições, e uma pessoa pode bloquear o login de todas. Um valor errado anula o limite por IP.
+
+**Quem pode entrar:** só membros do servidor. Desenvolvedores do bot também precisam ser membros. Um desenvolvedor que não é membro vê esta mensagem na tela de login: "Desenvolvedores precisam ser membros do servidor para acessar o painel. Isso faz parte da segurança do projeto: limita o estrago se uma conta for invadida." Quem não é membro e não é desenvolvedor vê "Só membros do servidor podem acessar o painel."
+
+**Teste manual da etapa 1** (pessoa mantenedora), atrás de um proxy HTTPS:
+
+1. Um membro comum entra e vê só "Meu perfil".
+2. Uma conta que não é membro recebe a mensagem "Só membros do servidor podem acessar o painel.".
+3. O dono vê a "Visão geral".
+4. Duas abas da mesma pessoa aparecem como uma só na presença.
+5. Desconectar a rede mostra `Reconectando…`, e a conexão volta sozinha quando a rede volta.
+6. O logout em uma aba leva a outra para o login.
+
 ## Documentação
 
 | Documento                          | Conteúdo                         |

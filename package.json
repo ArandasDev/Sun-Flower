@@ -15,7 +15,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test"
+    "app:install": "npm ci --prefix interfaces/dashboard/app",
+    "app:check": "npm run check --prefix interfaces/dashboard/app",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run app:check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

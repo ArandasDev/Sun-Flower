@@ -23,6 +23,8 @@ Leia, nesta ordem:
 
 Uma contribuição que contrarie uma decisão registrada em `docs/decisions/` precisa primeiro de uma nova decisão que a substitua.
 
+Quem quer ser desenvolvedor do bot, com acesso ao painel administrativo, precisa ser **membro do servidor Discord**: o painel recusa o login de quem não é membro, mesmo que seja desenvolvedor. Um desenvolvedor que não é membro vê esta mensagem: "Desenvolvedores precisam ser membros do servidor para acessar o painel. Isso faz parte da segurança do projeto: limita o estrago se uma conta for invadida." A configuração do painel está no [README](README.md#painel).
+
 ## 3. Princípios
 
 - **Consistência:** seguir os padrões de nomenclatura, organização e implementação existentes.

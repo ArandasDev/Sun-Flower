@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'node_modules/', 'coverage/'],
+    ignores: ['dist/', 'node_modules/', 'coverage/', 'interfaces/dashboard/app/dist/'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -47,6 +47,26 @@ export default tseslint.config(
               message: 'Modules must not import from interfaces/.',
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    // The panel app is a separate TS project with its own tsconfig.
+    files: ['interfaces/dashboard/app/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: ['./interfaces/dashboard/app/tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message: 'Use texto; a CSP e a revisão proíbem HTML bruto.',
         },
       ],
     },

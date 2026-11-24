@@ -9,7 +9,7 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 | **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                |
 | **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                          |
 | **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente. |
-| **Fase 3 — Painel administrativo** | Em design: spec e decisões 0017 a 0023 em revisão.                                                                                         |
+| **Fase 3 — Painel administrativo** | Em andamento: etapa 1 (base segura) implementada, teste manual pendente; etapas 2 e 3 por fazer.                                           |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -138,7 +138,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Etapas:** spec [2026-11-24-fase-3-painel.md](specs/2026-11-24-fase-3-painel.md).
 
-1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil.
+1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil. **Implementada** (PRs H, I e J); o teste manual do [README](../README.md#painel) está pendente.
 2. Moderação pelo painel.
 3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões.
 

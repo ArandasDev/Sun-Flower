@@ -504,6 +504,7 @@ describe('shutdown', { timeout: 20_000 }, () => {
   it('bounds the time to receive a whole request', async () => {
     await build();
     expect(app!.server.requestTimeout).toBe(15_000);
+    expect(app!.server.headersTimeout).toBe(15_000);
   });
 });
 

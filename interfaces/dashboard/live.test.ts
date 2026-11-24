@@ -409,9 +409,19 @@ async function expectNoServerSockets(): Promise<void> {
   await withTimeout(app.close(), 'app.close()');
 }
 
-function presenceOf(message: LiveMessage): { userId: string; screen: string }[] {
-  return (message.data as { users: { userId: string; screen: string }[] }).users;
+interface PresenceUserShape {
+  userId: string;
+  screen: string;
+  name: string;
+  avatarUrl: string | null;
 }
+
+function presenceOf(message: LiveMessage): PresenceUserShape[] {
+  return (message.data as { users: PresenceUserShape[] }).users;
+}
+
+/** What `member()` gives everyone by default. */
+const WHO = { name: 'Pessoa', avatarUrl: null };
 
 function sendPresence(client: Client, screen: string): void {
   client.ws.send(JSON.stringify({ type: 'presence', screen }));
@@ -534,7 +544,7 @@ describe('presence', () => {
     await barrier(plain);
     sendPresence(owner, 'overview');
     const message = await waitFor(owner, (m) => m.type === 'presence');
-    expect(presenceOf(message)).toEqual([{ userId: OWNER, screen: 'overview' }]);
+    expect(presenceOf(message)).toEqual([{ userId: OWNER, screen: 'overview', ...WHO }]);
     await barrier(plain);
     expect(plain.messages).toEqual([]);
   });
@@ -551,7 +561,7 @@ describe('presence', () => {
       dev,
       (m) => m.type === 'presence' && presenceOf(m).some((u) => u.screen === 'overview'),
     );
-    expect(presenceOf(message)).toEqual([{ userId: STAFF, screen: 'overview' }]);
+    expect(presenceOf(message)).toEqual([{ userId: STAFF, screen: 'overview', ...WHO }]);
 
     second.ws.close();
     await until(() => hub.connectionCount(STAFF) === 1, 'one connection left');
@@ -563,8 +573,34 @@ describe('presence', () => {
       (m) => m.type === 'presence' && presenceOf(m).some((u) => u.userId === DEV),
     );
     expect(presenceOf(after)).toEqual([
-      { userId: DEV, screen: 'overview' },
-      { userId: STAFF, screen: 'overview' },
+      { userId: DEV, screen: 'overview', ...WHO },
+      { userId: STAFF, screen: 'overview', ...WHO },
+    ]);
+  });
+
+  it('carries the display name and avatar of each person', async () => {
+    members.set(
+      STAFF,
+      member({
+        roleIds: [STAFF_ROLE],
+        displayName: 'Girassol',
+        avatarUrl: 'https://cdn.discordapp.com/avatars/1/a.png',
+      }),
+    );
+    const staff = await connect(sessions.create(STAFF).token);
+    const owner = await connect(sessions.create(OWNER).token);
+    sendPresence(staff, 'profile');
+    const message = await waitFor(
+      owner,
+      (m) => m.type === 'presence' && presenceOf(m).length === 1,
+    );
+    expect(presenceOf(message)).toEqual([
+      {
+        userId: STAFF,
+        screen: 'profile',
+        name: 'Girassol',
+        avatarUrl: 'https://cdn.discordapp.com/avatars/1/a.png',
+      },
     ]);
   });
 
@@ -604,7 +640,7 @@ describe('presence', () => {
     await until(() => hub.presentUsers().length === 1, 'presence recorded');
     const owner = await connect(sessions.create(OWNER).token);
     const message = await waitFor(owner, (m) => m.type === 'presence');
-    expect(presenceOf(message)).toEqual([{ userId: STAFF, screen: 'overview' }]);
+    expect(presenceOf(message)).toEqual([{ userId: STAFF, screen: 'overview', ...WHO }]);
   });
 });
 

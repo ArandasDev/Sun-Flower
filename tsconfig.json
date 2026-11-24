@@ -22,5 +22,5 @@
     "noEmit": true
   },
   "include": ["core", "modules", "interfaces", "shared", "tests", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "interfaces/dashboard/app"]
 }

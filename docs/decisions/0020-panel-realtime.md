@@ -29,3 +29,7 @@ Server-Sent Events só enviam do servidor ao navegador. A presença precisa que 
 - A presença e as atualizações ao vivo funcionam sem consultas repetidas ao servidor.
 - O canal ao vivo não vira uma segunda porta de ações, e a superfície de ataque se limita a receber eventos e a enviar presença.
 - O proxy HTTPS precisa repassar o upgrade de WebSocket.
+
+## Atualização (2026-11-24)
+
+As entradas de presença passam a levar também o nome e o avatar: `{ userId, screen, name, avatarUrl }`. Elas só chegam a quem tem alguma permissão nomeada, e servem para a lista mostrar quem está online.
