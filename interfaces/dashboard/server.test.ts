@@ -58,6 +58,7 @@ beforeEach(() => {
   mkdirSync(staticDir);
   writeFileSync(join(staticDir, 'index.html'), '<!doctype html><title>Painel</title>');
   writeFileSync(join(staticDir, 'app.js'), 'console.log(1);');
+  writeFileSync(join(staticDir, '.env'), 'DOTFILE-SECRET');
   writeFileSync(join(root, 'secret.txt'), 'TOP-SECRET-OUTSIDE');
   logger = createRecordingLogger();
 });
@@ -205,14 +206,18 @@ describe('static files', () => {
     expect(res.body).toBe('console.log(1);');
   });
 
-  it.each(['/../secret.txt', '/%2e%2e/secret.txt', '/..%2fsecret.txt', '/%2e%2e%2fsecret.txt'])(
-    'does not leave staticDir through %s',
-    async (url) => {
-      const server = await build();
-      const res = await server.inject({ method: 'GET', url });
-      expect(res.body).not.toContain('TOP-SECRET-OUTSIDE');
-    },
-  );
+  it.each([
+    '/../secret.txt',
+    '/%2e%2e/secret.txt',
+    '/..%2fsecret.txt',
+    '/%2e%2e%2fsecret.txt',
+    '/..%5csecret.txt',
+    '/%2e%2e%5csecret.txt',
+  ])('does not leave staticDir through %s', async (url) => {
+    const server = await build();
+    const res = await server.inject({ method: 'GET', url });
+    expect(res.body).not.toContain('TOP-SECRET-OUTSIDE');
+  });
 
   it('falls back to index.html for any other path', async () => {
     const server = await build();
@@ -245,5 +250,125 @@ describe('error handling', () => {
     const logged = JSON.stringify(logger.entries);
     expect(logged).toContain('TypeError');
     expect(logged).not.toContain('secret detail');
+  });
+});
+
+const HEADERS = {
+  'content-security-policy': CSP,
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'same-origin',
+};
+
+function expectSecurityHeaders(headers: Record<string, unknown>): void {
+  for (const [name, value] of Object.entries(HEADERS)) expect(headers[name]).toBe(value);
+  expect(headers['strict-transport-security']).toMatch(/max-age=\d+/);
+}
+
+describe('review fixes', () => {
+  it('rate-limits a percent-encoded /api prefix', async () => {
+    const server = await build();
+    for (let i = 0; i < 120; i++) {
+      expect((await server.inject({ method: 'GET', url: '/%61pi/me' })).statusCode).toBe(404);
+    }
+    const res = await server.inject({ method: 'GET', url: '/%61pi/me' });
+    expect(res.statusCode).toBe(429);
+  });
+
+  it('answers a JSON 404 to a percent-encoded /api or /auth prefix', async () => {
+    const server = await build();
+    for (const url of ['/%61pi/nope', '/%61uth/nope', '/api%2Fnope']) {
+      const res = await server.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toEqual({ error: { code: 'not_found', message: anyString } });
+    }
+  });
+
+  it.each(['/%zz', '/api/%zz'])(
+    'answers a malformed URL %s uniformly with headers',
+    async (url) => {
+      const server = await build();
+      const res = await server.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({
+        error: { code: 'bad_request', message: 'Requisição inválida.' },
+      });
+      expect(res.body).not.toContain('%zz');
+      expectSecurityHeaders(res.headers);
+    },
+  );
+
+  it('does not serve dotfiles', async () => {
+    const server = await build();
+    const res = await server.inject({ method: 'GET', url: '/.env' });
+    expect(res.body).not.toContain('DOTFILE-SECRET');
+  });
+
+  it('keeps the status of a thrown 4xx without leaking its message', async () => {
+    const server = await build();
+    const fail = (status: number) => () => {
+      throw Object.assign(new Error('leaky message'), { statusCode: status });
+    };
+    server.get('/api/t403', fail(403));
+    server.get('/api/t404', fail(404));
+    server.get('/api/t409', fail(409));
+    server.get('/api/t422', fail(422));
+    const expected: [string, number, string][] = [
+      ['/api/t403', 403, 'forbidden'],
+      ['/api/t404', 404, 'not_found'],
+      ['/api/t409', 409, 'conflict'],
+      ['/api/t422', 422, 'bad_request'],
+    ];
+    for (const [url, status, code] of expected) {
+      const res = await server.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(status);
+      expect(res.json()).toEqual({ error: { code, message: anyString } });
+      expect(res.body).not.toContain('leaky');
+    }
+  });
+
+  it('sets the security headers on every kind of response', async () => {
+    const server = await build({ staticDir: join(root, 'missing') });
+    server.get('/api/boom', () => {
+      throw new Error('x');
+    });
+    server.post('/api/echo', () => ({ ok: true }));
+    const post = (headers: Record<string, string>, payload: string) =>
+      server.inject({ method: 'POST', url: '/api/echo', headers, payload });
+    const responses = [
+      await server.inject({ method: 'GET', url: '/api/nope' }),
+      await post({ 'content-type': 'application/json' }, JSON.stringify({ d: 'x'.repeat(70_000) })),
+      await post({ 'content-type': 'text/plain' }, 'hi'),
+      await server.inject({ method: 'GET', url: '/api/boom' }),
+      await server.inject({ method: 'GET', url: '/spa/route' }),
+    ];
+    expect(responses.map((r) => r.statusCode)).toEqual([404, 413, 415, 500, 503]);
+    for (const res of responses) expectSecurityHeaders(res.headers);
+  });
+
+  it('sets the security headers on 429 and on the SPA fallback', async () => {
+    const server = await build();
+    const spa = await server.inject({ method: 'GET', url: '/spa/route' });
+    expect(spa.statusCode).toBe(200);
+    expectSecurityHeaders(spa.headers);
+    for (let i = 0; i < 120; i++) await server.inject({ method: 'GET', url: '/api/me' });
+    const limited = await server.inject({ method: 'GET', url: '/api/me' });
+    expect(limited.statusCode).toBe(429);
+    expectSecurityHeaders(limited.headers);
+  });
+
+  it('caches index.html but re-checks while it is missing', async () => {
+    const server = await build();
+    expect((await server.inject({ method: 'GET', url: '/a' })).body).toContain('Painel');
+    writeFileSync(join(staticDir, 'index.html'), 'changed');
+    expect((await server.inject({ method: 'GET', url: '/b' })).body).toContain('Painel');
+
+    rmSync(join(staticDir, 'index.html'));
+    const late = await build({ staticDir: join(root, 'late') });
+    expect((await late.inject({ method: 'GET', url: '/a' })).statusCode).toBe(503);
+    mkdirSync(join(root, 'late'));
+    writeFileSync(join(root, 'late', 'index.html'), 'now here');
+    const res = await late.inject({ method: 'GET', url: '/a' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('now here');
   });
 });
