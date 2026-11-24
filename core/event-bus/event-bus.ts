@@ -8,7 +8,7 @@ import { withTimeout } from '../infrastructure/timeout.ts';
 const DEFAULT_HANDLER_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_DEPTH = 8;
 const CORE_SOURCE = 'core';
-const CORE_EVENT_PREFIX = 'discord.';
+const CORE_EVENT_PREFIXES = ['discord.', 'core.'] as const;
 
 export class UndeclaredEventError extends Error {
   constructor(moduleId: string, type: string) {
@@ -86,9 +86,27 @@ export class EventBus {
     }
   }
 
-  /** Publishes a Discord event on behalf of the Core; only `discord.*` types are accepted. */
+  /**
+   * Subscribes an interface (e.g. the web panel) to an event type; no manifest is involved.
+   * Returns a function that cancels the subscription.
+   */
+  subscribeFromCore(type: string, handler: EventHandler): () => void {
+    const subscription: Subscription = { moduleId: CORE_SOURCE, handler, active: true };
+    let set = this.subscriptions.get(type);
+    if (set === undefined) {
+      set = new Set();
+      this.subscriptions.set(type, set);
+    }
+    set.add(subscription);
+    return () => {
+      subscription.active = false;
+      this.subscriptions.get(type)?.delete(subscription);
+    };
+  }
+
+  /** Publishes an event on behalf of the Core; only `discord.*` and `core.*` types are accepted. */
   publishFromCore(type: string, payload: unknown, context?: EventContext): void {
-    if (!type.startsWith(CORE_EVENT_PREFIX)) {
+    if (!CORE_EVENT_PREFIXES.some((prefix) => type.startsWith(prefix))) {
       throw new UndeclaredEventError(CORE_SOURCE, type);
     }
     this.dispatch(CORE_SOURCE, type, payload, context);

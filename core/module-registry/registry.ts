@@ -105,6 +105,15 @@ export class ModuleRegistry {
     this.#stepTimeoutMs = deps.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
   }
 
+  /** The permissions declared by the manifests that were loaded (valid ones only). */
+  declaredPermissions(): ReadonlySet<string> {
+    const permissions = new Set<string>();
+    for (const record of this.#records.values()) {
+      for (const permission of record.manifest.permissions) permissions.add(permission);
+    }
+    return permissions;
+  }
+
   status(): ReadonlyMap<string, ModuleStatus> {
     return new Map(this.#statuses);
   }
@@ -334,6 +343,10 @@ export class ModuleRegistry {
           if (record.settings === undefined) throw settingsUnavailable();
           const value = this.#deps.config.updateSettings(id, record.configSchema, partial);
           record.settings = { value };
+          this.#publishCore('core.config.changed', {
+            moduleId: id,
+            version: this.#deps.config.getVersion(id),
+          });
         },
       }),
       guild: createModuleGuild({
@@ -435,6 +448,16 @@ export class ModuleRegistry {
       throw new Error(`Invalid state transition for module "${id}": ${current} -> ${next}`);
     }
     this.#statuses.set(id, { state: next });
+    this.#publishCore('core.module.state.changed', { moduleId: id, state: next });
+  }
+
+  /** Core events are informational: a failure to publish never breaks the registry. */
+  #publishCore(type: string, payload: unknown): void {
+    try {
+      this.#deps.events.publishFromCore(type, payload);
+    } catch (error) {
+      this.#deps.logger.warn({ event: type, error: describe(error) }, 'core event not published');
+    }
   }
 
   #fail(id: string, failedAt: string, error: string): void {

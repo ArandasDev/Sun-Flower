@@ -267,4 +267,33 @@ describe('EventBus', () => {
       process.off('unhandledRejection', onUnhandled);
     }
   });
+
+  it('lets the Core publish core.* events and still rejects other module prefixes', async () => {
+    const { bus } = setup();
+    const received: SunFlowerEvent[] = [];
+    bus.subscribeFromCore('core.config.changed', (e) => {
+      received.push(e);
+    });
+    bus.publishFromCore('core.config.changed', { moduleId: 'a', version: 1 });
+    await bus.idle();
+    expect(received).toHaveLength(1);
+    expect(received[0]?.source).toBe('core');
+    expect(() => {
+      bus.publishFromCore('moderation.x', {});
+    }).toThrow(UndeclaredEventError);
+  });
+
+  it('stops delivering to a subscribeFromCore handler once cancelled', async () => {
+    const { bus } = setup();
+    const received: SunFlowerEvent[] = [];
+    const cancel = bus.subscribeFromCore('core.config.changed', (e) => {
+      received.push(e);
+    });
+    bus.publishFromCore('core.config.changed', { n: 1 });
+    await bus.idle();
+    cancel();
+    bus.publishFromCore('core.config.changed', { n: 2 });
+    await bus.idle();
+    expect(received).toHaveLength(1);
+  });
 });

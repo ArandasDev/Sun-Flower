@@ -1,5 +1,5 @@
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
-import type { EventContext } from '../../shared/contracts/events.ts';
+import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
@@ -27,8 +27,12 @@ export interface CoreHandle {
   status(): ReadonlyMap<string, ModuleStatus>;
   readonly permissions: PermissionService;
   readonly sessions: SessionStore;
+  /** Subscribes an interface to an event type; the returned function cancels it. */
+  subscribe(type: string, handler: EventHandler): () => void;
+  /** The permissions declared by the manifests of the loaded modules. */
+  declaredPermissions(): ReadonlySet<string>;
   /**
-   * Publishes a `discord.*` event with source `core`. Once stop() has begun the event is
+   * Publishes a `discord.*` or `core.*` event with source `core`. Once stop() has begun the event is
    * dropped with a warning instead of thrown.
    */
   publishCoreEvent(type: string, payload: unknown, context?: EventContext): void;
@@ -94,6 +98,8 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
       status: () => started.status(),
       permissions,
       sessions,
+      subscribe: (type, handler) => events.subscribeFromCore(type, handler),
+      declaredPermissions: () => started.declaredPermissions(),
       publishCoreEvent: (type, payload, context) => {
         if (stopping !== undefined) {
           logger.warn({ event: type }, 'core event dropped: core is stopping');
