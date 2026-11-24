@@ -10,12 +10,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
-import { hashSessionToken } from '../../core/sessions/session-store.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import { registerAuthRoutes } from './auth-routes.ts';
 import { apiError } from './errors.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
+import { createSessionAuth, type SessionAuth } from './session.ts';
 
-export const SESSION_COOKIE = '__Host-sf_session';
+export { SESSION_COOKIE } from './session.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -45,6 +46,7 @@ const BODY_LIMIT = 65_536;
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 120;
 const RATE_MAX_CHANGES = 30;
+const RATE_MAX_LOGIN = 10;
 const CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export interface DashboardDeps {
@@ -57,6 +59,11 @@ export interface DashboardDeps {
   /** The directory with the compiled panel (index.html and assets). */
   readonly staticDir: string;
   readonly now?: () => number;
+  /**
+   * Called with the session's idHash after `POST /api/logout` deleted it; the seam Task 8 uses to
+   * close that session's live connections. Errors it throws are logged, never sent.
+   */
+  readonly onLogout?: (idHash: string) => void;
 }
 
 export interface DashboardHandle {
@@ -72,31 +79,38 @@ function decodedPathname(url: string): string | undefined {
   }
 }
 
-function belongsToServer(path: string): boolean {
-  return ['/api', '/auth'].some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+type ServerArea = 'api' | 'auth';
+
+function areaOf(path: string): ServerArea | undefined {
+  const under = (prefix: string): boolean => path === prefix || path.startsWith(`${prefix}/`);
+  if (under('/api')) return 'api';
+  if (under('/auth')) return 'auth';
+  return undefined;
 }
 
 /**
  * Paths under /api and /auth belong to the server; everything else is the single-page app. Routing
  * has already happened, so a matched route decides; unmatched requests (and the static wildcard)
- * fall back to the decoded pathname, and an undecodable one counts as a server path.
+ * fall back to the decoded pathname, and an undecodable one counts as an API path.
  */
-function isServerRequest(request: FastifyRequest): boolean {
+function serverArea(request: FastifyRequest): ServerArea | undefined {
   const route = request.routeOptions.url;
-  if (route !== undefined && route !== '/*' && route !== '*') return belongsToServer(route);
+  if (route !== undefined && route !== '/*' && route !== '*') return areaOf(route);
   const path = decodedPathname(request.url);
-  return path === undefined || belongsToServer(path);
+  return path === undefined ? 'api' : areaOf(path);
+}
+
+function isServerRequest(request: FastifyRequest): boolean {
+  return serverArea(request) !== undefined;
 }
 
 /**
- * The limiter key: the hash of the session cookie when present (never the raw value), else the
- * client IP. The cookie is not validated here, so it only picks a bucket.
+ * The API limiter key: the idHash of the validated session, else the client IP. A cookie that does
+ * not resolve to a session falls back to the IP, so random cookies cannot open new buckets.
  */
-function rateLimitKey(request: FastifyRequest): string {
-  const cookie = request.cookies[SESSION_COOKIE];
-  return cookie !== undefined && cookie !== ''
-    ? `s:${hashSessionToken(cookie)}`
-    : `i:${request.ip}`;
+function rateLimitKey(auth: SessionAuth, request: FastifyRequest): string {
+  const record = auth.resolve(request);
+  return record !== null ? `s:${record.idHash}` : `i:${request.ip}`;
 }
 
 /**
@@ -179,23 +193,41 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   });
   await app.register(fastifyCookie, { secret: env.sessionSecret.toString('base64') });
 
-  // Two buckets per client: every API request, and the changing ones on top of that.
+  const auth = createSessionAuth({
+    core: deps.core,
+    directory: deps.directory,
+    sessionSecret: env.sessionSecret,
+  });
+  const apiKey = (request: FastifyRequest): string => rateLimitKey(auth, request);
+
+  // /auth has its own bucket per IP. The API has two per client: every request, and the changing
+  // ones on top of that.
   await app.register(fastifyRateLimit, { global: false });
+  const limitLogin = app.createRateLimit({
+    max: RATE_MAX_LOGIN,
+    timeWindow: RATE_WINDOW_MS,
+    keyGenerator: (request) => `i:${request.ip}`,
+  });
   const limitAll = app.createRateLimit({
     max: RATE_MAX,
     timeWindow: RATE_WINDOW_MS,
-    keyGenerator: rateLimitKey,
+    keyGenerator: apiKey,
   });
   const limitChanges = app.createRateLimit({
     max: RATE_MAX_CHANGES,
     timeWindow: RATE_WINDOW_MS,
-    keyGenerator: rateLimitKey,
+    keyGenerator: apiKey,
   });
   app.addHook('onRequest', async (request, reply) => {
-    if (!isServerRequest(request)) return;
+    const area = serverArea(request);
+    if (area === undefined) return;
     // A counted request is only refused once `isExceeded`; `isAllowed: false` just carries counters.
-    let result = await limitAll(request);
-    if (!(!result.isAllowed && result.isExceeded) && CHANGING_METHODS.has(request.method)) {
+    let result = area === 'auth' ? await limitLogin(request) : await limitAll(request);
+    if (
+      area === 'api' &&
+      !(!result.isAllowed && result.isExceeded) &&
+      CHANGING_METHODS.has(request.method)
+    ) {
       result = await limitChanges(request);
     }
     if (!result.isAllowed && result.isExceeded) {
@@ -232,6 +264,17 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
       return apiError(reply, 500, 'failed', 'Erro interno.');
     },
   );
+
+  registerAuthRoutes(app, {
+    env,
+    core: deps.core,
+    directory: deps.directory,
+    oauth: deps.oauth,
+    logger,
+    auth,
+    now: deps.now ?? Date.now,
+    ...(deps.onLogout === undefined ? {} : { onLogout: deps.onLogout }),
+  });
 
   await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
 

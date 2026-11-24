@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 
 describe('security headers', () => {
-  it.each(['/', '/api/me'])('sets the exact CSP and companions on %s', async (url) => {
+  it.each(['/', '/api/nope'])('sets the exact CSP and companions on %s', async (url) => {
     const server = await build();
     const res = await server.inject({ method: 'GET', url });
     expect(res.headers['content-security-policy']).toBe(CSP);
@@ -84,10 +84,10 @@ describe('security headers', () => {
 describe('request validation', () => {
   it('answers 415 to a body that is not JSON', async () => {
     const server = await build();
-    server.post('/api/logout', () => ({ ok: true }));
+    server.post('/api/echo', () => ({ ok: true }));
     const res = await server.inject({
       method: 'POST',
-      url: '/api/logout',
+      url: '/api/echo',
       headers: { 'content-type': 'text/plain' },
       payload: 'hello',
     });
@@ -99,8 +99,8 @@ describe('request validation', () => {
 
   it('does not require a content type on a bodiless POST', async () => {
     const server = await build();
-    server.post('/api/logout', () => ({ ok: true }));
-    const res = await server.inject({ method: 'POST', url: '/api/logout' });
+    server.post('/api/echo', () => ({ ok: true }));
+    const res = await server.inject({ method: 'POST', url: '/api/echo' });
     expect(res.statusCode).toBe(200);
   });
 
@@ -146,10 +146,10 @@ describe('rate limits', () => {
   it('answers 429 in the error format on the 121st request in a minute', async () => {
     const server = await build();
     for (let i = 0; i < 120; i++) {
-      const res = await server.inject({ method: 'GET', url: '/api/me' });
+      const res = await server.inject({ method: 'GET', url: '/api/nope' });
       expect(res.statusCode).toBe(404);
     }
-    const res = await server.inject({ method: 'GET', url: '/api/me' });
+    const res = await server.inject({ method: 'GET', url: '/api/nope' });
     expect(res.statusCode).toBe(429);
     expect(res.json()).toEqual({ error: { code: 'rate_limited', message: anyString } });
   });
@@ -166,7 +166,7 @@ describe('rate limits', () => {
       });
     for (let i = 0; i < 30; i++) expect((await post()).statusCode).toBe(200);
     expect((await post()).statusCode).toBe(429);
-    expect((await server.inject({ method: 'GET', url: '/api/me' })).statusCode).toBe(404);
+    expect((await server.inject({ method: 'GET', url: '/api/nope' })).statusCode).toBe(404);
   });
 
   it('ignores X-Forwarded-For when no proxy is trusted', async () => {
@@ -174,13 +174,13 @@ describe('rate limits', () => {
     for (let i = 0; i < 120; i++) {
       await server.inject({
         method: 'GET',
-        url: '/api/me',
+        url: '/api/nope',
         headers: { 'x-forwarded-for': `203.0.113.${i + 1}` },
       });
     }
     const res = await server.inject({
       method: 'GET',
-      url: '/api/me',
+      url: '/api/nope',
       headers: { 'x-forwarded-for': '203.0.113.250' },
     });
     expect(res.statusCode).toBe(429);
@@ -191,7 +191,7 @@ describe('rate limits', () => {
     for (let i = 0; i < 121; i++) {
       const res = await server.inject({
         method: 'GET',
-        url: '/api/me',
+        url: '/api/nope',
         headers: { 'x-forwarded-for': `203.0.113.${i + 1}` },
       });
       expect(res.statusCode).toBe(404);
@@ -269,9 +269,9 @@ describe('review fixes', () => {
   it('rate-limits a percent-encoded /api prefix', async () => {
     const server = await build();
     for (let i = 0; i < 120; i++) {
-      expect((await server.inject({ method: 'GET', url: '/%61pi/me' })).statusCode).toBe(404);
+      expect((await server.inject({ method: 'GET', url: '/%61pi/nope' })).statusCode).toBe(404);
     }
-    const res = await server.inject({ method: 'GET', url: '/%61pi/me' });
+    const res = await server.inject({ method: 'GET', url: '/%61pi/nope' });
     expect(res.statusCode).toBe(429);
   });
 
@@ -351,8 +351,8 @@ describe('review fixes', () => {
     const spa = await server.inject({ method: 'GET', url: '/spa/route' });
     expect(spa.statusCode).toBe(200);
     expectSecurityHeaders(spa.headers);
-    for (let i = 0; i < 120; i++) await server.inject({ method: 'GET', url: '/api/me' });
-    const limited = await server.inject({ method: 'GET', url: '/api/me' });
+    for (let i = 0; i < 120; i++) await server.inject({ method: 'GET', url: '/api/nope' });
+    const limited = await server.inject({ method: 'GET', url: '/api/nope' });
     expect(limited.statusCode).toBe(429);
     expectSecurityHeaders(limited.headers);
   });
@@ -408,16 +408,18 @@ async function listen(): Promise<number> {
 }
 
 describe('every request form', () => {
-  it.each(['http://h/api/me', 'HTTP://h/api/me', 'http://h:1@x/api/me', 'https://evil/%61pi/me'])(
-    'rate-limits the absolute-form target %s',
-    async (target) => {
-      const port = await listen();
-      for (let i = 0; i < 120; i++) {
-        expect((await rawRequest(port, get(target))).status).toBe(404);
-      }
-      expect((await rawRequest(port, get(target))).status).toBe(429);
-    },
-  );
+  it.each([
+    'http://h/api/nope',
+    'HTTP://h/api/nope',
+    'http://h:1@x/api/nope',
+    'https://evil/%61pi/nope',
+  ])('rate-limits the absolute-form target %s', async (target) => {
+    const port = await listen();
+    for (let i = 0; i < 120; i++) {
+      expect((await rawRequest(port, get(target))).status).toBe(404);
+    }
+    expect((await rawRequest(port, get(target))).status).toBe(429);
+  });
 
   it('answers a JSON 404 to an absolute-form API target', async () => {
     const port = await listen();
@@ -435,7 +437,7 @@ describe('every request form', () => {
   });
 
   it.each([
-    ['an unknown method', 'FOO /api/me HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n', 400],
+    ['an unknown method', 'FOO /api/nope HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n', 400],
     ['a garbage request line', 'garbage\r\n\r\n', 400],
     [
       'an oversized header',
