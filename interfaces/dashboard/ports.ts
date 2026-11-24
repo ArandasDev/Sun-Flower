@@ -21,3 +21,10 @@ export interface BotStatus {
   /** Epoch milliseconds when the bot process started. */
   startedAt: number;
 }
+
+/** The Discord OAuth2 client the login flow uses; implemented by the Discord adapter. */
+export interface OAuthClient {
+  authorizeUrl(state: string, challenge: string): string;
+  exchange(code: string, verifier: string): Promise<string>;
+  fetchUserId(accessToken: string): Promise<string>;
+}

@@ -102,4 +102,27 @@ describe('loadPanelEnvironment', () => {
     ).toEqual(['127.0.0.1', '::1']);
     expect(loadPanelEnvironment({ ...valid, PANEL_TRUST_PROXY: '' })?.trustProxy).toEqual([]);
   });
+
+  it('accepts IPs and CIDR ranges in PANEL_TRUST_PROXY', () => {
+    expect(
+      loadPanelEnvironment({ ...valid, PANEL_TRUST_PROXY: '10.0.0.0/8, 192.0.2.1, fd00::/8' })
+        ?.trustProxy,
+    ).toEqual(['10.0.0.0/8', '192.0.2.1', 'fd00::/8']);
+  });
+
+  it.each([
+    '*',
+    'true',
+    '0.0.0.0/0',
+    '::/0',
+    '10.0.0.0/0',
+    '10.0.0.0/33',
+    '::1/129',
+    'host',
+    '10.0.0.0/x',
+  ])('rejects %s in PANEL_TRUST_PROXY', (entry) => {
+    expect(failedVariables({ ...valid, PANEL_TRUST_PROXY: `127.0.0.1, ${entry}` })).toEqual([
+      'PANEL_TRUST_PROXY',
+    ]);
+  });
 });

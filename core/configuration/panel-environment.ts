@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import { z } from 'zod';
 
 import { parse, type Source } from './environment.ts';
@@ -13,6 +15,17 @@ export interface PanelEnvironment {
 }
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** An IP, or IP/CIDR with a prefix length above zero that fits the address family. */
+function isTrustedProxyEntry(entry: string): boolean {
+  const slash = entry.indexOf('/');
+  if (slash === -1) return isIP(entry) !== 0;
+  const family = isIP(entry.slice(0, slash));
+  const prefix = entry.slice(slash + 1);
+  if (family === 0 || !/^\d{1,3}$/.test(prefix)) return false;
+  const length = Number(prefix);
+  return length > 0 && length <= (family === 4 ? 32 : 128);
+}
 
 const publicUrl = z.string().transform((value, ctx) => {
   try {
@@ -62,6 +75,7 @@ const panelSchema = z.object({
         .map((item) => item.trim())
         .filter((item) => item !== ''),
     )
+    .refine((items) => items.every(isTrustedProxyEntry))
     .default([]),
 });
 
