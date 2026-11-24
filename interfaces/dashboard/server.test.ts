@@ -1,5 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { connect, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -370,5 +371,90 @@ describe('review fixes', () => {
     const res = await late.inject({ method: 'GET', url: '/a' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe('now here');
+  });
+});
+
+interface RawResponse {
+  readonly status: number;
+  readonly head: string;
+  readonly body: string;
+}
+
+/** Sends the raw bytes over a real socket (inject cannot send absolute-form targets). */
+function rawRequest(port: number, bytes: string): Promise<RawResponse> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: '127.0.0.1', port });
+    let data = '';
+    socket.setEncoding('utf8');
+    socket.on('data', (chunk: string) => (data += chunk));
+    socket.on('error', reject);
+    socket.on('close', () => {
+      const [head = '', ...rest] = data.split('\r\n\r\n');
+      const status = Number(/^HTTP\/1\.1 (\d+)/.exec(head)?.[1]);
+      resolve({ status, head, body: rest.join('\r\n\r\n') });
+    });
+    socket.write(bytes);
+  });
+}
+
+const get = (target: string, host = 'h'): string =>
+  `GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`;
+
+async function listen(): Promise<number> {
+  const server = await build();
+  server.get('/api', () => ({ ok: true }));
+  await server.listen({ host: '127.0.0.1', port: 0 });
+  return (server.server.address() as AddressInfo).port;
+}
+
+describe('every request form', () => {
+  it.each(['http://h/api/me', 'HTTP://h/api/me', 'http://h:1@x/api/me', 'https://evil/%61pi/me'])(
+    'rate-limits the absolute-form target %s',
+    async (target) => {
+      const port = await listen();
+      for (let i = 0; i < 120; i++) {
+        expect((await rawRequest(port, get(target))).status).toBe(404);
+      }
+      expect((await rawRequest(port, get(target))).status).toBe(429);
+    },
+  );
+
+  it('answers a JSON 404 to an absolute-form API target', async () => {
+    const port = await listen();
+    const res = await rawRequest(port, get('http://h/api/nope'));
+    expect(res.status).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: { code: 'not_found', message: anyString } });
+  });
+
+  it('rate-limits an exact route reached with a fragment', async () => {
+    const port = await listen();
+    for (let i = 0; i < 120; i++) {
+      expect((await rawRequest(port, get('/api#x'))).status).toBe(200);
+    }
+    expect((await rawRequest(port, get('/api#x'))).status).toBe(429);
+  });
+
+  it.each([
+    ['an unknown method', 'FOO /api/me HTTP/1.1\r\nHost: h\r\nConnection: close\r\n\r\n', 400],
+    ['a garbage request line', 'garbage\r\n\r\n', 400],
+    [
+      'an oversized header',
+      `GET / HTTP/1.1\r\nHost: h\r\nX-Big: ${'a'.repeat(100_000)}\r\n\r\n`,
+      431,
+    ],
+  ] as const)('answers %s with the uniform error and headers', async (_name, bytes, status) => {
+    const port = await listen();
+    const res = await rawRequest(port, bytes);
+    expect(res.status).toBe(status);
+    expect(JSON.parse(res.body)).toEqual({
+      error: { code: 'bad_request', message: 'Requisição inválida.' },
+    });
+    const lower = res.head.toLowerCase();
+    expect(lower).toContain(`content-security-policy: ${CSP}`.toLowerCase());
+    expect(lower).toContain('strict-transport-security: max-age=');
+    expect(lower).toContain('x-content-type-options: nosniff');
+    expect(lower).toContain('referrer-policy: same-origin');
+    expect(lower).toContain('content-type: application/json');
+    expect(lower).toContain('connection: close');
   });
 });

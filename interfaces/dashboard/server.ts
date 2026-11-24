@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
 import fastifyHelmet from '@fastify/helmet';
@@ -62,19 +63,29 @@ export interface DashboardHandle {
   close(): Promise<void>;
 }
 
-/**
- * Paths under these prefixes belong to the server; everything else is the single-page app. The
- * path is percent-decoded first, because the router decodes it too (`/%61pi` reaches `/api`); an
- * undecodable path counts as a server path.
- */
-function isServerPath(url: string): boolean {
-  let path = url.split('?')[0] ?? '';
+/** The percent-decoded pathname of a request target; scheme, authority, query and fragment are dropped. */
+function decodedPathname(url: string): string | undefined {
   try {
-    path = decodeURIComponent(path);
+    return decodeURIComponent(new URL(url, 'http://x').pathname);
   } catch {
-    return true;
+    return undefined;
   }
+}
+
+function belongsToServer(path: string): boolean {
   return ['/api', '/auth'].some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+/**
+ * Paths under /api and /auth belong to the server; everything else is the single-page app. Routing
+ * has already happened, so a matched route decides; unmatched requests (and the static wildcard)
+ * fall back to the decoded pathname, and an undecodable one counts as a server path.
+ */
+function isServerRequest(request: FastifyRequest): boolean {
+  const route = request.routeOptions.url;
+  if (route !== undefined && route !== '/*' && route !== '*') return belongsToServer(route);
+  const path = decodedPathname(request.url);
+  return path === undefined || belongsToServer(path);
 }
 
 /**
@@ -88,7 +99,43 @@ function rateLimitKey(request: FastifyRequest): string {
     : `i:${request.ip}`;
 }
 
-// Malformed URLs fail before routing, so no hook runs: answer them here, uniformly.
+/**
+ * Absolute-form targets (`GET http://h/api/me`) and fragments are reduced to path and query, so
+ * routing, the static plugin and the limiter all see the same path.
+ */
+function originForm(req: { url?: string | undefined }): string {
+  const url = req.url ?? '/';
+  if (url.startsWith('/') && !url.includes('#')) return url;
+  try {
+    const parsed = new URL(url, 'http://x');
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+/** Node-level client errors (unknown method, garbage request line, oversized header). */
+function clientErrorHandler(error: Error & { code?: string }, socket: Socket): void {
+  if (!socket.writable) {
+    socket.destroy(error);
+    return;
+  }
+  const status = error.code === 'HPE_HEADER_OVERFLOW' ? 431 : 400;
+  const body = JSON.stringify({ error: { code: 'bad_request', message: 'Requisição inválida.' } });
+  const lines = [
+    `HTTP/1.1 ${status} ${status === 431 ? 'Request Header Fields Too Large' : 'Bad Request'}`,
+    ...Object.entries(SECURITY_HEADERS).map(([name, value]) => `${name}: ${value}`),
+    'Content-Type: application/json; charset=utf-8',
+    `Content-Length: ${Buffer.byteLength(body)}`,
+    'Connection: close',
+    '',
+    body,
+  ];
+  socket.end(lines.join('\r\n'));
+}
+
+// Malformed URLs fail before routing, so no hook runs: answer them here, uniformly. These replies are
+// not rate-limited, and FST_ERR_MAX_PARAM_LENGTH / FST_ERR_ASYNC_CONSTRAINT also become 400 bad_request.
 function frameworkErrors(_error: Error, _request: unknown, reply: FastifyReply): void {
   reply.headers(SECURITY_HEADERS);
   apiError(reply, 400, 'bad_request', 'Requisição inválida.');
@@ -102,6 +149,8 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     trustProxy: env.trustProxy.length > 0 ? env.trustProxy : false,
     bodyLimit: BODY_LIMIT,
     frameworkErrors,
+    clientErrorHandler,
+    rewriteUrl: originForm,
   });
 
   // Only application/json bodies are accepted; Fastify answers 415 to any other type with a body.
@@ -132,7 +181,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     keyGenerator: rateLimitKey,
   });
   app.addHook('onRequest', async (request, reply) => {
-    if (!isServerPath(request.url)) return;
+    if (!isServerRequest(request)) return;
     // A counted request is only refused once `isExceeded`; `isAllowed: false` just carries counters.
     let result = await limitAll(request);
     if (!(!result.isAllowed && result.isExceeded) && CHANGING_METHODS.has(request.method)) {
@@ -178,7 +227,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   // Cached after the first successful read; a missing file is looked up again on the next request.
   let indexHtml: Buffer | undefined;
   app.setNotFoundHandler(async (request, reply) => {
-    if (isServerPath(request.url) || (request.method !== 'GET' && request.method !== 'HEAD')) {
+    if (isServerRequest(request) || (request.method !== 'GET' && request.method !== 'HEAD')) {
       return apiError(reply, 404, 'not_found', 'Não encontrado.');
     }
     try {
