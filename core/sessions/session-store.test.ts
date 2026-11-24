@@ -131,3 +131,24 @@ describe('SessionStore', () => {
     expect(store.resolve(kept.token)).not.toBeNull();
   });
 });
+
+describe('SessionStore corrupt rows', () => {
+  function plantGarbage(): string {
+    const token = 'garbage-token';
+    db.prepare(
+      'INSERT INTO panel_sessions (id_hash, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(hashSessionToken(token), user, 'garbage', 'garbage', 'garbage');
+    return token;
+  }
+
+  it('treats a row with unparseable timestamps as expired', () => {
+    const token = plantGarbage();
+    expect(store.resolve(token)).toBeNull();
+  });
+
+  it('purges a row with unparseable timestamps', () => {
+    plantGarbage();
+    expect(store.purgeExpired()).toBe(1);
+    expect(count()).toBe(0);
+  });
+});

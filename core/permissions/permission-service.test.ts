@@ -281,3 +281,40 @@ describe('PermissionService', () => {
     });
   });
 });
+
+describe('PermissionService hardening', () => {
+  const staff = { userId: mod, roleIds: [role], isOwner: false };
+  const owner = { userId: mod, roleIds: [], isOwner: true };
+
+  function plant(permission: string): void {
+    db.prepare(
+      'INSERT INTO permission_grants (permission, role_id, granted_at) VALUES (?, ?, ?)',
+    ).run(permission, role, new Date().toISOString());
+  }
+
+  it('ignores a legacy administration.* role grant but keeps it for owners', () => {
+    plant('administration.grants.manage');
+    const set = new Set(['administration.grants.manage']);
+    expect(perms.check(staff, 'administration.grants.manage')).toBe(false);
+    expect(perms.effective(staff, set)).toEqual([]);
+    expect(perms.check(owner, 'administration.grants.manage')).toBe(true);
+  });
+
+  it('returns false for a permission that fails the format, even for owners', () => {
+    expect(perms.check(owner, 'Core.modules.manage')).toBe(false);
+  });
+
+  it('does not treat core.* or administration.* grant rows as staff', () => {
+    plant('core.modules.manage');
+    plant('administration.grants.manage');
+    expect(perms.level(staff)).toBe('member');
+    plant('ping.cmd.use');
+    expect(perms.level(staff)).toBe('staff');
+  });
+
+  it('throws when a module checks an undeclared permission as owner', () => {
+    expect(() => perms.forModule(manifest()).check(owner, 'moderation.warn.use')).toThrow(
+      UndeclaredPermissionError,
+    );
+  });
+});

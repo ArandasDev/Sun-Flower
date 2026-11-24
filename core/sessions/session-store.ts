@@ -80,6 +80,7 @@ export class SessionStore {
     if (row === undefined) return null;
     const record = toRecord(row);
     const now = this.#now();
+    if (!Number.isFinite(record.expiresAt) || !Number.isFinite(record.lastSeenAt)) return null;
     if (now > record.expiresAt || now > record.lastSeenAt + IDLE_EXPIRY_MS) return null;
     if (now - record.lastSeenAt < TOUCH_INTERVAL_MS) return record;
     this.#db
@@ -104,10 +105,19 @@ export class SessionStore {
 
   purgeExpired(): number {
     const now = this.#now();
-    return Number(
+    let removed = Number(
       this.#db
         .prepare('DELETE FROM panel_sessions WHERE expires_at < ? OR last_seen_at < ?')
         .run(iso(now), iso(now - IDLE_EXPIRY_MS)).changes,
     );
+    const rows = this.#db.prepare('SELECT * FROM panel_sessions').all() as unknown as SessionRow[];
+    for (const row of rows) {
+      const record = toRecord(row);
+      if (!Number.isFinite(record.expiresAt) || !Number.isFinite(record.lastSeenAt)) {
+        this.deleteByHash(row.id_hash);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }

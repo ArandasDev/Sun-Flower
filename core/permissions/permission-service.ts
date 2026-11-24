@@ -124,8 +124,10 @@ export class PermissionService {
   }
 
   check(actor: Actor, permission: string): boolean {
+    if (!PERMISSION.test(permission)) return false;
     if (this.isDeveloper(actor.userId)) return true;
     if (permission.startsWith(CORE_PREFIX)) return false;
+    if (permission.startsWith(PROTECTED_PREFIX)) return actor.isOwner;
     if (actor.isOwner) return true;
     const statement = this.#db.prepare(
       'SELECT 1 AS found FROM permission_grants WHERE permission = ? AND role_id = ?',
@@ -137,12 +139,23 @@ export class PermissionService {
   level(actor: Actor): AccessLevel {
     if (this.isDeveloper(actor.userId)) return 'developer';
     if (actor.isOwner) return 'owner';
-    return this.hasAnyGrant(actor.roleIds, '') ? 'staff' : 'member';
+    return this.hasModuleGrant(actor.roleIds) ? 'staff' : 'member';
   }
 
   /** Declared permissions the actor passes `check` for, plus declared `core.*` for developers. */
   effective(actor: Actor, declared: ReadonlySet<string>): string[] {
     return [...declared].filter((permission) => this.check(actor, permission)).sort();
+  }
+
+  /** Whether any role holds a grant row for a module permission (not `core.*` or `administration.*`). */
+  private hasModuleGrant(roleIds: readonly string[]): boolean {
+    if (roleIds.length === 0) return false;
+    const statement = this.#db.prepare(
+      'SELECT 1 AS found FROM permission_grants WHERE role_id = ? AND permission NOT LIKE ? AND permission NOT LIKE ? LIMIT 1',
+    );
+    return roleIds.some(
+      (roleId) => statement.get(roleId, `${CORE_PREFIX}%`, `${PROTECTED_PREFIX}%`) !== undefined,
+    );
   }
 
   hasAnyGrant(roleIds: readonly string[], prefix: string): boolean {

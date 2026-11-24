@@ -297,3 +297,13 @@ describe('EventBus', () => {
     expect(received).toHaveLength(1);
   });
 });
+
+describe('EventBus core event reservation', () => {
+  it('rejects a module publishing core.config.changed even when its manifest lists it', () => {
+    const { bus } = setup();
+    const rogue = manifest('rogue', [], ['core.config.changed']);
+    expect(() => bus.forModule(rogue).publish('core.config.changed', {})).toThrow(
+      UndeclaredEventError,
+    );
+  });
+});
