@@ -12,7 +12,7 @@ import {
   type RecordingLogger,
 } from '../../tests/helpers/recording-logger.ts';
 import type { OAuthClient } from './ports.ts';
-import { buildDashboard, type DashboardDeps } from './server.ts';
+import { buildDashboard, startDashboard, type DashboardDeps } from './server.ts';
 
 const anyString = expect.any(String) as string;
 const CSP =
@@ -477,5 +477,52 @@ describe('every request form', () => {
     }
     socket.destroy();
     expect(count).toBe(0);
+  });
+});
+
+describe('shutdown', { timeout: 20_000 }, () => {
+  it('closes within a bound while a client trickles a request body', async () => {
+    const port = await listen();
+    const server = app!;
+    const socket = connect({ host: '127.0.0.1', port });
+    socket.on('error', () => undefined);
+    await new Promise<void>((resolve) => socket.once('connect', resolve));
+    socket.write(
+      'POST /api/logout HTTP/1.1\r\nHost: h\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const started = Date.now();
+    const outcome = await Promise.race([
+      server.close().then(() => 'closed'),
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 5_000)),
+    ]);
+    socket.destroy();
+    expect(outcome).toBe('closed');
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('bounds the time to receive a whole request', async () => {
+    await build();
+    expect(app!.server.requestTimeout).toBe(15_000);
+  });
+});
+
+describe('proxy trust warning', () => {
+  it('warns at start when no proxy is trusted', async () => {
+    const handle = await startDashboard(makeDeps({ env: { ...makeEnv(), port: 0 } }));
+    await handle.close();
+    expect(logger.entries).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        obj: { variable: 'PANEL_TRUST_PROXY' },
+        msg: 'panel trusts no proxy: every client behind a local proxy shares one rate-limit bucket',
+      }),
+    );
+  });
+
+  it('does not warn when a proxy is trusted', async () => {
+    const handle = await startDashboard(makeDeps({ env: { ...makeEnv(['127.0.0.1']), port: 0 } }));
+    await handle.close();
+    expect(logger.entries.filter((r) => r.level === 'warn')).toEqual([]);
   });
 });

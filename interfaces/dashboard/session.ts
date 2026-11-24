@@ -65,9 +65,14 @@ export interface SessionAuthDeps {
   readonly core: CoreHandle;
   readonly directory: MemberDirectory;
   readonly sessionSecret: Buffer;
+  /** Called with the idHash of a session deleted because its member left the server. */
+  readonly onSessionEnded?: (idHash: string) => void;
 }
 
+/** A 401 also drops the session cookie the browser sent, so a stale one is not kept around. */
 export function unauthorized(reply: FastifyReply): FastifyReply {
+  const sent = reply.request.cookies[SESSION_COOKIE];
+  if (sent !== undefined && sent !== '') reply.clearCookie(SESSION_COOKIE, SESSION_COOKIE_OPTIONS);
   return apiError(reply, 401, 'unauthorized', 'Faça login para continuar.');
 }
 
@@ -153,6 +158,11 @@ export function createSessionAuth(deps: SessionAuthDeps): SessionAuth {
     if (member === null) {
       core.sessions.deleteByHash(record.idHash);
       resolved.set(request, null);
+      try {
+        deps.onSessionEnded?.(record.idHash);
+      } catch {
+        // The session is already gone; its sockets are closed by the next revalidation at the latest.
+      }
       return 'unauthorized';
     }
     return { record, actor: actorFor(record.userId, member), member };

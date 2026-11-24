@@ -730,6 +730,23 @@ describe('session end', { timeout: 20_000 }, () => {
   });
 });
 
+describe('member left, found over HTTP', () => {
+  it('ends the live connections of the deleted session at once', async () => {
+    const { token } = sessions.create(STAFF);
+    const staff = await connect(token);
+    members.set(STAFF, null);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      cookies: { [SESSION_COOKIE]: token },
+    });
+    expect(res.statusCode).toBe(401);
+    const closed = await withTimeout(staff.closed, 'close');
+    expect(closed.code).toBe(4401);
+    expect(closed.messages.at(-1)).toEqual({ type: 'session.ended', data: null });
+  });
+});
+
 describe('GET /api/status', () => {
   const status = (token: string) =>
     app.inject({ method: 'GET', url: '/api/status', cookies: { [SESSION_COOKIE]: token } });
@@ -802,6 +819,42 @@ describe('stray upgrade sockets', { timeout: 20_000 }, () => {
 });
 
 describe('live hub cleanup', { timeout: 20_000 }, () => {
+  it('does not run a queued task after close', async () => {
+    const staff = await connect(sessions.create(STAFF).token);
+    await barrier(staff);
+    const directory = deps.directory as { lookup: (userId: string) => Promise<unknown> };
+    let lookups = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    directory.lookup = async () => {
+      lookups += 1;
+      await gate;
+      return member({ roleIds: [STAFF_ROLE] });
+    };
+    // The first delivery is held in its lookup, the second one waits in the queue.
+    emit('core.module.state.changed', { moduleId: 'moderation', state: 'FAILED' });
+    emit('core.module.state.changed', { moduleId: 'moderation', state: 'RUNNING' });
+    await until(() => lookups === 1, 'the first delivery to start');
+    hub.close();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(lookups).toBe(1);
+    const logger = deps.logger as unknown as { entries: { level: string }[] };
+    expect(logger.entries.filter((entry) => entry.level === 'error')).toEqual([]);
+  });
+
+  it('does not drop a healthy client when revalidation ticks run back to back', async () => {
+    const alive = await connect(sessions.create(STAFF).token);
+    const first = pinged(alive);
+    clock.advance(120_000);
+    await first;
+    await barrier(alive);
+    expect(alive.ws.readyState).toBe(WebSocket.OPEN);
+    expect(hub.connectionCount(STAFF)).toBe(1);
+  });
+
   it('closes the hub when listen fails', async () => {
     const blocker = createServer();
     await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', resolve));

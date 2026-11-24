@@ -540,6 +540,40 @@ describe('GET /api/me', () => {
   });
 });
 
+describe('stale session cookie', () => {
+  const cleared = {
+    value: '',
+    maxAge: 0,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+    path: '/',
+  };
+
+  it('clears the cookie when it does not resolve to a session', async () => {
+    const server = await build();
+    const res = await me(server, randomBytes(32).toString('base64url'));
+    expect(res.statusCode).toBe(401);
+    expect(cookie(res, SESSION_COOKIE)).toMatchObject(cleared);
+  });
+
+  it('clears the cookie when the member left the server', async () => {
+    const server = await build();
+    const token = await login(server);
+    members.set(USER, null);
+    const res = await me(server, token);
+    expect(res.statusCode).toBe(401);
+    expect(cookie(res, SESSION_COOKIE)).toMatchObject(cleared);
+  });
+
+  it('sets no cookie when none was sent', async () => {
+    const server = await build();
+    const res = await me(server);
+    expect(res.statusCode).toBe(401);
+    expect(cookie(res, SESSION_COOKIE)).toBeUndefined();
+  });
+});
+
 describe('POST /api/logout', () => {
   const logout = (server: FastifyInstance, token: string, csrf?: string) =>
     server.inject({

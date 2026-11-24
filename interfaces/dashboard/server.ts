@@ -52,6 +52,8 @@ const RATE_MAX_CHANGES = 30;
 const RATE_MAX_LOGIN = 10;
 /** A refused or stalled upgrade request is dropped after this long without traffic. */
 const UPGRADE_IDLE_MS = 10_000;
+/** The whole request (headers and body) must arrive within this time. */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export interface DashboardDeps {
   readonly env: PanelEnvironment;
@@ -230,6 +232,9 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     logger: false,
     trustProxy: env.trustProxy.length > 0 ? env.trustProxy : false,
     bodyLimit: BODY_LIMIT,
+    requestTimeout: REQUEST_TIMEOUT_MS,
+    // close() must not wait for slow or idle clients: shutdown has a deadline.
+    forceCloseConnections: true,
     frameworkErrors: frameworkErrorsFor(upgrades),
     clientErrorHandler,
     rewriteUrl: originForm,
@@ -259,6 +264,9 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     core: deps.core,
     directory: deps.directory,
     sessionSecret: env.sessionSecret,
+    onSessionEnded: (idHash) => {
+      liveHubs.get(app)?.revokeSession(idHash);
+    },
   });
   const apiKey = (request: FastifyRequest): string => rateLimitKey(auth, request);
 
@@ -395,6 +403,12 @@ export async function startDashboard(deps: DashboardDeps): Promise<DashboardHand
     // Releases the live hub's subscriptions and timers before reporting the failure.
     await app.close();
     throw error;
+  }
+  if (deps.env.trustProxy.length === 0) {
+    deps.logger.warn(
+      { variable: 'PANEL_TRUST_PROXY' },
+      'panel trusts no proxy: every client behind a local proxy shares one rate-limit bucket',
+    );
   }
   return { close: () => app.close() };
 }

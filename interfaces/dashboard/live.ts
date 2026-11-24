@@ -95,6 +95,8 @@ interface Connection {
   ended: boolean;
   /** Whether a pong arrived since the last heartbeat ping. */
   alive: boolean;
+  /** When the last heartbeat ping went out. */
+  pingedAt: number;
 }
 
 interface PresenceState {
@@ -265,6 +267,7 @@ export class LiveHub {
       violations: 0,
       ended: false,
       alive: true,
+      pingedAt: this.#clock.now(),
     };
     this.#connections.add(connection);
     socket.on('pong', () => {
@@ -383,9 +386,11 @@ export class LiveHub {
 
   /** Deliveries run one at a time, in the order the events arrived. */
   #enqueue(task: () => Promise<void>): void {
-    this.#queue = this.#queue.then(task).catch((error: unknown) => {
-      this.#logger.error({ error: errorName(error) }, 'live delivery failed');
-    });
+    this.#queue = this.#queue
+      .then(() => (this.#closed ? undefined : task()))
+      .catch((error: unknown) => {
+        this.#logger.error({ error: errorName(error) }, 'live delivery failed');
+      });
   }
 
   /**
@@ -410,6 +415,7 @@ export class LiveHub {
   async #deliver(type: string, data: unknown, entitled: (actor: Actor) => boolean): Promise<void> {
     const connections = [...this.#connections];
     const actors = await this.#actors(connections.map((connection) => connection.userId));
+    if (this.#closed) return;
     for (const connection of connections) {
       const actor = actors.get(connection.userId);
       if (actor !== undefined && entitled(actor)) this.#send(connection, type, data);
@@ -442,6 +448,7 @@ export class LiveHub {
       ...this.#presence.keys(),
       ...connections.map((connection) => connection.userId),
     ]);
+    if (this.#closed) return;
     const users = this.presence().filter((entry) => {
       const actor = actors.get(entry.userId);
       return actor !== undefined && this.#hasNamedPermission(actor);
@@ -470,17 +477,22 @@ export class LiveHub {
   }
 
   /**
-   * A connection that did not answer the previous tick's ping is dropped (a silent, half-open peer
-   * would otherwise hold a session slot and its presence forever); the others are pinged again.
+   * A connection that did not answer a ping sent at least half a tick ago is dropped (a silent,
+   * half-open peer would otherwise hold a session slot and its presence forever); the others are
+   * pinged again. Ticks that run back to back never drop a client that had no time to answer.
    */
   #heartbeat(): void {
+    const now = this.#clock.now();
     for (const connection of [...this.#connections]) {
       if (!connection.alive) {
-        connection.ended = true;
-        connection.socket.terminate();
+        if (now - connection.pingedAt >= REVALIDATE_INTERVAL_MS / 2) {
+          connection.ended = true;
+          connection.socket.terminate();
+        }
         continue;
       }
       connection.alive = false;
+      connection.pingedAt = now;
       try {
         connection.socket.ping();
       } catch (error) {
