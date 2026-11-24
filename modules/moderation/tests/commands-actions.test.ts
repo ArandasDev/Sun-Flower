@@ -42,7 +42,7 @@ function setup(options: SetupOptions = {}) {
       isDeveloper: (userId) => developers.has(userId),
       hasAnyGrant: (roleIds, prefix) => prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
     },
-    config: { get: <T>() => config as T, set: vi.fn() },
+    config: { get: <T>() => config as T, set: vi.fn(), version: () => 0 },
     guild,
     cases: new CaseStore(ctx.storage),
     domains: new DomainStore(ctx.storage),

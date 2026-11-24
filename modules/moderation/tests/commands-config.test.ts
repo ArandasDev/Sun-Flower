@@ -62,7 +62,7 @@ function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const deps: ModCommandDeps = {
     permissions: { check, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => current as T, set },
+    config: { get: <T>() => current as T, set, version: () => 0 },
     guild,
     cases: new CaseStore(ctx.storage),
     domains: new DomainStore(ctx.storage),

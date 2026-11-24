@@ -1,10 +1,11 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
-import type { CommandDefinition } from '../../shared/contracts/commands.ts';
+import type { Actor, CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import type { OperationDefinition } from '../../shared/contracts/operations.ts';
 import type { SqlValue } from '../../shared/contracts/storage.ts';
 import {
   CORE_API_VERSION,
@@ -16,6 +17,7 @@ import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
 import { createModuleGuild } from '../guild/module-guild.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
+import { InvalidOperationError, OperationRegistry } from '../operations/operation-registry.ts';
 import type { PermissionService } from '../permissions/permission-service.ts';
 import { applyModuleMigrations } from '../storage/module-migrations.ts';
 import { createModuleStorage } from '../storage/module-storage.ts';
@@ -70,6 +72,7 @@ interface ModuleRecord {
   events?: ModuleEvents;
   settings?: { readonly value: unknown };
   rejectedCommand?: string;
+  rejectedOperation?: string;
   readonly commands: Map<string, CommandDefinition>;
 }
 
@@ -99,10 +102,17 @@ export class ModuleRegistry {
   #phase: Phase = 'new';
   #starting: Promise<void> | undefined;
   #stopping: Promise<void> | undefined;
+  /** The operations of the modules; an operation runs only while its module is RUNNING. */
+  readonly operations: OperationRegistry;
 
   constructor(deps: ModuleRegistryDeps) {
     this.#deps = deps;
     this.#stepTimeoutMs = deps.stepTimeoutMs ?? DEFAULT_STEP_TIMEOUT_MS;
+    this.operations = new OperationRegistry({
+      permissions: deps.permissions,
+      logger: deps.logger,
+      isActive: (moduleId) => this.#statuses.get(moduleId)?.state === 'RUNNING',
+    });
   }
 
   /** The permissions declared by the manifests that were loaded (valid ones only). */
@@ -279,6 +289,9 @@ export class ModuleRegistry {
           if (record.rejectedCommand !== undefined) {
             throw new CommandRegistrationError(record.rejectedCommand);
           }
+          if (record.rejectedOperation !== undefined) {
+            throw new InvalidOperationError(record.rejectedOperation);
+          }
         },
         'REGISTERED',
       ],
@@ -338,16 +351,22 @@ export class ModuleRegistry {
           if (record.settings === undefined) throw settingsUnavailable();
           return record.settings.value as T;
         },
-        set: (partial: Record<string, unknown>) => {
+        set: (partial: Record<string, unknown>, expectedVersion?: number) => {
           assertActive();
           if (record.settings === undefined) throw settingsUnavailable();
-          const value = this.#deps.config.updateSettings(id, record.configSchema, partial);
+          const value = this.#deps.config.updateSettings(
+            id,
+            record.configSchema,
+            partial,
+            expectedVersion,
+          );
           record.settings = { value };
           this.#publishCore('core.config.changed', {
             moduleId: id,
             version: this.#deps.config.getVersion(id),
           });
         },
+        version: () => this.#deps.config.getVersion(id),
       }),
       guild: createModuleGuild({
         manifest: record.manifest,
@@ -374,6 +393,13 @@ export class ModuleRegistry {
         register: (command: CommandDefinition) => {
           this.#registerCommand(record, command);
         },
+      }),
+      operations: Object.freeze({
+        register: <I, O>(definition: OperationDefinition<I, O>) => {
+          this.#registerOperation(record, definition);
+        },
+        execute: (name: string, actor: Actor, input: unknown) =>
+          this.operations.executeOwn(id, name, actor, input),
       }),
     });
   }
@@ -411,6 +437,20 @@ export class ModuleRegistry {
     record.commands.set(name, Object.freeze({ ...deepFreeze(data), handle }));
   }
 
+  #registerOperation(record: ModuleRecord, definition: OperationDefinition): void {
+    const { id } = record.manifest;
+    if (this.#statuses.get(id)?.state !== 'VALIDATED') {
+      throw new InvalidOperationError(`Module "${id}" can only register operations in register()`);
+    }
+    try {
+      this.operations.register(record.manifest, definition);
+    } catch (error) {
+      // Recorded so the register step fails even if the module swallows the error.
+      record.rejectedOperation ??= describe(error);
+      throw error;
+    }
+  }
+
   #isActive(id: string): boolean {
     const state = this.#statuses.get(id)?.state;
     return state !== undefined && ACTIVE_STATES.has(state);
@@ -430,6 +470,7 @@ export class ModuleRegistry {
   #dropCommands(record: ModuleRecord): void {
     for (const name of record.commands.keys()) this.#commandOwners.delete(name);
     record.commands.clear();
+    this.operations.dropModule(record.manifest.id);
   }
 
   #step(id: string, step: string, work: () => Promise<void>): Promise<void> {

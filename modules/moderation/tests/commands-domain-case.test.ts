@@ -27,7 +27,7 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const publish = vi.fn();
   const deps: ModCommandDeps = {
     permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => config as T, set: vi.fn() },
+    config: { get: <T>() => config as T, set: vi.fn(), version: () => 0 },
     guild,
     cases: new CaseStore(ctx.storage),
     domains: new DomainStore(ctx.storage),

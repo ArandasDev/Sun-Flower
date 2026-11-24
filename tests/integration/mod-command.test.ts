@@ -8,7 +8,7 @@ describe('/mod command definition', () => {
   it('passes the Core command validator', () => {
     const command = buildModCommand({
       permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
-      config: { get: <T>() => ({}) as T, set: vi.fn() },
+      config: { get: <T>() => ({}) as T, set: vi.fn(), version: () => 0 },
       publish: vi.fn(),
     } as unknown as ModCommandDeps);
     expect(() => {
