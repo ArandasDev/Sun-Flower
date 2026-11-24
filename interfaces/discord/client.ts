@@ -42,6 +42,7 @@ export function toRawInteraction(interaction: ChatInputCommandInteraction): RawI
     commandName: interaction.commandName,
     userId: interaction.user.id,
     roleIds,
+    isOwner: interaction.guild?.ownerId === interaction.user.id,
     guildId: interaction.guildId,
     channelId: interaction.channelId,
     subcommandGroup: interaction.options.getSubcommandGroup(false) ?? undefined,

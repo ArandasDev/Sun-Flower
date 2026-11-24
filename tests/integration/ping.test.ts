@@ -26,6 +26,7 @@ function fakeInteraction(fields: {
     replies,
     userId: '111111111111111111',
     roleIds: [],
+    isOwner: false,
     channelId: '222222222222222222',
     subcommandGroup: undefined,
     subcommand: undefined,

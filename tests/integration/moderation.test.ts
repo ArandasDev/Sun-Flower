@@ -170,6 +170,7 @@ describe('moderation module', () => {
       commandName: 'mod',
       userId: MODERATOR,
       roleIds: [MODERATOR_ROLE],
+      isOwner: false,
       guildId: '000000000000000000',
       channelId: '555555555555555555',
       subcommandGroup: undefined,
@@ -199,7 +200,11 @@ describe('moderation module', () => {
     guild.memberRoles.set(TARGET, [TARGET_ROLE]);
     const core = await startCore({ dbPath: ':memory:', modulesDir: MODULES_DIR, logger, guild });
     try {
-      core.permissions.grant('moderation.actions.timeout', MODERATOR_ROLE);
+      core.permissions.grant(
+        'moderation.actions.timeout',
+        MODERATOR_ROLE,
+        new Set(['moderation.actions.timeout', 'moderation.cases.read']),
+      );
       expect(await dispatchTimeout(core, logger)).toEqual([
         { content: 'Timeout aplicado (caso #1).', ephemeral: true },
       ]);
@@ -219,8 +224,16 @@ describe('moderation module', () => {
     guild.memberRoles.set(TARGET, [TARGET_ROLE]);
     const core = await startCore({ dbPath: ':memory:', modulesDir: MODULES_DIR, logger, guild });
     try {
-      core.permissions.grant('moderation.actions.timeout', MODERATOR_ROLE);
-      core.permissions.grant('moderation.cases.read', TARGET_ROLE);
+      core.permissions.grant(
+        'moderation.actions.timeout',
+        MODERATOR_ROLE,
+        new Set(['moderation.actions.timeout', 'moderation.cases.read']),
+      );
+      core.permissions.grant(
+        'moderation.cases.read',
+        TARGET_ROLE,
+        new Set(['moderation.actions.timeout', 'moderation.cases.read']),
+      );
       expect(await dispatchTimeout(core, logger)).toEqual([
         { content: 'Não é possível agir contra este membro.', ephemeral: true },
       ]);

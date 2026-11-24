@@ -5,6 +5,9 @@ import type { ModuleContext, ModuleManifest } from '../../shared/contracts/modul
 const SNOWFLAKE = /^\d{17,20}$/;
 const PERMISSION = /^[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*\.[a-z][a-z0-9-]*$/;
 const CORE_PREFIX = 'core.';
+const PROTECTED_PREFIX = 'administration.';
+
+export type AccessLevel = 'developer' | 'owner' | 'staff' | 'member';
 
 export class InvalidSnowflakeError extends Error {
   constructor() {
@@ -27,9 +30,21 @@ export class CorePermissionGrantError extends Error {
   }
 }
 
+export class ProtectedPermissionGrantError extends Error {
+  constructor(permission: string) {
+    super(`Permission "${permission}" is protected and cannot be granted to roles`);
+    this.name = 'ProtectedPermissionGrantError';
+  }
+}
+
 export class UndeclaredPermissionError extends Error {
-  constructor(moduleId: string, permission: string) {
-    super(`Module "${moduleId}" is not allowed to check undeclared permission "${permission}"`);
+  /** `moduleId` is `null` when no module is involved (granting to a role). */
+  constructor(moduleId: string | null, permission: string) {
+    super(
+      moduleId === null
+        ? `No module declares permission "${permission}"`
+        : `Module "${moduleId}" is not allowed to check undeclared permission "${permission}"`,
+    );
     this.name = 'UndeclaredPermissionError';
   }
 }
@@ -87,10 +102,13 @@ export class PermissionService {
     return rows.map((row) => ({ userId: row.user_id, addedAt: row.added_at }));
   }
 
-  grant(permission: string, roleId: string): void {
+  grant(permission: string, roleId: string, declared: ReadonlySet<string>): void {
     assertSnowflake(roleId);
     if (!PERMISSION.test(permission)) throw new InvalidPermissionError();
     if (permission.startsWith(CORE_PREFIX)) throw new CorePermissionGrantError(permission);
+    if (permission.startsWith(PROTECTED_PREFIX))
+      throw new ProtectedPermissionGrantError(permission);
+    if (!declared.has(permission)) throw new UndeclaredPermissionError(null, permission);
     this.#db
       .prepare(
         'INSERT OR IGNORE INTO permission_grants (permission, role_id, granted_at) VALUES (?, ?, ?)',
@@ -106,11 +124,25 @@ export class PermissionService {
   }
 
   check(actor: Actor, permission: string): boolean {
-    if (permission.startsWith(CORE_PREFIX)) return this.isDeveloper(actor.userId);
+    if (this.isDeveloper(actor.userId)) return true;
+    if (permission.startsWith(CORE_PREFIX)) return false;
+    if (actor.isOwner) return true;
     const statement = this.#db.prepare(
       'SELECT 1 AS found FROM permission_grants WHERE permission = ? AND role_id = ?',
     );
     return actor.roleIds.some((roleId) => statement.get(permission, roleId) !== undefined);
+  }
+
+  /** The highest access level of the actor: developer, owner, staff or member. */
+  level(actor: Actor): AccessLevel {
+    if (this.isDeveloper(actor.userId)) return 'developer';
+    if (actor.isOwner) return 'owner';
+    return this.hasAnyGrant(actor.roleIds, '') ? 'staff' : 'member';
+  }
+
+  /** Declared permissions the actor passes `check` for, plus declared `core.*` for developers. */
+  effective(actor: Actor, declared: ReadonlySet<string>): string[] {
+    return [...declared].filter((permission) => this.check(actor, permission)).sort();
   }
 
   hasAnyGrant(roleIds: readonly string[], prefix: string): boolean {
