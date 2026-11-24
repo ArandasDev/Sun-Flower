@@ -232,3 +232,69 @@ describe('moderation.actions input', () => {
     expect(t.create).not.toHaveBeenCalled();
   });
 });
+
+describe('moderation.actions canonical IDs and strict input', () => {
+  it.each(ACTIONS)('%s rejects a zero-padded self ID without Discord calls', async (action) => {
+    const t = setup();
+    expect(await t.run(action, { userId: `0${ACTOR.userId}` })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(t.guild.calls).toHaveLength(0);
+    expect(t.create).not.toHaveBeenCalled();
+  });
+
+  it.each(ACTIONS)('%s rejects a zero-padded developer ID', async (action) => {
+    const t = setup({}, [TARGET]);
+    expect(await t.run(action, { userId: `0${TARGET}` })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(t.guild.calls).toHaveLength(0);
+  });
+
+  it.each([
+    '1'.repeat(21),
+    '18446744073709551616',
+    '99999999999999999999',
+    '1'.repeat(16),
+    '0'.repeat(18),
+  ])('rejects the ID %s', async (userId) => {
+    const t = setup();
+    expect(await t.run('kick', { userId })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(await t.run('warn', { channelId: userId })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(t.guild.calls).toHaveLength(0);
+  });
+
+  it('accepts the largest canonical ID', async () => {
+    const t = setup();
+    expect(await t.run('ban', { userId: '18446744073709551615' })).toMatchObject({ ok: true });
+  });
+
+  it.each(['spam\u0000x', 'a\nb', '\u200b', ' \u200b\u200d ', '\u2060'])(
+    'rejects the reason %j',
+    async (reason) => {
+      const t = setup();
+      expect(await t.run('kick', { reason })).toMatchObject({
+        ok: false,
+        error: { code: 'invalid' },
+      });
+      expect(t.guild.calls).toHaveLength(0);
+    },
+  );
+
+  it.each(ACTIONS)('%s rejects unknown keys', async (action) => {
+    const t = setup();
+    expect(await t.run(action, { extra: 1 })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(t.guild.calls).toHaveLength(0);
+  });
+});

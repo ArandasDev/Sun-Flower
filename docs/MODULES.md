@@ -224,7 +224,7 @@ O método `dispose()` deverá ser seguro mesmo após uma inicialização parcial
 Uma operação é uma ação nomeada que um módulo expõe ao Core, para que o Discord e o painel a executem pelo mesmo caminho e com as mesmas regras. Detalhes na [decisão 0022](decisions/0022-module-operations.md).
 
 - **Registro:** `ctx.operations.register({ name, permission, input, handler })` no `register()` do módulo. `input` é um schema zod; `handler(actor, input)` devolve `ok(dados)` ou `fail(código, mensagem)` (`shared/contracts/operations.ts`).
-- **Execução:** `ctx.operations.execute(name, actor, input, source)`, com `source` `discord` ou `dashboard`. Quem chama nunca fala com o handler diretamente.
+- **Execução:** o módulo usa `ctx.operations.execute(name, actor, input)`, que roda só as operações do próprio módulo e fixa `source` em `discord`. As interfaces usam `CoreHandle.operations.execute(name, actor, input, source)`, com `source` `discord` ou `dashboard`. Ninguém chama o handler diretamente.
 - **Nome:** `^<id do módulo>\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`, por exemplo `moderation.cases.list`. Um nome repetido é recusado no registro.
 - **Permissão:** precisa estar declarada no manifesto do módulo, ou ser `null`. `null` só vale para nomes terminados em `.mine` (operações sobre os dados da própria pessoa).
 - **Ordem de checagem do Core**, antes do handler; cada falha devolve um erro tipado com mensagem fixa e não executa nada:

@@ -36,7 +36,13 @@ export const DEFAULT_BAIT_TERMS: readonly string[] = [
   'resgate',
 ];
 
-export const snowflake = z.string().regex(/^\d{17,20}$/);
+const SNOWFLAKE_MAX = 18446744073709551615n;
+
+/** A canonical Discord ID: no leading zeros, 17 to 20 digits and at most 2^64 - 1. */
+export const snowflake = z
+  .string()
+  .regex(/^[1-9]\d{16,19}$/)
+  .refine((id) => /^\d+$/.test(id) && BigInt(id) <= SNOWFLAKE_MAX);
 const weight = z.number().int().min(0).max(1000);
 
 const thresholdsSchema = z.object({

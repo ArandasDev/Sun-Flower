@@ -341,3 +341,12 @@ describe('registration', () => {
     }
   });
 });
+
+describe('moderation.cases.list ID filter', () => {
+  it.each(['0333333333333333333', '18446744073709551616', '1'.repeat(21)])(
+    'rejects the non-canonical targetUserId %s',
+    async (targetUserId) => {
+      expect(await run('moderation.cases.list', { targetUserId })).toMatchObject({ ok: false });
+    },
+  );
+});

@@ -17,10 +17,10 @@ import { CASE_CREATED } from '../responder.ts';
 import { snowflake } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
 
-const REASON_MAX = 512;
-const TIMEOUT_MIN_MINUTES = 1;
-const TIMEOUT_MAX_MINUTES = 40320;
-const DELETE_DAYS_MAX = 7;
+export const REASON_MAX = 512;
+export const TIMEOUT_MIN_MINUTES = 1;
+export const TIMEOUT_MAX_MINUTES = 40320;
+export const DELETE_DAYS_MAX = 7;
 const MINUTE_MS = 60_000;
 const DAY_SECONDS = 86_400;
 
@@ -44,17 +44,27 @@ const REFUSAL_LABEL: Record<GuildActionError, 'sem permissão' | 'não encontrad
   failed: 'falha',
 };
 
-const reason = z.string().trim().min(1).max(REASON_MAX);
-/** `channelId` is the channel where /mod ran; the panel leaves it out. */
+const CONTROL = /\p{Cc}/u;
+const INVISIBLE = /\p{Cf}/gu;
+
+/** 1 to 512 characters, no control characters, and not made only of invisible ones. */
+const reason = z
+  .string()
+  .trim()
+  .min(1)
+  .max(REASON_MAX)
+  .refine((text) => !CONTROL.test(text))
+  .refine((text) => text.replace(INVISIBLE, '').trim().length > 0);
+/** `channelId` is informational: the channel shown on the case (/mod passes where it ran). */
 const base = { userId: snowflake, reason, channelId: snowflake.optional() };
 
-export const warnInput = z.object(base);
-export const timeoutInput = z.object({
+export const warnInput = z.strictObject(base);
+export const timeoutInput = z.strictObject({
   ...base,
   minutes: z.number().int().min(TIMEOUT_MIN_MINUTES).max(TIMEOUT_MAX_MINUTES),
 });
-export const kickInput = z.object(base);
-export const banInput = z.object({
+export const kickInput = z.strictObject(base);
+export const banInput = z.strictObject({
   ...base,
   deleteDays: z.number().int().min(0).max(DELETE_DAYS_MAX).optional(),
 });

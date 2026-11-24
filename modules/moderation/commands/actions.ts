@@ -1,13 +1,15 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
+import {
+  DELETE_DAYS_MAX,
+  REASON_MAX,
+  TIMEOUT_MAX_MINUTES,
+  TIMEOUT_MIN_MINUTES,
+} from '../operations/actions.ts';
 import type { ActionResult } from '../operations/actions.ts';
 import type { ModCommandDeps } from './mod-command.ts';
 import { BANNED, DM_FAILED, INVALID_OPTION, KICKED, TIMED_OUT, WARNED } from './replies.ts';
 
 const EPHEMERAL = { ephemeral: true } as const;
-const REASON_MAX = 512;
-const TIMEOUT_MIN_MINUTES = 1;
-const TIMEOUT_MAX_MINUTES = 40320;
-const DELETE_DAYS_MAX = 7;
 
 type ManualAction = 'warn' | 'timeout' | 'kick' | 'ban';
 

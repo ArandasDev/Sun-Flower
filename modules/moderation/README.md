@@ -161,7 +161,7 @@ O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcoman
 
 ### 7.1. Operações
 
-O módulo registra estas operações no Core (contrato em [docs/MODULES.md §5.3](../../docs/MODULES.md#53-operações)). O `/mod` e o painel usam as mesmas, com as mesmas regras e mensagens. A entrada é validada pelo Core; `id` é um inteiro a partir de 1 e `userId` é um ID de 17 a 20 dígitos.
+O módulo registra estas operações no Core (contrato em [docs/MODULES.md §5.3](../../docs/MODULES.md#53-operações)). O `/mod` e o painel usam as mesmas, com as mesmas regras e mensagens. A entrada é validada pelo Core; `id` é um inteiro a partir de 1 e todo ID do Discord é canônico (17 a 20 dígitos, sem zeros à esquerda, até 2^64 - 1).
 
 | Operação                     | Permissão                    | Entrada                                                   | Saída                                                                                                     |
 | ---------------------------- | ---------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -181,7 +181,7 @@ O módulo registra estas operações no Core (contrato em [docs/MODULES.md §5.3
 | `moderation.actions.kick`    | `moderation.actions.kick`    | `{ userId, reason }`                                      | `{ caseId }`                                                                                              |
 | `moderation.actions.ban`     | `moderation.actions.ban`     | `{ userId, reason, deleteDays? (0 a 7) }`                 | `{ caseId }`                                                                                              |
 
-- `reason` tem de 1 a 512 caracteres, sem espaços nas pontas. As ações aceitam ainda `channelId` opcional (o canal onde o `/mod` rodou; o painel não envia).
+- `reason` tem de 1 a 512 caracteres, sem espaços nas pontas. As ações aceitam ainda `channelId` opcional (informativo: qualquer chamador pode enviar, e aparece como o canal do caso; o `/mod` envia o canal onde rodou).
 - As ações aplicam as proteções descritas acima. Contra a própria pessoa ou um alvo protegido: `forbidden`; contra quem não é membro (`warn`, `timeout`, `kick`): `not_found`; consulta de cargos com falha: `unavailable`; recusa do Discord: `forbidden`, `not_found` ou `failed`. Nenhum caso é gravado quando a operação falha.
 
 ## 8. Exemplos de utilização
