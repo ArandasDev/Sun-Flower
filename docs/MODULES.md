@@ -219,6 +219,28 @@ Todos os métodos deverão possuir comportamento previsível e tratamento adequa
 
 O método `dispose()` deverá ser seguro mesmo após uma inicialização parcialmente concluída. Ele pode ser chamado mesmo que `register()` nunca tenha sido executado (por exemplo, quando a migração do módulo falha), portanto não deve presumir que o contexto foi recebido nem que recursos foram criados.
 
+### 5.3. Operações
+
+Uma operação é uma ação nomeada que um módulo expõe ao Core, para que o Discord e o painel a executem pelo mesmo caminho e com as mesmas regras. Detalhes na [decisão 0022](decisions/0022-module-operations.md).
+
+- **Registro:** `ctx.operations.register({ name, permission, input, handler })` no `register()` do módulo. `input` é um schema zod; `handler(actor, input)` devolve `ok(dados)` ou `fail(código, mensagem)` (`shared/contracts/operations.ts`).
+- **Execução:** `ctx.operations.execute(name, actor, input, source)`, com `source` `discord` ou `dashboard`. Quem chama nunca fala com o handler diretamente.
+- **Nome:** `^<id do módulo>\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$`, por exemplo `moderation.cases.list`. Um nome repetido é recusado no registro.
+- **Permissão:** precisa estar declarada no manifesto do módulo, ou ser `null`. `null` só vale para nomes terminados em `.mine` (operações sobre os dados da própria pessoa).
+- **Ordem de checagem do Core**, antes do handler; cada falha devolve um erro tipado com mensagem fixa e não executa nada:
+
+| Ordem | Falha                | Código        | Mensagem                                                                 |
+| ----- | -------------------- | ------------- | ------------------------------------------------------------------------ |
+| 1     | Operação inexistente | `not_found`   | `Operação desconhecida.`                                                 |
+| 2     | Módulo inativo       | `unavailable` | `Módulo indisponível.`                                                   |
+| 3     | Sem permissão        | `forbidden`   | `Você não tem permissão para isso.`                                      |
+| 4     | Entrada inválida     | `invalid`     | `Entrada inválida: <caminhos separados por vírgula>.` (nunca os valores) |
+
+- **Resultado:** `{ ok: true, data }` ou `{ ok: false, error: { code, message } }`, com `code` em `forbidden`, `invalid`, `not_found`, `conflict`, `unavailable` ou `failed`. A mensagem é em português, sem detalhes internos nem valores recebidos. Um erro lançado pelo handler vira `failed` com `Erro interno.`.
+- **Log:** cada chamada registra `{ module, operation, source, result }`, sem entrada, IDs nem texto.
+- **Configuração:** `ctx.config.version()` devolve a versão da configuração do módulo e `ctx.config.set(parcial, expectedVersion)` recusa a gravação com conflito quando a versão mudou, para que duas pessoas não sobrescrevam uma à outra.
+- **Versão:** as operações chegaram com `CORE_API_VERSION` `1.3.0`, de forma aditiva. Um módulo que as usa declara `apiVersion` `1.3.0` (o `ping` continua em `1.0.0`).
+
 ## 6. Ciclo de Vida
 
 O Core será responsável por controlar o ciclo de vida dos módulos.

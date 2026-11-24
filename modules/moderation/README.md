@@ -61,7 +61,7 @@ Cada mensagem criada alimenta um registro de atividade por autor (só um hash do
 
 ## 3. Requisitos e dependências
 
-- `apiVersion` `1.2.0` do contrato do Core (exclusão de mensagens em lote, decisão 0016).
+- `apiVersion` `1.3.0` do contrato do Core (operações de módulo, decisão 0022; exclusão de mensagens em lote, decisão 0016).
 - Nenhuma dependência de outro módulo.
 - Intents privilegiados **Server Members** e **Message Content** ativos (README do projeto).
 - **Antes de testar ou de usar em produção:** isente o cargo da equipe das regras automáticas com `/mod config exempt-role <cargo da equipe> add`. As permissões `moderation.*` protegem o membro **somente das ações manuais** (`/mod warn`, `timeout`, `kick` e `ban`), não das regras automáticas de phishing e spam; sem a isenção, a própria equipe pode ser punida.
@@ -115,6 +115,7 @@ O módulo começa ativo e age automaticamente desde o primeiro início. Defina o
 
 - Consome: `discord.message.created`, `discord.message.updated`.
 - Publica: `moderation.case.created` com `{ caseId, kind, level, action }` (casos automáticos e ações manuais) e `moderation.case.reverted` com `{ caseId }` (`/mod case revert`).
+- Publica também `moderation.case.dismissed` com `{ caseId }` (`/mod case dismiss` e a operação equivalente).
 
 ## 7. Comandos e interfaces disponibilizados
 
@@ -157,6 +158,31 @@ O comando `/mod` reúne tudo. Todas as respostas são efêmeras, e cada subcoman
 - é o próprio bot: o serviço `guild` do Core recusa; em `warn` a resposta é `Não é possível agir contra este membro.` e, nas demais, `O Discord recusou a ação: sem permissão.`.
 
 `warn`, `timeout` e `kick` exigem que o alvo seja membro do servidor (`Este usuário não é membro do servidor.`); `ban` aceita um usuário que não é membro. Se não for possível consultar os cargos do alvo (erro ou demora do Discord), nenhuma das quatro ações é executada: a resposta é `O Discord recusou a ação: falha.` e nenhum caso é gravado.
+
+### 7.1. Operações
+
+O módulo registra estas operações no Core (contrato em [docs/MODULES.md §5.3](../../docs/MODULES.md#53-operações)). O `/mod` e o painel usam as mesmas, com as mesmas regras e mensagens. A entrada é validada pelo Core; `id` é um inteiro a partir de 1 e `userId` é um ID de 17 a 20 dígitos.
+
+| Operação                     | Permissão                    | Entrada                                                   | Saída                                                                                                     |
+| ---------------------------- | ---------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `moderation.config.view`     | `moderation.config.manage`   | nenhuma                                                   | `{ version, config }`                                                                                     |
+| `moderation.config.update`   | `moderation.config.manage`   | `{ expectedVersion, changes }` (chaves de nível superior) | `{ version, config }`; `conflict` se a versão mudou                                                       |
+| `moderation.domains.list`    | `moderation.domains.manage`  | `{ list: block\|allow }`                                  | `{ list, domains }`                                                                                       |
+| `moderation.domains.block`   | `moderation.domains.manage`  | `{ domain }`                                              | `{ domain, list }`                                                                                        |
+| `moderation.domains.allow`   | `moderation.domains.manage`  | `{ domain }`                                              | `{ domain, list }`                                                                                        |
+| `moderation.domains.remove`  | `moderation.domains.manage`  | `{ domain }`                                              | `{ domain }`; `not_found` se não está nas listas                                                          |
+| `moderation.cases.list`      | `moderation.cases.read`      | `{ status?, rule?, targetUserId?, cursor? }`              | `{ cases, nextCursor }` (50 por página, `id` decrescente)                                                 |
+| `moderation.cases.view`      | `moderation.cases.read`      | `{ id }`                                                  | detalhe do caso, sem o ID da mensagem                                                                     |
+| `moderation.cases.revert`    | `moderation.cases.revert`    | `{ id, allowDomains? }`                                   | `{ case, deletedMessage }`                                                                                |
+| `moderation.cases.dismiss`   | `moderation.cases.revert`    | `{ id }`                                                  | detalhe do caso; publica `moderation.case.dismissed`                                                      |
+| `moderation.cases.mine`      | `null` (só dados da pessoa)  | nenhuma                                                   | `{ cases }`: últimos 50 casos em que a pessoa é o alvo, só `id`, `createdAt`, `kind`, `action` e `status` |
+| `moderation.actions.warn`    | `moderation.actions.warn`    | `{ userId, reason }`                                      | `{ caseId, dmFailed? }`                                                                                   |
+| `moderation.actions.timeout` | `moderation.actions.timeout` | `{ userId, minutes (1 a 40320), reason }`                 | `{ caseId }`                                                                                              |
+| `moderation.actions.kick`    | `moderation.actions.kick`    | `{ userId, reason }`                                      | `{ caseId }`                                                                                              |
+| `moderation.actions.ban`     | `moderation.actions.ban`     | `{ userId, reason, deleteDays? (0 a 7) }`                 | `{ caseId }`                                                                                              |
+
+- `reason` tem de 1 a 512 caracteres, sem espaços nas pontas. As ações aceitam ainda `channelId` opcional (o canal onde o `/mod` rodou; o painel não envia).
+- As ações aplicam as proteções descritas acima. Contra a própria pessoa ou um alvo protegido: `forbidden`; contra quem não é membro (`warn`, `timeout`, `kick`): `not_found`; consulta de cargos com falha: `unavailable`; recusa do Discord: `forbidden`, `not_found` ou `failed`. Nenhum caso é gravado quando a operação falha.
 
 ## 8. Exemplos de utilização
 
