@@ -8,6 +8,7 @@ import { createLogger } from '../../core/infrastructure/logger.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { createDiscordClient, toRawInteraction, toRawMessage } from './client.ts';
 import { dispatchCommand, syncCommands } from './commands.ts';
+import type { ConnectionState } from '../dashboard/ports.ts';
 import { createDiscordGateway, createGuildActions } from './guild-actions.ts';
 import { isAllowedInteraction } from './guild-guard.ts';
 import {
@@ -69,6 +70,19 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
       return;
     }
     enqueue(sync);
+  });
+
+  const publishConnection = (state: ConnectionState): void => {
+    core.publishCoreEvent('core.discord.connection.changed', { state });
+  };
+  client.on(Events.ClientReady, () => {
+    publishConnection('ready');
+  });
+  client.on(Events.ShardDisconnect, () => {
+    publishConnection('disconnected');
+  });
+  client.on(Events.ShardReconnecting, () => {
+    publishConnection('connecting');
   });
 
   client.on(Events.GuildCreate, (guild: Guild) => {
