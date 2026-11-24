@@ -21,6 +21,9 @@ export function Menu() {
       <button type="button" className="button button-quiet" onClick={() => logout.mutate()}>
         Sair
       </button>
+      <div role="alert" className="rail-error">
+        {logout.isError ? 'Não foi possível sair. Tente de novo.' : null}
+      </div>
     </header>
   );
 }

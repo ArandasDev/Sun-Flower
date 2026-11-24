@@ -10,12 +10,17 @@ interface Status {
   modules: { id: string; state: string }[];
 }
 
+/** Poll every 15 s, but stop after an error (a 403 or 401 will not fix itself). */
+export function statusRefetchInterval(query: { state: { status: string } }): number | false {
+  return query.state.status === 'error' ? false : 15_000;
+}
+
 export function Overview() {
   const query = useQuery({
     queryKey: ['status'],
     queryFn: () => apiFetch<Status>('/api/status'),
     retry: false,
-    refetchInterval: 15_000,
+    refetchInterval: statusRefetchInterval,
   });
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 403) return <NoPermission />;

@@ -4,6 +4,8 @@ import { Navigate, useNavigate } from 'react-router';
 import { ApiError, apiFetch, resetCsrfToken, setCsrfToken } from './api.ts';
 import type { Level } from './labels.ts';
 
+const UNAVAILABLE_TEXT = 'Não foi possível confirmar seu acesso agora. Tente de novo em instantes.';
+
 export interface Me {
   id: string;
   name: string;
@@ -38,12 +40,17 @@ export function useCurrentMe(): Me {
 export function useLogout() {
   const client = useQueryClient();
   const navigate = useNavigate();
+  const leave = () => {
+    resetCsrfToken();
+    client.removeQueries({ queryKey: ['me'] });
+    void navigate('/login');
+  };
   return useMutation({
     mutationFn: () => apiFetch<void>('/api/logout', { method: 'POST' }),
-    onSettled: () => {
-      resetCsrfToken();
-      client.removeQueries({ queryKey: ['me'] });
-      void navigate('/login');
+    onSuccess: leave,
+    onError: (error) => {
+      // 401 means the session is already gone; any other failure keeps the session alive.
+      if (error instanceof ApiError && error.status === 401) leave();
     },
   });
 }
@@ -59,7 +66,7 @@ export function RequireSession({ children }: { children: ReactNode }) {
       <div className="center-note" role="alert">
         <p>
           {error instanceof ApiError && error.status === 503
-            ? error.message
+            ? UNAVAILABLE_TEXT
             : 'Algo deu errado. Tente de novo.'}
         </p>
         <button type="button" className="button" onClick={() => void query.refetch()}>

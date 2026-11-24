@@ -7,8 +7,8 @@ const LEVELS: Record<Level, string> = {
   member: 'Membro',
 };
 
-export function levelLabel(level: Level): string {
-  return LEVELS[level];
+export function levelLabel(level: string): string {
+  return Object.hasOwn(LEVELS, level) ? LEVELS[level as Level] : LEVELS.member;
 }
 
 const CONNECTIONS: Record<string, string> = {

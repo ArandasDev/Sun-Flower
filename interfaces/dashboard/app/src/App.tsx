@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Route, Routes, useLocation } from 'react-router';
+import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Menu } from './components/Menu.tsx';
 import { Login } from './routes/Login.tsx';
 import { Overview } from './routes/Overview.tsx';
@@ -24,7 +24,7 @@ function Shell() {
             <Routes location={location}>
               <Route index element={<Profile />} />
               <Route path="visao-geral" element={<Overview />} />
-              <Route path="*" element={<Profile />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.main>
         </AnimatePresence>

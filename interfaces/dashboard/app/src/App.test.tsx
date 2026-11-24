@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { statusRefetchInterval } from './routes/Overview.tsx';
 import { me, renderApp, stubFetch } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -78,6 +79,32 @@ describe('session', () => {
   });
 });
 
+describe('logout failure', () => {
+  it.each([500, 403])('stays in the shell with an alert when logout answers %i', async (status) => {
+    stubFetch((path) =>
+      path === '/api/logout'
+        ? { status, body: { error: { code: 'x', message: 'x' } } }
+        : me('member'),
+    );
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    expect(await screen.findByText('Não foi possível sair. Tente de novo.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Entrar com Discord' })).toBeNull();
+  });
+
+  it('leaves for /login when logout answers 401', async () => {
+    stubFetch((path) =>
+      path === '/api/logout'
+        ? { status: 401, body: { error: { code: 'x', message: 'x' } } }
+        : me('member'),
+    );
+    renderApp('/');
+    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
+  });
+});
+
 describe('menu', () => {
   it('hides "Visão geral" from a member and always shows "Meu perfil"', async () => {
     stubFetch(() => me('member'));
@@ -99,6 +126,33 @@ describe('menu', () => {
       'aria-current',
       'page',
     );
+  });
+});
+
+describe('routing and labels', () => {
+  it('redirects unknown routes to /', async () => {
+    stubFetch(() => me('member'));
+    renderApp('/nao-existe');
+    expect(await screen.findByRole('link', { name: 'Meu perfil' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('falls back to "Membro" for an unknown level', async () => {
+    stubFetch(() => me('martian'));
+    renderApp('/');
+    expect(await screen.findByText('Membro')).toBeInTheDocument();
+  });
+
+  it('ignores the server text on 503 and shows the fixed one', async () => {
+    stubFetch(() => ({
+      status: 503,
+      body: { error: { code: 'unavailable', message: 'texto do servidor' } },
+    }));
+    renderApp('/');
+    expect(await screen.findByText(retryText)).toBeInTheDocument();
+    expect(screen.queryByText('texto do servidor')).toBeNull();
   });
 });
 
@@ -147,6 +201,25 @@ describe('overview', () => {
     expect(screen.getByText('Ativo')).toBeInTheDocument();
     expect(screen.getByText('Com falha')).toBeInTheDocument();
     expect(screen.getByText('Parado')).toBeInTheDocument();
+  });
+
+  it('sends a 401 on /api/status to the login screen', async () => {
+    let signedIn = true;
+    const gone = { status: 401, body: { error: { code: 'unauthorized', message: 'x' } } };
+    stubFetch((path) => {
+      if (path === '/api/status') {
+        signedIn = false;
+        return gone;
+      }
+      return signedIn ? me('owner') : gone;
+    });
+    renderApp('/visao-geral');
+    expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
+  });
+
+  it('stops polling once the status query errored', () => {
+    expect(statusRefetchInterval({ state: { status: 'error' } })).toBe(false);
+    expect(statusRefetchInterval({ state: { status: 'success' } })).toBe(15_000);
   });
 
   it('shows "Sem permissão." on a 403', async () => {

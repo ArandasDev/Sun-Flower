@@ -1,7 +1,7 @@
 :root {
   --sky: #eaf1f4;
   --stem: #14281d;
-  --leaf: #3e7a4f;
+  --leaf: #356b44;
   --petal: #f2b300;
   --seed: #5b3a1d;
   --alert: #b3261e;
@@ -230,6 +230,9 @@ a {
     flex-basis: 100%;
     order: 3;
     overflow-x: auto;
+
+    /* Room so the focus ring is not clipped by the scroll container. */
+    padding: 4px;
   }
 
   .brand {
@@ -333,4 +336,13 @@ a {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.rail-error {
+  color: var(--alert);
+  font-size: var(--text-sm);
+}
+
+.rail-error:empty {
+  display: none;
 }

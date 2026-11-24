@@ -1,10 +1,11 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { MotionConfig } from 'motion/react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import { App } from './App.tsx';
 import { resetCsrfToken } from './api.ts';
+import { makeQueryClient } from './query-client.ts';
 
 export interface FakeResponse {
   status: number;
@@ -44,7 +45,7 @@ export function stubFetch(handler: Handler) {
 
 export function renderApp(path: string) {
   resetCsrfToken();
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = makeQueryClient();
   return render(
     <QueryClientProvider client={client}>
       <MotionConfig reducedMotion="always">
