@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
+import { ApiError, apiFetch } from './api.ts';
 import { useLeaveSession } from './session.tsx';
 
 export const BACKOFF_START_MS = 1_000;
@@ -232,8 +233,18 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
         socket = null;
         stopSending();
         stopStableTimer();
-        // Never opened: the upgrade may have been refused because the session ended.
-        if (!opened) void client.invalidateQueries({ queryKey: ['me'] });
+        // Never opened: the upgrade may have been refused because the session ended. Probe
+        // outside the query cache, so a failing probe never turns the shell into an error screen.
+        if (!opened) {
+          apiFetch('/api/me').catch((error: unknown) => {
+            if (!stopped && error instanceof ApiError && error.status === 401) {
+              stopped = true;
+              stopSending();
+              if (retryTimer !== undefined) clock.clearTimeout(retryTimer);
+              leaveRef.current();
+            }
+          });
+        }
         if (event.code === CLOSE_SESSION_ENDED) {
           endSession(ws);
           return;

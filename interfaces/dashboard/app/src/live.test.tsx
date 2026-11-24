@@ -126,16 +126,82 @@ describe('connection', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
   });
 
-  it('refetches /api/me when a connection closes without ever opening', async () => {
-    const { fetchMock } = await start('member');
-    const meCalls = () => fetchMock.mock.calls.filter(([path]) => path === '/api/me').length;
-    drop();
-    act(() => {
-      clock.advance(1_000);
+  describe('probe after a close that never opened', () => {
+    let mode: 'ok' | '503' | 'network' | '401';
+    async function startWithProbe() {
+      mode = 'ok';
+      const fetchMock = vi.fn((url: string) => {
+        if (url !== '/api/me') return Promise.resolve(new Response(null, { status: 404 }));
+        if (mode === 'network') return Promise.reject(new TypeError('Failed to fetch'));
+        const { status, body } =
+          mode === '503'
+            ? { status: 503, body: { error: { code: 'unavailable', message: 'x' } } }
+            : mode === '401'
+              ? unauthorized
+              : me('member');
+        return Promise.resolve(new Response(JSON.stringify(body), { status }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const view = renderApp('/', clock);
+      await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+      act(() => {
+        lastSocket().open();
+      });
+      drop();
+      return { ...view, fetchMock };
+    }
+
+    it.each(['503', 'network'] as const)(
+      'keeps the shell, the banner and the retries while /api/me fails with %s',
+      async (failure) => {
+        const { fetchMock } = await startWithProbe();
+        mode = failure;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const [delay] = clock.pendingDelays();
+          act(() => {
+            clock.advance(delay ?? 0);
+          });
+          const calls = fetchMock.mock.calls.length;
+          drop(); // the new socket never opened
+          await waitFor(() => expect(fetchMock.mock.calls.length).toBe(calls + 1));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
+          expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+          expect(screen.queryByText('Tentar de novo')).toBeNull();
+          expect(clock.pendingDelays()).toHaveLength(1);
+        }
+        expect(FakeWebSocket.instances).toHaveLength(4);
+      },
+    );
+
+    it('goes to the login when the probe answers 401, without retrying', async () => {
+      await startWithProbe();
+      mode = '401';
+      act(() => {
+        clock.advance(1_000);
+      });
+      drop();
+      expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
+      expect(clock.pendingDelays()).toEqual([]);
+      expect(FakeWebSocket.instances).toHaveLength(2);
     });
-    const before = meCalls();
-    drop(); // the second socket never opened
-    await waitFor(() => expect(meCalls()).toBe(before + 1));
+  });
+
+  it('RequireSession keeps the shell when a refetch of /api/me fails with 503', async () => {
+    let failing = false;
+    stubFetch(() =>
+      failing
+        ? { status: 503, body: { error: { code: 'unavailable', message: 'x' } } }
+        : me('member'),
+    );
+    const { client } = renderApp('/', clock);
+    await screen.findByRole('button', { name: 'Sair' });
+    failing = true;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['me'] });
+    });
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.queryByText('Tentar de novo')).toBeNull();
   });
 
   it('keeps the status region in the accessibility tree while empty', async () => {

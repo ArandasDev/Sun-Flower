@@ -60,11 +60,18 @@ export function useLogout() {
   });
 }
 
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 /** Gate for every screen except the login: loads `/api/me` and handles 401 and 503. */
 export function RequireSession({ children }: { children: ReactNode }) {
   const query = useMe();
   if (query.isPending) return <p className="center-note">Carregando…</p>;
-  if (query.isError) {
+  // A failed refetch keeps the data: only a 401 (below) or a first failure replaces the shell.
+  const data = query.data;
+  if (data === undefined || (query.isError && isUnauthorized(query.error))) {
+    if (!query.isError) return <p className="center-note">Carregando…</p>;
     const error = query.error;
     if (error instanceof ApiError && error.status === 401) return <Navigate to="/login" replace />;
     return (
@@ -80,5 +87,5 @@ export function RequireSession({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return <MeContext.Provider value={query.data}>{children}</MeContext.Provider>;
+  return <MeContext.Provider value={data}>{children}</MeContext.Provider>;
 }
