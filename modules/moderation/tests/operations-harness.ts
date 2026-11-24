@@ -16,6 +16,7 @@ interface Parser {
  */
 export function createLocalOperations(deps: {
   readonly config: ModuleContext['config'];
+  readonly permissions: ModuleContext['permissions'];
   readonly domains: DomainStore;
   readonly cases: CaseStore;
   readonly guild: GuildActions;
@@ -26,6 +27,7 @@ export function createLocalOperations(deps: {
   registerModerationOperations(
     {
       config: deps.config,
+      permissions: deps.permissions,
       operations: {
         register: <I, O>(definition: OperationDefinition<I, O>) => {
           definitions.set(definition.name, definition);

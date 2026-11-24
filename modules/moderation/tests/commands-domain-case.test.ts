@@ -29,11 +29,13 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
   const domains = new DomainStore(ctx.storage);
   const cases = new CaseStore(ctx.storage);
+  const permissions = { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false };
   const deps: ModCommandDeps = {
-    permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
+    permissions,
     config: configApi,
     operations: createLocalOperations({
       config: configApi,
+      permissions,
       domains,
       cases,
       guild,

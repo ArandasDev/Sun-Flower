@@ -190,6 +190,35 @@ describe('moderation.cases.view', () => {
     expect('messageId' in result.data).toBe(false);
   });
 
+  it('pins the exact key set of the detail', async () => {
+    const id = cases.create(newCase());
+    const result = (await run('moderation.cases.view', { id })) as {
+      data: Record<string, unknown>;
+    };
+    expect(Object.keys(result.data).sort()).toEqual(
+      [
+        'action',
+        'actorUserId',
+        'channelId',
+        'createdAt',
+        'domains',
+        'id',
+        'kind',
+        'level',
+        'outcome',
+        'reason',
+        'revertedAt',
+        'revertedBy',
+        'rules',
+        'score',
+        'signals',
+        'status',
+        'targetUserId',
+        'timeoutUntil',
+      ].sort(),
+    );
+  });
+
   it('answers not_found for an unknown case', async () => {
     expect(await run('moderation.cases.view', { id: 99 })).toEqual({
       ok: false,

@@ -65,9 +65,26 @@ function summary(record: CaseRecord): CaseSummary {
 }
 
 function detail(record: CaseRecord): CaseDetail {
-  const copy: Partial<CaseRecord> = { ...record };
-  delete copy.messageId;
-  return copy as CaseDetail;
+  return {
+    id: record.id,
+    kind: record.kind,
+    level: record.level,
+    action: record.action,
+    status: record.status,
+    targetUserId: record.targetUserId,
+    actorUserId: record.actorUserId,
+    channelId: record.channelId,
+    domains: record.domains,
+    signals: record.signals,
+    rules: record.rules,
+    score: record.score,
+    reason: record.reason,
+    outcome: record.outcome,
+    timeoutUntil: record.timeoutUntil,
+    createdAt: record.createdAt,
+    revertedBy: record.revertedBy,
+    revertedAt: record.revertedAt,
+  };
 }
 
 function undoOnDiscord(record: CaseRecord, guild: GuildActions): Promise<GuildActionResult> {

@@ -65,10 +65,11 @@ function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
   const domains = new DomainStore(ctx.storage);
   const cases = new CaseStore(ctx.storage);
   const publish = vi.fn();
+  const permissions = { check, isDeveloper: () => false, hasAnyGrant: () => false };
   const deps: ModCommandDeps = {
-    permissions: { check, isDeveloper: () => false, hasAnyGrant: () => false },
+    permissions,
     config,
-    operations: createLocalOperations({ config, domains, cases, guild, publish }),
+    operations: createLocalOperations({ config, permissions, domains, cases, guild, publish }),
     guild,
     cases,
     domains,
