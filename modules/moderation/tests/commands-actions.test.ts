@@ -39,6 +39,7 @@ function setup(options: SetupOptions = {}) {
   const developers = new Set(options.developers ?? []);
   const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
   const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
   const deps: ModCommandDeps = {
     permissions: {
       check: () => true,
@@ -46,9 +47,16 @@ function setup(options: SetupOptions = {}) {
       hasAnyGrant: (roleIds, prefix) => prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
     },
     config: configApi,
-    operations: createLocalOperations(configApi, domains, () => NOW),
+    operations: createLocalOperations({
+      config: configApi,
+      domains,
+      cases,
+      guild,
+      publish,
+      now: () => NOW,
+    }),
     guild,
-    cases: new CaseStore(ctx.storage),
+    cases,
     domains,
     publish,
     now: () => NOW,

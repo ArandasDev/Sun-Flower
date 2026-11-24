@@ -20,6 +20,10 @@
   ],
   "events": {
     "subscribes": ["discord.message.created", "discord.message.updated"],
-    "publishes": ["moderation.case.created", "moderation.case.reverted"]
+    "publishes": [
+      "moderation.case.created",
+      "moderation.case.reverted",
+      "moderation.case.dismissed"
+    ]
   }
 }

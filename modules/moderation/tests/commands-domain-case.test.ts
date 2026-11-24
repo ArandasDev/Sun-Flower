@@ -28,12 +28,20 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const publish = vi.fn();
   const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
   const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
   const deps: ModCommandDeps = {
     permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
     config: configApi,
-    operations: createLocalOperations(configApi, domains, () => NOW),
+    operations: createLocalOperations({
+      config: configApi,
+      domains,
+      cases,
+      guild,
+      publish,
+      now: () => NOW,
+    }),
     guild,
-    cases: new CaseStore(ctx.storage),
+    cases,
     domains,
     publish,
     now: () => NOW,
@@ -415,14 +423,14 @@ describe('/mod case revert', () => {
 });
 
 describe('/mod case dismiss', () => {
-  it('dismisses an open case and publishes nothing', async () => {
+  it('dismisses an open case and publishes moderation.case.dismissed', async () => {
     const t = setup();
     const id = seed(t, 'none', { status: 'open' });
     expect(await run(t, 'case', 'dismiss', { number: id })).toBe(`Caso #${String(id)} descartado.`);
     const record = t.deps.cases.get(id);
     expect(record?.status).toBe('dismissed');
     expect(record?.revertedBy).toBe(ACTOR.userId);
-    expect(t.publish).not.toHaveBeenCalled();
+    expect(t.publish).toHaveBeenCalledExactlyOnceWith('moderation.case.dismissed', { caseId: id });
     expect(t.guild.calls).toHaveLength(0);
   });
 

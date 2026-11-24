@@ -65,7 +65,14 @@ const createModeration: ModuleFactory = () => {
       context = ctx;
       ctx.events.subscribe(DISCORD_MESSAGE_CREATED, onCreated);
       ctx.events.subscribe(DISCORD_MESSAGE_UPDATED, onUpdated);
-      registerModerationOperations(ctx, { domains: () => required(domainStore) });
+      registerModerationOperations(ctx, {
+        domains: () => required(domainStore),
+        cases: () => required(caseStore),
+        guild: ctx.guild,
+        publish: (type, payload) => {
+          ctx.events.publish(type, payload);
+        },
+      });
       ctx.commands.register(
         buildModCommand({
           permissions: ctx.permissions,

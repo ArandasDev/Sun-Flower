@@ -63,14 +63,16 @@ function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const config = { get: <T>() => current as T, set, version: () => 0 };
   const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
+  const publish = vi.fn();
   const deps: ModCommandDeps = {
     permissions: { check, isDeveloper: () => false, hasAnyGrant: () => false },
     config,
-    operations: createLocalOperations(config, domains),
+    operations: createLocalOperations({ config, domains, cases, guild, publish }),
     guild,
-    cases: new CaseStore(ctx.storage),
+    cases,
     domains,
-    publish: vi.fn(),
+    publish,
   };
   return { deps, set, check, guild, command: buildModCommand(deps), current: () => current };
 }

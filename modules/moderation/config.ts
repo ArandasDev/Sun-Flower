@@ -36,7 +36,7 @@ export const DEFAULT_BAIT_TERMS: readonly string[] = [
   'resgate',
 ];
 
-const snowflake = z.string().regex(/^\d{17,20}$/);
+export const snowflake = z.string().regex(/^\d{17,20}$/);
 const weight = z.number().int().min(0).max(1000);
 
 const thresholdsSchema = z.object({
