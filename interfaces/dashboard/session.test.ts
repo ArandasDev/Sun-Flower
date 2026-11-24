@@ -19,16 +19,23 @@ let sessions: SessionStore;
 let auth: SessionAuth;
 let app: FastifyInstance;
 let member: MemberInfo | null | undefined;
+let lookups: number;
 
 beforeEach(async () => {
   db = openDatabase(':memory:');
   runMigrations(db, MIGRATIONS_DIR);
   sessions = new SessionStore(db);
   member = { roleIds: [], isOwner: false, displayName: 'Pessoa', avatarUrl: null };
+  lookups = 0;
   const core = { sessions, permissions: new PermissionService(db) } as unknown as CoreHandle;
   auth = createSessionAuth({
     core,
-    directory: { lookup: () => Promise.resolve(member) },
+    directory: {
+      lookup: () => {
+        lookups += 1;
+        return Promise.resolve(member);
+      },
+    },
     sessionSecret: SECRET,
   });
   app = Fastify();
@@ -89,10 +96,26 @@ describe('requireSession', () => {
     expect(sessions.resolve(token)).toBeNull();
   });
 
-  it('refuses without deleting while the lookup cannot answer', async () => {
+  it('answers 503 without deleting while the lookup cannot answer', async () => {
     const { token } = sessions.create(USER);
     member = undefined;
-    expect((await send('GET', token)).statusCode).toBe(401);
+    const res = await send('GET', token);
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      error: {
+        code: 'unavailable',
+        message: 'Não foi possível confirmar seu acesso agora. Tente de novo em instantes.',
+      },
+    });
     expect(sessions.resolve(token)).not.toBeNull();
+  });
+
+  it('checks the CSRF token before looking the person up', async () => {
+    const { token } = sessions.create(USER);
+    lookups = 0;
+    expect((await send('POST', token)).statusCode).toBe(403);
+    expect(lookups).toBe(0);
+    expect((await send('GET', token)).statusCode).toBe(200);
+    expect(lookups).toBe(1);
   });
 });

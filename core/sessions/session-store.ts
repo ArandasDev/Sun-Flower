@@ -74,7 +74,23 @@ export class SessionStore {
 
   /** Returns the session if both expirations still hold, refreshing `last_seen_at` at most once a minute. */
   resolve(token: string): SessionRecord | null {
-    const idHash = hashSessionToken(token);
+    const record = this.peek(token);
+    if (record === null) return null;
+    const now = this.#now();
+    if (now - record.lastSeenAt < TOUCH_INTERVAL_MS) return record;
+    this.#db
+      .prepare('UPDATE panel_sessions SET last_seen_at = ? WHERE id_hash = ?')
+      .run(iso(now), record.idHash);
+    return { ...record, lastSeenAt: now };
+  }
+
+  /** Like `resolve`, but read-only: `last_seen_at` is never rewritten. */
+  peek(token: string): SessionRecord | null {
+    return this.peekByHash(hashSessionToken(token));
+  }
+
+  /** The valid session with this hash, read-only. */
+  peekByHash(idHash: string): SessionRecord | null {
     const row = this.#db.prepare('SELECT * FROM panel_sessions WHERE id_hash = ?').get(idHash) as
       SessionRow | undefined;
     if (row === undefined) return null;
@@ -82,11 +98,7 @@ export class SessionStore {
     const now = this.#now();
     if (!Number.isFinite(record.expiresAt) || !Number.isFinite(record.lastSeenAt)) return null;
     if (now > record.expiresAt || now > record.lastSeenAt + IDLE_EXPIRY_MS) return null;
-    if (now - record.lastSeenAt < TOUCH_INTERVAL_MS) return record;
-    this.#db
-      .prepare('UPDATE panel_sessions SET last_seen_at = ? WHERE id_hash = ?')
-      .run(iso(now), idHash);
-    return { ...record, lastSeenAt: now };
+    return record;
   }
 
   delete(token: string): void {

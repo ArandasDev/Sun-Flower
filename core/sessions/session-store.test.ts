@@ -91,6 +91,21 @@ describe('SessionStore', () => {
     expect(row.last_seen_at).toBe(new Date(clock).toISOString());
   });
 
+  it('peeks at a session without rewriting last_seen_at', () => {
+    const { token, record } = store.create(user);
+    clock += TOUCH_INTERVAL_MS * 5;
+    expect(store.peek(token)?.lastSeenAt).toBe(record.createdAt);
+    expect(store.peekByHash(record.idHash)?.userId).toBe(user);
+    const row = db.prepare('SELECT last_seen_at FROM panel_sessions').get() as {
+      last_seen_at: string;
+    };
+    expect(row.last_seen_at).toBe(new Date(record.createdAt).toISOString());
+    expect(store.peek('nope')).toBeNull();
+    clock = record.createdAt + IDLE_EXPIRY_MS + 1;
+    expect(store.peek(token)).toBeNull();
+    expect(store.peekByHash(record.idHash)).toBeNull();
+  });
+
   it('deletes by token and by hash', () => {
     const a = store.create(user);
     const b = store.create(user);

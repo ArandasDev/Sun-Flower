@@ -14,7 +14,7 @@ import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
 import { apiError } from './errors.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
-import { createSessionAuth, type SessionAuth } from './session.ts';
+import { CHANGING_METHODS, createSessionAuth, type SessionAuth } from './session.ts';
 
 export { SESSION_COOKIE } from './session.ts';
 
@@ -47,7 +47,6 @@ const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 120;
 const RATE_MAX_CHANGES = 30;
 const RATE_MAX_LOGIN = 10;
-const CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export interface DashboardDeps {
   readonly env: PanelEnvironment;
@@ -106,10 +105,11 @@ function isServerRequest(request: FastifyRequest): boolean {
 
 /**
  * The API limiter key: the idHash of the validated session, else the client IP. A cookie that does
- * not resolve to a session falls back to the IP, so random cookies cannot open new buckets.
+ * not resolve to a session falls back to the IP, so random cookies cannot open new buckets. The
+ * lookup is read-only, so a refused request never extends the session.
  */
 function rateLimitKey(auth: SessionAuth, request: FastifyRequest): string {
-  const record = auth.resolve(request);
+  const record = auth.peek(request);
   return record !== null ? `s:${record.idHash}` : `i:${request.ip}`;
 }
 

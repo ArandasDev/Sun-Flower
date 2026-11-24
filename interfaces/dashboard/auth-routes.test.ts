@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
@@ -196,6 +196,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await app?.close();
   app = undefined;
   db.close();
@@ -361,6 +362,65 @@ describe('GET /auth/callback', () => {
     expect(first).not.toBe(second);
   });
 
+  it('sends to failed and keeps the previous session when creating the session throws', async () => {
+    const server = await build();
+    const previous = await login(server);
+    const create = vi.spyOn(sessions, 'create').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+    const { oauthCookie, state } = await startLogin(server);
+    const res = await server.inject({
+      method: 'GET',
+      url: `/auth/callback?${new URLSearchParams({ code: CODE, state }).toString()}`,
+      cookies: { [OAUTH_COOKIE]: oauthCookie, [SESSION_COOKIE]: previous },
+    });
+    expect(create).toHaveBeenCalled();
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`${PUBLIC_URL}/login?error=failed`);
+    expect(cookie(res, SESSION_COOKIE)).toBeUndefined();
+    expect(sessions.resolve(previous)).not.toBeNull();
+  });
+
+  it('replaces the session the browser held after creating the new one', async () => {
+    const server = await build();
+    const previous = await login(server);
+    const { oauthCookie, state } = await startLogin(server);
+    const res = await server.inject({
+      method: 'GET',
+      url: `/auth/callback?${new URLSearchParams({ code: CODE, state }).toString()}`,
+      cookies: { [OAUTH_COOKIE]: oauthCookie, [SESSION_COOKIE]: previous },
+    });
+    expect(res.headers.location).toBe(`${PUBLIC_URL}/`);
+    expect(sessions.resolve(previous)).toBeNull();
+    expect(sessionCount()).toBe(1);
+  });
+
+  it('sends to failed when deleting the previous session throws', async () => {
+    const server = await build();
+    const previous = await login(server);
+    vi.spyOn(sessions, 'deleteByHash').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+    const { oauthCookie, state } = await startLogin(server);
+    const res = await server.inject({
+      method: 'GET',
+      url: `/auth/callback?${new URLSearchParams({ code: CODE, state }).toString()}`,
+      cookies: { [OAUTH_COOKIE]: oauthCookie, [SESSION_COOKIE]: previous },
+    });
+    expect(res.headers.location).toBe(`${PUBLIC_URL}/login?error=failed`);
+  });
+
+  it('sends to failed when the developer check throws', async () => {
+    members.set(USER, null);
+    vi.spyOn(permissions, 'isDeveloper').mockImplementation(() => {
+      throw new Error('database is locked');
+    });
+    const server = await build();
+    const { oauthCookie, state } = await startLogin(server);
+    const res = await callback(server, { code: CODE, state }, oauthCookie);
+    expect(res.headers.location).toBe(`${PUBLIC_URL}/login?error=failed`);
+  });
+
   it('ignores the Host header when building redirects', async () => {
     const server = await build();
     const res = await server.inject({
@@ -439,11 +499,18 @@ describe('GET /api/me', () => {
     expect((await me(server, token)).statusCode).toBe(401);
   });
 
-  it('answers 401 but keeps the session when the directory cannot answer', async () => {
+  it('answers 503 but keeps the session when the directory cannot answer', async () => {
     const server = await build();
     const token = await login(server);
     members.set(USER, undefined);
-    expect((await me(server, token)).statusCode).toBe(401);
+    const res = await me(server, token);
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      error: {
+        code: 'unavailable',
+        message: 'Não foi possível confirmar seu acesso agora. Tente de novo em instantes.',
+      },
+    });
     expect(sessionCount()).toBe(1);
     members.set(USER, member());
     expect((await me(server, token)).statusCode).toBe(200);
@@ -458,7 +525,7 @@ describe('GET /api/me', () => {
     });
     const token = await login(server);
     fail = true;
-    expect((await me(server, token)).statusCode).toBe(401);
+    expect((await me(server, token)).statusCode).toBe(503);
     expect(sessionCount()).toBe(1);
   });
 
@@ -539,6 +606,20 @@ describe('API rate limit key', () => {
     }
     expect(statuses.slice(0, 120).every((s) => s === 401)).toBe(true);
     expect(statuses.slice(120).every((s) => s === 429)).toBe(true);
+  });
+
+  it('does not advance last_seen_at for a request refused with 429', async () => {
+    const server = await build();
+    const token = await login(server);
+    const lastSeen = (): string =>
+      (db.prepare('SELECT last_seen_at FROM panel_sessions').get() as { last_seen_at: string })
+        .last_seen_at;
+    for (let i = 0; i < 120; i++) await me(server, token);
+    const before = lastSeen();
+    clock += 120_000;
+    const res = await me(server, token);
+    expect(res.statusCode).toBe(429);
+    expect(lastSeen()).toBe(before);
   });
 
   it('gives a valid session its own bucket', async () => {

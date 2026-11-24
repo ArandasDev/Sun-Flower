@@ -1,14 +1,16 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
-import type { MemberDirectory, MemberInfo, OAuthClient } from './ports.ts';
+import type { MemberDirectory, OAuthClient } from './ports.ts';
 import {
   SESSION_COOKIE,
   SESSION_COOKIE_OPTIONS,
   forbidden,
+  lookupMember,
+  safeEqual,
   unauthorized,
   type SessionAuth,
 } from './session.ts';
@@ -52,12 +54,6 @@ function randomToken(): string {
 
 function challengeFor(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
-}
-
-function sameState(given: string, expected: string): boolean {
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function parsePending(raw: string): PendingLogin | null {
@@ -106,21 +102,13 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
     const state = param(request, 'state');
     const code = param(request, 'code');
     if (pending === null || state === undefined || code === undefined) return null;
-    if (!sameState(state, pending.state)) return null;
+    if (!safeEqual(state, pending.state)) return null;
     try {
       // The access token lives only in this local variable and is dropped after the user lookup.
       const accessToken = await oauth.exchange(code, pending.verifier);
       return await oauth.fetchUserId(accessToken);
     } catch {
       return null;
-    }
-  };
-
-  const lookup = async (userId: string): Promise<MemberInfo | null | undefined> => {
-    try {
-      return await directory.lookup(userId);
-    } catch {
-      return undefined;
     }
   };
 
@@ -146,23 +134,33 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRoutesDeps): 
       return reply.redirect(loginError('failed'), 302);
     }
     const userId = identity;
-    const member = await lookup(userId);
+    const member = await lookupMember(directory, userId);
     if (member === undefined) {
       logger.warn({ reason: 'lookup' }, 'panel login refused');
       return reply.redirect(loginError('retry'), 302);
     }
-    if (member === null) {
-      logger.info({ reason: 'not_member' }, 'panel login refused');
-      const error = core.permissions.isDeveloper(userId) ? 'dev_not_member' : 'not_member';
-      return reply.redirect(loginError(error), 302);
+    // Discord already identified the person: any failure from here on is a plain failed login.
+    try {
+      if (member === null) {
+        logger.info({ reason: 'not_member' }, 'panel login refused');
+        const error = core.permissions.isDeveloper(userId) ? 'dev_not_member' : 'not_member';
+        return reply.redirect(loginError(error), 302);
+      }
+      // A new login always gets a new session. The one the browser held before is dropped, but only
+      // once the new one exists, so a failure here never leaves the browser without either.
+      const previous = auth.peek(request);
+      const { token } = core.sessions.create(userId);
+      if (previous !== null) core.sessions.deleteByHash(previous.idHash);
+      reply.setCookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
+      logger.info('panel login succeeded');
+      return reply.redirect(home, 302);
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.name : 'unknown' },
+        'panel login failed',
+      );
+      return reply.redirect(loginError('failed'), 302);
     }
-    // A new login always gets a new session; the one the browser held before is dropped.
-    const previous = auth.resolve(request);
-    if (previous !== null) core.sessions.deleteByHash(previous.idHash);
-    const { token } = core.sessions.create(userId);
-    reply.setCookie(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
-    logger.info('panel login succeeded');
-    return reply.redirect(home, 302);
   });
 
   app.get('/api/me', { preHandler: auth.requireSession }, async (request, reply) => {
