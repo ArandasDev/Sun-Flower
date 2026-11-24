@@ -14,12 +14,18 @@ export interface DatabaseEnvironment {
   readonly logLevel: LogLevel;
 }
 
-type Source = Record<string, string | undefined>;
+export type Source = Record<string, string | undefined>;
 
 const rules: Record<string, string> = {
   DISCORD_TOKEN: 'must not be empty',
   DISCORD_GUILD_ID: 'must have 17 to 20 digits',
   LOG_LEVEL: 'must be one of fatal, error, warn, info, debug, trace',
+  PANEL_PUBLIC_URL: 'must be an https:// origin with no path, query or fragment',
+  PANEL_PORT: 'must be an integer from 1 to 65535',
+  DISCORD_CLIENT_ID: 'must have 17 to 20 digits',
+  DISCORD_CLIENT_SECRET: 'must not be empty',
+  SESSION_SECRET: 'must be base64 with at least 32 decoded bytes',
+  PANEL_TRUST_PROXY: 'must be a comma-separated list of addresses',
 };
 
 export class EnvironmentError extends Error {
@@ -36,7 +42,7 @@ export class EnvironmentError extends Error {
   }
 }
 
-function present(source: Source, name: string): string | undefined {
+export function present(source: Source, name: string): string | undefined {
   const value = source[name];
   const trimmed = value?.trim();
   return trimmed === undefined || trimmed === '' ? undefined : trimmed;
@@ -54,7 +60,11 @@ const environmentSchema = z.object({
   ...databaseShape,
 });
 
-function parse<T extends z.ZodType>(schema: T, source: Source, names: string[]): z.output<T> {
+export function parse<T extends z.ZodType>(
+  schema: T,
+  source: Source,
+  names: string[],
+): z.output<T> {
   const input: Record<string, string | undefined> = {};
   for (const name of names) input[name] = present(source, name);
   const result = schema.safeParse(input);

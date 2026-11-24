@@ -382,6 +382,8 @@ Exemplo:
 
 Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id. O prefixo `discord.` é reservado à interface do Discord: um manifesto que declare publicar `discord.*` é recusado. Os módulos apenas consomem esses eventos (`discord.message.created`, `discord.message.updated`), declarando-os em `events.subscribes`.
 
+O prefixo `core.` também é reservado, ao Core, e vale a mesma recusa no manifesto. O Core publica `core.config.changed` (configurações de um módulo alteradas, com a nova versão), `core.module.state.changed` (módulo ativado, desativado ou com falha) e `core.discord.connection.changed` (conexão do bot com o Discord). As interfaces os recebem por `subscribe`; módulos podem consumi-los em `events.subscribes`.
+
 ### 7.3. Regras de comunicação
 
 - Eventos deverão possuir identificadores únicos.
@@ -415,6 +417,8 @@ Exemplo:
   }
 }
 ```
+
+As configurações de cada módulo têm uma versão, que começa em 0 e sobe a cada gravação. Quem altera informa a versão que leu; se ela já mudou, a gravação é recusada com um erro de conflito, para que ninguém sobrescreva sem querer a alteração de outra pessoa. Cada gravação publica `core.config.changed`.
 
 ### Requisitos
 
@@ -468,14 +472,18 @@ social.wishlist.manage
 
 ### 9.2. Origem das permissões
 
-Conforme a [decisão 0006](decisions/0006-permission-model.md):
+Conforme a [decisão 0006](decisions/0006-permission-model.md), em parte substituída pela [decisão 0017](decisions/0017-access-levels.md). Cada ator (`Actor`) tem um nível de acesso, e `Actor.isOwner` indica o dono do servidor:
 
-| Permissões                 | Quem recebe                                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `core.*` (operação do bot) | Somente usuários da lista de desenvolvedores do bot. Nunca associáveis a cargos do servidor.                       |
-| Permissões de módulo       | Membros cujos cargos do servidor tenham a permissão associada. Ser desenvolvedor não concede permissões de módulo. |
+| Nível          | Permissões                                       |
+| -------------- | ------------------------------------------------ |
+| Desenvolvedor  | Todas, incluindo `core.*`.                       |
+| Dono           | Todas as permissões de módulo, nunca `core.*`.   |
+| Equipe (staff) | As permissões associadas aos cargos do servidor. |
+| Membro         | Nenhuma.                                         |
 
-O dono do servidor e membros com a permissão de Administrador do Discord não recebem nenhuma permissão automática.
+`core.*` nunca é associável a cargos do servidor. Quem não é desenvolvedor, dono nem equipe é membro e não tem permissões.
+
+Membros com a permissão de Administrador do Discord não recebem nenhuma permissão automática.
 
 ### 9.3. Regras
 
