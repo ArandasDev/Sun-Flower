@@ -120,7 +120,7 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 
 O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel.
 
-**Variáveis** (todas no `.env`; as seis são lidas só quando `PANEL_PUBLIC_URL` está definida):
+**Variáveis** (todas no `.env`): o painel liga quando `PANEL_PUBLIC_URL` está definida, e então `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` e `SESSION_SECRET` passam a ser obrigatórias; `PANEL_PORT` (padrão `3000`) e `PANEL_TRUST_PROXY` são opcionais:
 
 | Variável                | Conteúdo                                                                             |
 | ----------------------- | ------------------------------------------------------------------------------------ |
@@ -179,7 +179,7 @@ npm run build --prefix interfaces/dashboard/app
 
 **`PANEL_TRUST_PROXY`:** com um proxy na mesma máquina (Caddy ou Nginx), use `PANEL_TRUST_PROXY=127.0.0.1`. Com um túnel, use o IP de onde o conector (por exemplo, `cloudflared`) se conecta ao painel. Se ficar vazio, o painel avisa na inicialização e todos os clientes parecem vir do proxy: dividem os mesmos limites de requisições, e uma pessoa pode bloquear o login de todas. Um valor errado anula o limite por IP.
 
-**Quem pode entrar:** só membros do servidor. Desenvolvedores do bot também precisam ser membros: isso faz parte da segurança do projeto e limita o estrago se uma conta for invadida. Quem não é membro vê a mensagem correspondente na tela de login.
+**Quem pode entrar:** só membros do servidor. Desenvolvedores do bot também precisam ser membros. Um desenvolvedor que não é membro vê esta mensagem na tela de login: "Desenvolvedores precisam ser membros do servidor para acessar o painel. Isso faz parte da segurança do projeto: limita o estrago se uma conta for invadida." Quem não é membro e não é desenvolvedor vê "Só membros do servidor podem acessar o painel."
 
 **Teste manual da etapa 1** (pessoa mantenedora), atrás de um proxy HTTPS:
 

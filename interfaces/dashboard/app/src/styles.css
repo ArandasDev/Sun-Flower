@@ -364,8 +364,16 @@ a {
   transform: translateX(-50%);
 }
 
+/* Empty: keep the live region in the accessibility tree but hide it visually. */
 .reconnect-banner:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Presence: a sunflower seed head */

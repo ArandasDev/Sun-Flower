@@ -9,6 +9,8 @@ export const BACKOFF_MAX_MS = 30_000;
 export const PRESENCE_MIN_INTERVAL_MS = 1_100;
 /** The server ended the session; do not reconnect. */
 export const CLOSE_SESSION_ENDED = 4401;
+/** A connection counts as healthy after this long open; only then is the backoff reset. */
+export const STABLE_AFTER_MS = 5_000;
 
 const OPEN = 1;
 
@@ -77,6 +79,19 @@ function parsePresence(data: unknown): PresenceUser[] | null {
   return users;
 }
 
+function isStatus(data: unknown): boolean {
+  return (
+    isRecord(data) &&
+    typeof data['connection'] === 'string' &&
+    typeof data['uptimeMs'] === 'number' &&
+    Array.isArray(data['modules']) &&
+    (data['modules'] as unknown[]).every(
+      (entry) =>
+        isRecord(entry) && typeof entry['id'] === 'string' && typeof entry['state'] === 'string',
+    )
+  );
+}
+
 function liveUrl(): string {
   return `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/api/live`;
 }
@@ -108,6 +123,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
     let delay = BACKOFF_START_MS;
     let retryTimer: unknown;
     let sendTimer: unknown;
+    let stableTimer: unknown;
     let lastSentAt = Number.NEGATIVE_INFINITY;
     let lastSentScreen: string | null = null;
 
@@ -130,6 +146,11 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       if (sendTimer === undefined) flush();
     };
 
+    const stopStableTimer = (): void => {
+      if (stableTimer !== undefined) clock.clearTimeout(stableTimer);
+      stableTimer = undefined;
+    };
+
     const stopSending = (): void => {
       if (sendTimer !== undefined) clock.clearTimeout(sendTimer);
       sendTimer = undefined;
@@ -145,6 +166,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
     const endSession = (ws: WebSocket): void => {
       stopped = true;
       stopSending();
+      stopStableTimer();
       detach(ws);
       ws.close();
       leaveRef.current();
@@ -161,7 +183,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       const data = message['data'];
       switch (message['type']) {
         case 'status':
-          client.setQueryData(['status'], data);
+          if (isStatus(data)) client.setQueryData(['status'], data);
           break;
         case 'config.changed':
           if (isRecord(data) && typeof data['moduleId'] === 'string') {
@@ -185,15 +207,22 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       retryTimer = undefined;
       const ws = new WebSocket(liveUrl());
       socket = ws;
+      let opened = false;
       ws.onopen = () => {
-        setReconnecting(false);
-        delay = BACKOFF_START_MS;
+        opened = true;
         lastSentAt = Number.NEGATIVE_INFINITY;
         lastSentScreen = null;
-        // Events may have been missed while it was down.
-        if (lost) void client.invalidateQueries();
-        lost = false;
         flush();
+        // A server may accept and then close at once (too many tabs); only a connection that
+        // stays open proves the link is healthy, so only then reset the wait and refetch.
+        stableTimer = clock.setTimeout(() => {
+          stableTimer = undefined;
+          setReconnecting(false);
+          delay = BACKOFF_START_MS;
+          // Events may have been missed while it was down.
+          if (lost) void client.invalidateQueries();
+          lost = false;
+        }, STABLE_AFTER_MS);
       };
       ws.onmessage = (event) => {
         onMessage(ws, event.data);
@@ -202,6 +231,9 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
         if (stopped || socket !== ws) return;
         socket = null;
         stopSending();
+        stopStableTimer();
+        // Never opened: the upgrade may have been refused because the session ended.
+        if (!opened) void client.invalidateQueries({ queryKey: ['me'] });
         if (event.code === CLOSE_SESSION_ENDED) {
           endSession(ws);
           return;
@@ -219,6 +251,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       stopped = true;
       reportRef.current = () => undefined;
       stopSending();
+      stopStableTimer();
       if (retryTimer !== undefined) clock.clearTimeout(retryTimer);
       if (socket !== null) {
         detach(socket);

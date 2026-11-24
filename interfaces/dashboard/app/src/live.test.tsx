@@ -94,10 +94,71 @@ describe('connection', () => {
     act(() => {
       lastSocket().open();
     });
+    expect(meCalls()).toBe(before);
+    act(() => {
+      clock.advance(5_000);
+    });
     await waitFor(() => expect(meCalls()).toBe(before + 1));
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
     drop();
     expect(clock.pendingDelays()).toEqual([1_000]);
+  });
+
+  it('keeps doubling when the server accepts and closes at once (6th tab)', async () => {
+    const { fetchMock } = await start('member');
+    const meCalls = () => fetchMock.mock.calls.filter(([path]) => path === '/api/me').length;
+    const before = meCalls();
+    const delays: number[] = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      drop(4408);
+      const [delay] = clock.pendingDelays();
+      delays.push(delay ?? -1);
+      act(() => {
+        clock.advance(delay ?? 0);
+      });
+      act(() => {
+        lastSocket().open();
+      });
+    }
+    expect(delays).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000]);
+    await Promise.resolve();
+    expect(meCalls()).toBe(before);
+    expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
+  });
+
+  it('refetches /api/me when a connection closes without ever opening', async () => {
+    const { fetchMock } = await start('member');
+    const meCalls = () => fetchMock.mock.calls.filter(([path]) => path === '/api/me').length;
+    drop();
+    act(() => {
+      clock.advance(1_000);
+    });
+    const before = meCalls();
+    drop(); // the second socket never opened
+    await waitFor(() => expect(meCalls()).toBe(before + 1));
+  });
+
+  it('keeps the status region in the accessibility tree while empty', async () => {
+    await start('member');
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('unmounting stops the retry and send timers', async () => {
+    const { unmount } = await start('owner');
+    await userEvent.click(screen.getByRole('link', { name: 'Visão geral' }));
+    drop();
+    expect(clock.pendingDelays().length).toBeGreaterThan(0);
+    unmount();
+    expect(clock.pendingDelays()).toEqual([]);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it('unmounting while a send is pending leaves no timers', async () => {
+    const { unmount } = await start('owner');
+    await userEvent.click(screen.getByRole('link', { name: 'Visão geral' }));
+    expect(clock.pendingDelays().length).toBeGreaterThan(0); // send + stable timers
+    unmount();
+    expect(clock.pendingDelays()).toEqual([]);
   });
 
   it.each([4400, 4408])('reconnects after close code %i', async (code) => {
@@ -138,6 +199,14 @@ describe('connection', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
     await screen.findByRole('link', { name: 'Entrar com Discord' });
     expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+  });
+
+  it('the login screen clears the cache when it mounts', async () => {
+    stubFetch(() => unauthorized);
+    const { client } = renderApp('/', clock); // /api/me answers 401, so the login mounts
+    client.setQueryData(['config', 'moderation'], { a: 1 });
+    await screen.findByRole('link', { name: 'Entrar com Discord' });
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('a 401 from any query clears the whole cache', async () => {
@@ -183,6 +252,16 @@ describe('messages', () => {
       lastSocket().receive('status', status);
     });
     expect(client.getQueryData(['status'])).toEqual(status);
+  });
+
+  it('ignores a status message with the wrong shape', async () => {
+    const { client } = await start('member');
+    act(() => {
+      lastSocket().receive('status', { connection: 'ready', uptimeMs: '1', modules: [] });
+      lastSocket().receive('status', { connection: 'ready', uptimeMs: 1, modules: [{ id: 1 }] });
+      lastSocket().receive('status', null);
+    });
+    expect(client.getQueryData(['status'])).toBeUndefined();
   });
 
   it('ignores malformed messages', async () => {
