@@ -1,6 +1,6 @@
 # 0006 — Modelo de permissões: desenvolvedores do bot e cargos do servidor
 
-**Status:** Aceita
+**Status:** Aceita, substituída em parte por [0017](0017-access-levels.md) (permissões automáticas do dono e dos desenvolvedores)
 **Data:** 2026-11-16
 
 ## Contexto

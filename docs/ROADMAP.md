@@ -9,6 +9,7 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 | **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                |
 | **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                          |
 | **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente. |
+| **Fase 3 — Painel administrativo** | Em design: spec e decisões 0017 a 0023 em revisão.                                                                                         |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -129,20 +130,22 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - Ativação e desativação de módulos.
 - Edição das configurações dos módulos, incluindo as regras de moderação.
 - Consulta de logs, histórico e estado dos módulos.
-- Módulo `administration`: gestão da lista de desenvolvedores do bot e da associação de permissões aos cargos ([0006](decisions/0006-permission-model.md)).
+- Módulo `administration`: gestão da lista de desenvolvedores do bot e da associação de permissões aos cargos ([0006](decisions/0006-permission-model.md), [0023](decisions/0023-administration-module.md)).
+- Níveis de acesso: desenvolvedores, dono do servidor, equipe e membros, que veem só o próprio perfil ([0017](decisions/0017-access-levels.md)).
+- Atualizações em tempo real e presença de quem está no painel.
 
-**Decisões pendentes:**
+**Decisões:** resolvidas em [0017](decisions/0017-access-levels.md) (níveis de acesso, substituindo parte da 0006), [0018](decisions/0018-panel-authentication.md) (login com Discord OAuth2 e sessões), [0019](decisions/0019-panel-stack.md) (Fastify, React e Vite), [0020](decisions/0020-panel-realtime.md) (WebSocket filtrado por permissão), [0021](decisions/0021-panel-hosting.md) (mesmo processo, atrás de um proxy HTTPS), [0022](decisions/0022-module-operations.md) (operações de módulo) e [0023](decisions/0023-administration-module.md) (módulo `administration`).
 
-| Decisão                | Recomendação                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Autenticação do painel | Login com Discord (OAuth2), permitido apenas a desenvolvedores do bot ([0006](decisions/0006-permission-model.md)). |
-| Framework do painel    | Decidir na spec da fase.                                                                                            |
-| Hospedagem do painel   | Mesmo processo do bot, servindo a API e o painel.                                                                   |
+**Etapas:** spec [2026-11-24-fase-3-painel.md](specs/2026-11-24-fase-3-painel.md).
+
+1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil.
+2. Moderação pelo painel.
+3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões.
 
 **Critérios de conclusão:**
 
 - [ ] Toda operação da API verifica permissão no backend.
-- [ ] Um membro sem permissão não acessa o painel.
+- [ ] Quem não é membro do servidor, inclusive um desenvolvedor, não acessa o painel, e um membro sem permissões vê só o próprio perfil.
 - [ ] Uma alteração de configuração pelo painel tem efeito sem reiniciar a aplicação.
 - [ ] **Revisão ofensiva:** três subagentes independentes atacam o projeto como invasores, um focado em autenticação e permissões, um na API e em injeção, e um em vazamento de informações e segredos. Todas as falhas encontradas são corrigidas ou registradas como aceitas pela pessoa mantenedora antes da release.
 
