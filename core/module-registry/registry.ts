@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
+import type { AdminService } from '../../shared/contracts/admin.ts';
 import type { Actor, CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
@@ -21,6 +22,7 @@ import { InvalidOperationError, OperationRegistry } from '../operations/operatio
 import type { PermissionService } from '../permissions/permission-service.ts';
 import { applyModuleMigrations } from '../storage/module-migrations.ts';
 import { createModuleStorage } from '../storage/module-storage.ts';
+import { createModuleAdmin } from './module-admin.ts';
 import { resolveOrder } from './dependencies.ts';
 import { discoverModules } from './discovery.ts';
 import { loadModule } from './entrypoint.ts';
@@ -60,6 +62,8 @@ export interface ModuleRegistryDeps {
   readonly db: DatabaseSync;
   /** The Discord port; each module receives it gated by its manifest capabilities. */
   readonly guild: GuildActions;
+  /** The Core administration service, handed only to modules with `core.admin`. */
+  readonly admin?: AdminService;
   readonly coreApiVersion?: string;
   readonly stepTimeoutMs?: number;
 }
@@ -375,6 +379,7 @@ export class ModuleRegistry {
         isActive,
         logger: this.#deps.logger,
       }),
+      admin: createModuleAdmin({ manifest: record.manifest, service: this.#deps.admin }),
       // Reads stay allowed; writes from a FAILED or STOPPED module are refused.
       storage: Object.freeze({
         run: (sql: string, params?: readonly SqlValue[]) => {

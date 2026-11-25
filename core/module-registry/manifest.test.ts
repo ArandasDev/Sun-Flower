@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CORE_API_VERSION } from '../../shared/contracts/module.ts';
 import { validateManifest } from './manifest.ts';
 
 const base = {
@@ -153,6 +154,52 @@ describe('validateManifest', () => {
     expect(validateManifest(minimal, 'ping', '1.0.0')).toMatchObject({
       ok: true,
       manifest: { enabledByDefault: false, events: { subscribes: [], publishes: [] } },
+    });
+  });
+
+  describe('core.admin capability', () => {
+    const admin = {
+      ...base,
+      id: 'administration',
+      permissions: ['administration.grants.manage', 'core.logs.read'],
+      capabilities: ['core.admin'],
+      events: { subscribes: [], publishes: [] },
+    };
+
+    it('accepts core.* permissions when the manifest declares core.admin', () => {
+      expect(validateManifest(admin, 'administration', '1.4.0').ok).toBe(true);
+    });
+
+    it('refuses core.* permissions without core.admin', () => {
+      const result = validateManifest({ ...admin, capabilities: [] }, 'administration', '1.4.0');
+      expect(result).toEqual({
+        ok: false,
+        errors: ['permission "core.logs.read" must start with "administration."'],
+      });
+    });
+
+    it('does not let core.admin open other foreign prefixes', () => {
+      const result = validateManifest(
+        { ...admin, permissions: ['moderation.cases.read'] },
+        'administration',
+        '1.4.0',
+      );
+      expect(result.ok).toBe(false);
+    });
+  });
+
+  describe('CORE_API_VERSION', () => {
+    it('is 1.4.0 and keeps the 1.0.0 and 1.3.0 manifests compatible', () => {
+      expect(CORE_API_VERSION).toBe('1.4.0');
+      expect(validateManifest(base, 'ping', CORE_API_VERSION).ok).toBe(true);
+      const moderation = {
+        ...base,
+        id: 'moderation',
+        apiVersion: '1.3.0',
+        permissions: [],
+        events: { subscribes: [], publishes: [] },
+      };
+      expect(validateManifest(moderation, 'moderation', CORE_API_VERSION).ok).toBe(true);
     });
   });
 });

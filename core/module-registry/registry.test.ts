@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
+import type { AdminService } from '../../shared/contracts/admin.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { ModuleContext } from '../../shared/contracts/module.ts';
 import { ConfigVersionConflictError, ModuleConfigStore } from '../configuration/module-config.ts';
@@ -151,8 +152,13 @@ const fakeGuild: GuildActions = {
   getMemberRoleIds: () => Promise.resolve([]),
 };
 
-function createRegistry(stepTimeoutMs = 50): ModuleRegistry {
+const fakeAdmin = {
+  developers: { list: () => [{ userId: '1', addedAt: 't' }] },
+} as unknown as AdminService;
+
+function createRegistry(stepTimeoutMs = 50, admin?: AdminService): ModuleRegistry {
   return new ModuleRegistry({
+    ...(admin === undefined ? {} : { admin }),
     modulesDir,
     logger,
     events: bus,
@@ -964,6 +970,63 @@ export default () => ({
     await registry.load();
     await registry.start();
     expect(calls()).toEqual(['a:set:Settings of module "a" are only available from initialize()']);
+    await registry.stop();
+  });
+
+  it('gates context.admin on the core.admin capability', async () => {
+    const source = (id: string): string => `${recorder()}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {},
+    async start() {
+      try {
+        calls.push(${JSON.stringify(id)} + ':admin:' + JSON.stringify(context.admin.developers.list()));
+      } catch (error) {
+        calls.push(${JSON.stringify(id)} + ':admin:' + error.message);
+      }
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`;
+    writeModule('plain', { rawSource: source('plain') });
+    writeModule('boss', { rawSource: source('boss'), manifest: { capabilities: ['core.admin'] } });
+    const registry = createRegistry(50, fakeAdmin);
+    await registry.load();
+    await registry.start();
+    expect([...calls()].sort()).toEqual([
+      'boss:admin:[{"userId":"1","addedAt":"t"}]',
+      'plain:admin:Module "plain" lacks capability core.admin',
+    ]);
+    await registry.stop();
+  });
+
+  it('context.admin throws while the registry has no admin service', async () => {
+    writeModule('boss', {
+      rawSource: `${recorder()}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {},
+    async start() {
+      try { context.admin.logs.recent({ limit: 1, minLevel: 'info' }); }
+      catch (error) { calls.push('boss:' + error.message); }
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+      manifest: { capabilities: ['core.admin'] },
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(calls()).toEqual(['boss:Admin service is not available']);
     await registry.stop();
   });
 

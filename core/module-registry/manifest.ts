@@ -27,7 +27,7 @@ const manifestSchema = z.strictObject({
   permissions: z.array(
     z.string().regex(THREE_SEGMENTS, 'permission must have the format module.resource.action'),
   ),
-  capabilities: z.array(z.enum(['guild.moderate', 'guild.message'])).default([]),
+  capabilities: z.array(z.enum(['guild.moderate', 'guild.message', 'core.admin'])).default([]),
   enabledByDefault: z.boolean().default(false),
   events: z
     .strictObject({
@@ -85,8 +85,9 @@ export function validateManifest(
     );
   }
   const prefix = `${manifest.id}.`;
+  const mayUseCore = manifest.capabilities.includes('core.admin');
   for (const permission of manifest.permissions) {
-    if (!permission.startsWith(prefix)) {
+    if (!permission.startsWith(prefix) && !(mayUseCore && permission.startsWith('core.'))) {
       errors.push(`permission "${permission}" must start with "${prefix}"`);
     }
   }

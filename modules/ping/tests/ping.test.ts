@@ -13,6 +13,7 @@ function fakeContext(registered: CommandDefinition[]): ModuleContext {
     permissions: { check: () => false, isDeveloper: () => false, hasAnyGrant: () => false },
     config: { get: <T>() => ({}) as T, set: () => {}, version: () => 0 },
     guild: {} as ModuleContext['guild'],
+    admin: {} as ModuleContext['admin'],
     storage: {} as ModuleContext['storage'],
     commands: {
       register: (command) => {
