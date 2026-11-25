@@ -151,10 +151,15 @@ Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 
 **Capacidades (`capabilities`).** O serviço `guild` do contexto só executa ações no servidor que o manifesto declarou. Valores aceitos:
 
-| Capacidade       | Libera                                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `guild.moderate` | `deleteMessage`, `bulkDeleteMessages`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`. |
-| `guild.message`  | `sendMessage`.                                                                                                                       |
+| Capacidade       | Libera                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guild.moderate` | `deleteMessage`, `bulkDeleteMessages`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`.            |
+| `guild.message`  | `sendMessage`.                                                                                                                                  |
+| `core.admin`     | O serviço `admin` do contexto (`context.admin`): desenvolvedores, permissões de cargos, ativação de módulos, logs recentes e sessões do painel. |
+
+**`core.admin` e `context.admin`.** Só um manifesto com `core.admin` pode declarar permissões `core.*` (um manifesto de outro módulo com `core.*` é recusado com `permission "<p>" must start with "<id>."`), e só ele usa `context.admin`: em qualquer outro módulo, chamar o serviço lança `Module "<id>" lacks capability core.admin`. As funções recebem o ator como primeiro argumento e devolvem `OperationResult`, exceto as de listagem (dados simples) e `modules.setEnabled` (uma `Promise`). Não chame `setEnabled` dentro do ciclo de vida do próprio módulo. O módulo `administration` é o único que declara `core.admin`; um Pull Request que a adicione a outro módulo exige uma decisão própria ([0023](decisions/0023-administration-module.md)).
+
+**Nome de comando e ativação em tempo de execução.** Quando módulos são ligados e desligados com o Core em execução, um nome de comando tomado por outro módulo enquanto o seu estava desligado faz o seu `register` falhar ao ser ligado de novo.
 
 Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`, exceto `bulkDeleteMessages`, descrito abaixo. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core, com toda sequência de 17 a 20 dígitos trocada por `[id]`; o Discord recebe o motivo original. Mesmo assim, nunca inclua nele conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
 

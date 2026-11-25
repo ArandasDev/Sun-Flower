@@ -1,0 +1,18 @@
+{
+  "id": "administration",
+  "name": "Administration",
+  "description": "Panel administration of developers, role grants, modules, logs and sessions",
+  "version": "1.0.0",
+  "apiVersion": "1.4.0",
+  "entrypoint": "index.ts",
+  "enabledByDefault": true,
+  "dependencies": [],
+  "capabilities": ["core.admin"],
+  "permissions": [
+    "administration.grants.manage",
+    "core.developers.manage",
+    "core.modules.manage",
+    "core.logs.read",
+    "core.sessions.manage"
+  ]
+}
