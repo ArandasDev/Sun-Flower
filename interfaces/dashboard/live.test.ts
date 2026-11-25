@@ -29,7 +29,15 @@ const DEV = '222222222222222222';
 const STAFF = '333333333333333333';
 const MEMBER = '555555555555555555';
 const STAFF_ROLE = '444444444444444444';
-const DECLARED = new Set(['moderation.config.manage', 'moderation.cases.read']);
+const READER = '777777777777777777';
+const READER_ROLE = '888888888888888888';
+const DOMAINS = '999999999999999999';
+const DOMAINS_ROLE = '121212121212121212';
+const DECLARED = new Set([
+  'moderation.config.manage',
+  'moderation.cases.read',
+  'moderation.domains.manage',
+]);
 /** Real-time bound for anything a socket must do; operations take milliseconds. */
 const WAIT_MS = 5_000;
 
@@ -150,11 +158,15 @@ beforeEach(async () => {
   sessions = new SessionStore(db, clock.now);
   permissions.addDeveloper(DEV);
   permissions.grant('moderation.config.manage', STAFF_ROLE, DECLARED);
+  permissions.grant('moderation.cases.read', READER_ROLE, DECLARED);
+  permissions.grant('moderation.domains.manage', DOMAINS_ROLE, DECLARED);
   members = new Map<string, MemberInfo | null | undefined>([
     [OWNER, member({ isOwner: true })],
     [DEV, member()],
     [STAFF, member({ roleIds: [STAFF_ROLE] })],
     [MEMBER, member()],
+    [READER, member({ roleIds: [READER_ROLE] })],
+    [DOMAINS, member({ roleIds: [DOMAINS_ROLE] })],
   ]);
   modules = new Map<string, ModuleStatus>([
     ['moderation', { state: 'RUNNING' }],
@@ -533,6 +545,63 @@ describe('config.changed', () => {
     emit('core.config.changed', null);
     await barrier(owner);
     expect(owner.messages).toEqual([]);
+  });
+});
+
+describe('case events', () => {
+  it('reaches whoever may read cases and not a moderator without that permission (Review Focus 3)', async () => {
+    const reader = await connect(sessions.create(READER).token);
+    const domains = await connect(sessions.create(DOMAINS).token);
+    const plain = await connect(sessions.create(MEMBER).token);
+    emit('moderation.case.created', { caseId: 7, kind: 'spam', level: 1, action: 'timeout' });
+    const message = await waitFor(reader, (m) => m.type === 'case.created');
+    expect(message.data).toEqual({ caseId: 7 });
+    await barrier(domains);
+    await barrier(plain);
+    expect(domains.messages).toEqual([]);
+    expect(plain.messages).toEqual([]);
+  });
+
+  it('sends case.updated for a reverted or dismissed case', async () => {
+    const reader = await connect(sessions.create(READER).token);
+    emit('moderation.case.dismissed', { caseId: 8 });
+    emit('moderation.case.reverted', { caseId: 9 });
+    await waitFor(
+      reader,
+      (m) => m.type === 'case.updated' && (m.data as { caseId: number }).caseId === 9,
+    );
+    expect(reader.messages).toEqual([
+      { type: 'case.updated', data: { caseId: 8 } },
+      { type: 'case.updated', data: { caseId: 9 } },
+    ]);
+  });
+
+  it('checks the permission when the event is sent, not when the socket opened', async () => {
+    const reader = await connect(sessions.create(READER).token);
+    members.set(READER, member());
+    emit('moderation.case.created', { caseId: 1 });
+    await barrier(reader);
+    expect(reader.messages).toEqual([]);
+  });
+
+  it('ignores a malformed payload', async () => {
+    const reader = await connect(sessions.create(READER).token);
+    emit('moderation.case.created', { caseId: 'x' });
+    emit('moderation.case.dismissed', null);
+    await barrier(reader);
+    expect(reader.messages).toEqual([]);
+  });
+
+  it('releases the subscriptions when the server closes', async () => {
+    const count = (): number =>
+      ['moderation.case.created', 'moderation.case.reverted', 'moderation.case.dismissed'].reduce(
+        (total, type) => total + (handlers.get(type)?.length ?? 0),
+        0,
+      );
+    expect(count()).toBe(3);
+    await app.close();
+    closed = true;
+    expect(count()).toBe(0);
   });
 });
 
