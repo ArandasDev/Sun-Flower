@@ -48,6 +48,8 @@ interface AuditExtra {
   readonly permission?: string;
   readonly moduleId?: string;
   readonly count?: number;
+  /** Set only when the change was stored but did not take effect, as an enable that failed. */
+  readonly result?: 'failed';
 }
 
 /** Translates the Core services into the AdminService contract, with fixed texts and an audit log. */
@@ -63,6 +65,7 @@ export function createAdminService(deps: AdminServiceDeps): AdminService {
         ...(extra.permission === undefined ? {} : { permission: extra.permission }),
         ...(extra.moduleId === undefined ? {} : { moduleId: extra.moduleId }),
         ...(extra.count === undefined ? {} : { count: extra.count }),
+        ...(extra.result === undefined ? {} : { result: extra.result }),
       },
       'admin change',
     );
@@ -167,6 +170,8 @@ export function createAdminService(deps: AdminServiceDeps): AdminService {
           case 'dependencies':
             return fail('conflict', `Ligue antes: ${outcome.ids.join(', ')}.`);
           case 'failed':
+            // The enabled flag is already stored, so the module is retried at the next start.
+            audit(action, actor, { moduleId, result: 'failed' });
             return fail('failed', 'O módulo não conseguiu iniciar.');
           case 'stopping':
             return fail('unavailable', 'O bot está encerrando.');

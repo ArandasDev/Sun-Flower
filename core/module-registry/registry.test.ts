@@ -1550,6 +1550,68 @@ export default () => {
     await registry.stop();
   });
 
+  it('publishes the unchanged state when disabling a module that is not running', async () => {
+    toggleModule('a');
+    failStart('a', true);
+    toggleModule('d', { enabledByDefault: false });
+    toggleModule('b', { dependencies: ['d'] });
+    const registry = await started();
+    await bus.idle();
+    const states: unknown[] = [];
+    bus.subscribeFromCore('core.module.state.changed', (event) => {
+      states.push(event.payload);
+    });
+
+    await registry.setEnabled('a', false);
+    await registry.setEnabled('b', false);
+    await registry.setEnabled('a', false);
+    await bus.idle();
+
+    expect(states).toEqual([
+      { moduleId: 'a', state: 'FAILED' },
+      { moduleId: 'b', state: 'FAILED' },
+    ]);
+    await registry.stop();
+  });
+
+  it('keeps config.get() unavailable in register() on the retry of a FAILED module', async () => {
+    writeModule('a', {
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+export const configSchema = { safeParse: (value) => ({ success: true, data: { greeting: 'hi', ...value } }) };
+let instances = 0;
+export default () => {
+  instances += 1;
+  const instance = instances;
+  return {
+    async register(ctx) {
+      try {
+        ctx.config.get();
+        calls.push('a:get:' + instance + ':ok');
+      } catch (error) {
+        calls.push('a:get:' + instance + ':' + error.message);
+      }
+    },
+    async initialize() {},
+    async start() {
+      if (instance === 1) throw new Error('first start failed');
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+    });
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+
+    await expect(registry.setEnabled('a', true)).resolves.toMatchObject({ kind: 'changed' });
+
+    const unavailable = 'Settings of module "a" are only available from initialize()';
+    expect(calls()).toEqual([`a:get:1:${unavailable}`, `a:get:2:${unavailable}`]);
+    await registry.stop();
+  });
+
   it('answers unchanged when nothing would change', async () => {
     toggleModule('a');
     const registry = await started();

@@ -316,7 +316,8 @@ export class ModuleRegistry {
   async #disable(record: ModuleRecord): Promise<SetEnabledOutcome> {
     const { id } = record.manifest;
     if (record.manifest.capabilities.includes('core.admin')) return { kind: 'protected' };
-    if (this.#stateOf(id) === 'RUNNING') {
+    const wasRunning = this.#stateOf(id) === 'RUNNING';
+    if (wasRunning) {
       const running = this.#dependents(id).filter((other) => this.#stateOf(other) === 'RUNNING');
       if (running.length > 0) return { kind: 'dependents', ids: running };
       await this.#stopModule(record);
@@ -327,10 +328,15 @@ export class ModuleRegistry {
     } else if (!this.#storedEnabled(record)) {
       return { kind: 'unchanged', entry: this.#entry(id) };
     }
-    // A FAILED module was already disposed when it failed: only the stored flag changes.
+    // A FAILED or never-started module was already disposed or never built: only the stored
+    // flag changes.
     this.#deps.config.setEnabled(id, false);
     this.#disabled.add(id);
     this.#deps.logger.info({ module: id }, 'module disabled');
+    // No transition published anything: tell the listeners the flag moved, with the same state.
+    if (!wasRunning) {
+      this.#publishCore('core.module.state.changed', { moduleId: id, state: this.#stateOf(id) });
+    }
     return { kind: 'changed', entry: this.#entry(id) };
   }
 
@@ -347,6 +353,8 @@ export class ModuleRegistry {
       return { kind: 'dependencies', ids: inactive };
     }
     if (state === 'FAILED' || state === 'DISPOSED') this.#transition(id, 'VALIDATED');
+    // As on a first start, settings exist only from initialize() on.
+    delete record.settings;
     this.#deps.config.setEnabled(id, true);
     this.#disabled.delete(id);
     try {

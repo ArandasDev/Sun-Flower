@@ -176,10 +176,6 @@ describe('modules', () => {
       { kind: 'dependencies', ids: ['a'] },
       { code: 'conflict', message: 'Ligue antes: a.' },
     ],
-    [
-      { kind: 'failed', entry },
-      { code: 'failed', message: 'O módulo não conseguiu iniciar.' },
-    ],
     [{ kind: 'stopping' }, { code: 'unavailable', message: 'O bot está encerrando.' }],
   ];
 
@@ -190,6 +186,17 @@ describe('modules', () => {
       error,
     });
     expect(changes()).toEqual([]);
+  });
+
+  it('maps a failed enable and audits it with its outcome, since the flag is stored', async () => {
+    outcome = { kind: 'failed', entry };
+    await expect(build().modules.setEnabled(actor, 'moderation', true)).resolves.toEqual({
+      ok: false,
+      error: { code: 'failed', message: 'O módulo não conseguiu iniciar.' },
+    });
+    expect(changes()).toEqual([
+      { action: 'modules.enable', actor: '…5678', moduleId: 'moderation', result: 'failed' },
+    ]);
   });
 
   it('maps changed and unchanged, logging only changes', async () => {
