@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import type { OperationErrorCode } from '../../shared/contracts/operations.ts';
+import { apiError } from './errors.ts';
 import type { SessionAuth } from './session.ts';
 
 /** A well-formed operation name; anything else is answered 404 without reaching the Core. */
@@ -24,9 +25,13 @@ export interface OperationsRouteDeps {
   readonly auth: SessionAuth;
 }
 
-/** Errors of this route carry only the fixed message of the operation; the input is never echoed. */
-function operationError(reply: FastifyReply, status: number, message: string): FastifyReply {
-  return reply.code(status).send({ error: message });
+/** Standard API error shape with the operation's code and fixed message; the input is never echoed. */
+function operationError(
+  reply: FastifyReply,
+  code: OperationErrorCode,
+  message: string,
+): FastifyReply {
+  return apiError(reply, STATUS[code], code, message);
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -46,13 +51,13 @@ export function registerOperationsRoute(app: FastifyInstance, deps: OperationsRo
     async (request, reply): Promise<FastifyReply> => {
       reply.header('cache-control', 'no-store');
       const { name } = request.params;
-      if (!OPERATION_NAME.test(name)) return operationError(reply, 404, UNKNOWN_OPERATION);
+      if (!OPERATION_NAME.test(name)) return operationError(reply, 'not_found', UNKNOWN_OPERATION);
       const body: unknown = request.body === undefined ? {} : request.body;
-      if (!isJsonObject(body)) return operationError(reply, 422, INVALID_ROOT);
+      if (!isJsonObject(body)) return operationError(reply, 'invalid', INVALID_ROOT);
       const { actor } = auth.authenticated(request);
       const result = await core.operations.execute(name, actor, body, 'dashboard');
       if (result.ok) return reply.code(200).send({ data: result.data });
-      return operationError(reply, STATUS[result.error.code], result.error.message);
+      return operationError(reply, result.error.code, result.error.message);
     },
   );
 }

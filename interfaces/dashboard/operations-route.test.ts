@@ -131,7 +131,9 @@ describe('POST /api/operations/:name', () => {
   it('forbids a member on a ban with 403 and writes no case (Review Focus 5)', async () => {
     const res = await post(MEMBER, 'moderation.actions.ban', { userId: TARGET, reason: 'spam' });
     expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({ error: 'Você não tem permissão para isso.' });
+    expect(res.json()).toEqual({
+      error: { code: 'forbidden', message: 'Você não tem permissão para isso.' },
+    });
     expect(guild.calls).toHaveLength(0);
     const list = await post(OWNER, 'moderation.cases.list', {});
     expect(list.json()).toEqual({ data: { cases: [], nextCursor: null } });
@@ -160,14 +162,16 @@ describe('POST /api/operations/:name', () => {
   it('answers 404 to a well-formed name nobody registered', async () => {
     const res = await post(OWNER, 'moderation.cases.nothing', {});
     expect(res.statusCode).toBe(404);
-    expect(res.json()).toEqual({ error: 'Operação desconhecida.' });
+    expect(res.json()).toEqual({ error: { code: 'not_found', message: 'Operação desconhecida.' } });
     expect(calls).toHaveLength(1);
   });
 
   it('answers 422 with the operation message and never echoes the input', async () => {
     const res = await post(OWNER, 'moderation.actions.ban', { userId: 'not-an-id', reason: 'x' });
     expect(res.statusCode).toBe(422);
-    expect(res.json<{ error: string }>().error).toMatch(/^Entrada inválida: .*userId/);
+    const { error } = res.json<{ error: { code: string; message: string } }>();
+    expect(error.code).toBe('invalid');
+    expect(error.message).toMatch(/^Entrada inválida: .*userId/);
     expect(res.body).not.toContain('not-an-id');
   });
 
@@ -180,7 +184,9 @@ describe('POST /api/operations/:name', () => {
         payload,
       });
       expect(res.statusCode, payload).toBe(422);
-      expect(res.json()).toEqual({ error: 'Entrada inválida: (raiz).' });
+      expect(res.json()).toEqual({
+        error: { code: 'invalid', message: 'Entrada inválida: (raiz).' },
+      });
     }
     expect(calls).toEqual([]);
   });
@@ -197,16 +203,22 @@ describe('POST /api/operations/:name', () => {
       changes: { timeoutMinutes: 120 },
     });
     expect(res.statusCode).toBe(409);
-    expect(Object.keys(res.json<object>())).toEqual(['error']);
+    const { error } = res.json<{ error: { code: string; message: string } }>();
+    expect(error.code).toBe('conflict');
+    expect(error.message).not.toBe('');
   });
 
   it('answers 503 for a module that is not running and 500 for a failure', async () => {
     stub = { ok: false, error: { code: 'unavailable', message: 'Módulo indisponível.' } };
     const down = await post(OWNER, 'moderation.cases.list', {});
     expect(down.statusCode).toBe(503);
-    expect(down.json()).toEqual({ error: 'Módulo indisponível.' });
+    expect(down.json()).toEqual({
+      error: { code: 'unavailable', message: 'Módulo indisponível.' },
+    });
     stub = { ok: false, error: { code: 'failed', message: 'Erro interno.' } };
-    expect((await post(OWNER, 'moderation.cases.list', {})).statusCode).toBe(500);
+    const failed = await post(OWNER, 'moderation.cases.list', {});
+    expect(failed.statusCode).toBe(500);
+    expect(failed.json()).toEqual({ error: { code: 'failed', message: 'Erro interno.' } });
   });
 
   it('lets a moderator with moderation.cases.read list cases', async () => {
