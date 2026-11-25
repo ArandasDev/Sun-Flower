@@ -112,6 +112,12 @@ describe('RecentLogs', () => {
     expect(entry?.message).toHaveLength(300);
   });
 
+  it('leaves no digit tail on runs longer than 20 digits', () => {
+    const recent = new RecentLogs();
+    recent.write(line(30, 'n 1234567890123456789012345 end'));
+    expect(recent.recent({ limit: 1, minLevel: 'info' })[0]?.message).toBe('n [id] end');
+  });
+
   it('takes module from the top-level field', () => {
     const { logger, recent } = realLogger();
     logger.child({ module: 'ping' }).warn('hi');

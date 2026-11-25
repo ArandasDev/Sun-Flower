@@ -13,13 +13,17 @@ export interface CreateLoggerOptions {
 
 export function createLogger(options: CreateLoggerOptions): Logger {
   const { recent } = options;
-  // With `recent`, the logger itself must let info through; each stream filters on its own level.
-  const loggerLevel = recent === undefined ? options.level : 'info';
+  // With `recent` the logger must let info through even if the configured level is higher;
+  // each stream filters on its own level, so the destination keeps `options.level`.
+  const loggerLevel =
+    recent !== undefined && pino.levels.values[options.level]! > pino.levels.values.info!
+      ? 'info'
+      : options.level;
   const destination =
     recent === undefined
       ? options.destination
       : pino.multistream([
-          { level: options.level, stream: options.destination ?? process.stdout },
+          { level: options.level, stream: options.destination ?? pino.destination(1) },
           { level: 'info', stream: { write: (line: string) => recent.write(line) } },
         ]);
   return pino(

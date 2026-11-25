@@ -10,7 +10,7 @@ const RANK: Readonly<Record<LogLevelName, number>> = { info: 30, warn: 40, error
 /** Keys that are dropped from `fields` because they have their own place in the entry. */
 const RESERVED = new Set(['pid', 'hostname', 'service', 'level', 'time', 'msg', 'module']);
 const MAX_TEXT = 300;
-const ID_RUN = /\d{17,20}/g;
+const ID_RUN = /\d{17,}/g;
 
 function clean(text: string): string {
   return text.replace(ID_RUN, '[id]').slice(0, MAX_TEXT);
