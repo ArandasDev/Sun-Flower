@@ -47,6 +47,38 @@ function errorSummary(error: unknown): { name: string; code?: string | number } 
     : { name: error.name };
 }
 
+export interface CoalescedSync {
+  /** Asks for a sync: at most one waits behind the one running, which every request shares. */
+  request(): void;
+  /** Resolves once the running and the queued sync have settled. */
+  idle(): Promise<void>;
+}
+
+/**
+ * Runs `task` one at a time. A request made while a sync is already queued is folded into it,
+ * since that sync reads the latest state when it starts. A failure goes to `onError` only.
+ */
+export function createCoalescedSync(
+  task: () => Promise<void>,
+  onError: (error: unknown) => void,
+): CoalescedSync {
+  let queue = Promise.resolve();
+  let pending = false;
+  return {
+    request: () => {
+      if (pending) return;
+      pending = true;
+      queue = queue
+        .then(() => {
+          pending = false;
+          return task();
+        })
+        .catch(onError);
+    },
+    idle: () => queue,
+  };
+}
+
 /** Module states after which the set of commands may have changed. */
 const RESYNC_STATES: ReadonlySet<unknown> = new Set(['RUNNING', 'DISPOSED', 'FAILED']);
 
@@ -70,14 +102,6 @@ export function resyncOnModuleChanges(
  * Returns the function that cancels the Core subscriptions made here.
  */
 function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): () => void {
-  // Command syncs run one at a time, in the order the events arrive.
-  let queue = Promise.resolve();
-  const enqueue = (task: () => Promise<void>): void => {
-    queue = queue.then(task).catch((error: unknown) => {
-      logger.error({ error: errorMessage(error) }, 'discord guild sync failed');
-    });
-  };
-
   const sync = async (): Promise<void> => {
     const guild = client.guilds.cache.get(guildId);
     const application = client.application;
@@ -96,6 +120,10 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     );
     logger.info({ commands: commands.length }, 'discord commands synced');
   };
+  // Command syncs run one at a time; a burst of requests collapses into one queued sync.
+  const syncs = createCoalescedSync(sync, (error) => {
+    logger.error({ error: errorMessage(error) }, 'discord guild sync failed');
+  });
 
   // The bot stays in other guilds and ignores them (decision 0010); it only syncs its own guild.
   client.once(Events.ClientReady, () => {
@@ -104,18 +132,18 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
       logger.error('the bot is not in the configured guild; waiting to be added');
       return;
     }
-    enqueue(sync);
+    syncs.request();
   });
 
   publishConnectionChanges(client, core);
 
   client.on(Events.GuildCreate, (guild: Guild) => {
-    if (guild.id === guildId) enqueue(sync);
+    if (guild.id === guildId) syncs.request();
   });
 
   // Modules enabled or disabled at runtime change the commands; sync() skips while not ready.
   const stopResync = resyncOnModuleChanges(core, () => {
-    enqueue(sync);
+    syncs.request();
   });
 
   const messageDeps = {

@@ -14,7 +14,7 @@ import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import { InvalidOperationError } from '../operations/operation-registry.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
 import { EntrypointError, resolveEntrypoint } from './entrypoint.ts';
-import { ModuleRegistry, RegistryStateError } from './registry.ts';
+import { CommandRegistrationError, ModuleRegistry, RegistryStateError } from './registry.ts';
 
 interface LogCall {
   readonly level: string;
@@ -1288,6 +1288,7 @@ export default () => ({
 describe('ModuleRegistry setEnabled', () => {
   const OWNER = { userId: '444444444444444444', roleIds: [], isOwner: true };
   const EVENT = 'discord.test.pinged';
+  const STALE_EVENT = 'a.thing.done';
   const flags = globalThis as unknown as Record<string, boolean | undefined>;
   const failKey = (id: string): string => `${callsKey}_${id}_failStart`;
   const failStart = (id: string, fail: boolean): void => {
@@ -1626,10 +1627,22 @@ export default () => {
   it('keeps an old instance context inactive after the module is enabled again', async () => {
     const key = `${callsKey}_a_context`;
     writeModule('a', {
-      manifest: { capabilities: ['guild.message'], events: { subscribes: [EVENT], publishes: [] } },
+      manifest: {
+        capabilities: ['guild.message'],
+        events: { subscribes: [EVENT], publishes: [STALE_EVENT] },
+      },
       rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
 export default () => ({
-  async register(ctx) { globalThis[${JSON.stringify(key)}] ??= ctx; },
+  async register(ctx) {
+    globalThis[${JSON.stringify(key)}] ??= ctx;
+    ctx.operations.register({
+      name: 'a.items.mine',
+      permission: null,
+      input: { safeParse: (value) => ({ success: true, data: value }) },
+      handler: async () => { calls.push('a:handler'); return { ok: true, data: null }; },
+    });
+  },
   async initialize() {},
   async start() {},
   async stop() {},
@@ -1644,6 +1657,9 @@ export default () => ({
     expect(stateOf(registry, 'a')).toBe('RUNNING');
 
     expect(() => first.storage.run('SELECT 1')).toThrow(/not active/);
+    expect(() => {
+      first.config.set({ greeting: 'stale' });
+    }).toThrow('Module "a" is not active');
     await expect(first.guild.sendMessage('111111111111111111', 'oi')).resolves.toMatchObject({
       ok: false,
     });
@@ -1654,7 +1670,171 @@ export default () => ({
     bus.publishFromCore(EVENT, {});
     await bus.idle();
     expect(delivered).toBe(false);
+
+    const published: unknown[] = [];
+    bus.subscribeFromCore(STALE_EVENT, (event) => {
+      published.push(event.payload);
+    });
+    first.events.publish(STALE_EVENT, { stale: true });
+    await bus.idle();
+    expect(published).toEqual([]);
+    expect(logger.calls).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        msg: 'event publish ignored: module is not active',
+      }),
+    );
+
+    expect(() => {
+      first.commands.register({ name: 'stale', description: 'Stale', handle: async () => {} });
+    }).toThrow(CommandRegistrationError);
+    expect(() => {
+      first.operations.register({
+        name: 'a.items.mine',
+        permission: null,
+        input: { safeParse: (value: unknown) => ({ success: true, data: value }) },
+        handler: () => Promise.resolve({ ok: true, data: 'stale' }),
+      } as never);
+    }).toThrow(InvalidOperationError);
+    expect(registry.commands().has('stale')).toBe(false);
+    expect(registry.operations.names()).toEqual(['a.items.mine']);
+    await expect(first.operations.execute('a.items.mine', OWNER, {})).resolves.toEqual({
+      ok: false,
+      error: { code: 'unavailable', message: 'Módulo indisponível.' },
+    });
+    expect(calls()).not.toContain('a:handler');
     await registry.stop();
+  });
+
+  it('keeps the context of a FAILED core.admin instance away from admin, also after a retry', async () => {
+    const key = `${callsKey}_boss_context`;
+    writeModule('boss', {
+      manifest: { capabilities: ['core.admin'] },
+      rawSource: `
+export default () => ({
+  async register(ctx) { globalThis[${JSON.stringify(key)}] ??= ctx; },
+  async initialize() {},
+  async start() {
+    if (globalThis[${JSON.stringify(failKey('boss'))}] === true) throw new Error('boss start failed');
+  },
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+    failStart('boss', true);
+    const registry = createRegistry(1000, fakeAdmin);
+    await registry.load();
+    await registry.start();
+    expect(stateOf(registry, 'boss')).toBe('FAILED');
+    const first = (globalThis as unknown as Record<string, ModuleContext>)[key] as ModuleContext;
+    const inactive = 'Module "boss" is not active';
+    expect(() => first.admin.developers.list()).toThrow(inactive);
+    await expect(first.admin.modules.setEnabled(OWNER, 'a', false)).rejects.toThrow(inactive);
+
+    failStart('boss', false);
+    await expect(registry.setEnabled('boss', true)).resolves.toMatchObject({ kind: 'changed' });
+    expect(() => first.admin.developers.list()).toThrow(inactive);
+    await expect(first.admin.modules.setEnabled(OWNER, 'a', false)).rejects.toThrow(inactive);
+    await registry.stop();
+  });
+
+  it('refuses to enable a module outside the dependency order', async () => {
+    fs.mkdirSync(path.join(modulesDir, 'broken'));
+    fs.writeFileSync(path.join(modulesDir, 'broken', 'manifest.json'), '{"id":"broken"}');
+    toggleModule('a', { dependencies: ['broken'] });
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+    await expect(registry.setEnabled('a', true)).resolves.toEqual({
+      kind: 'dependencies',
+      ids: ['broken'],
+    });
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+    expect(calls().filter((call) => call.startsWith('a:'))).toEqual([]);
+    await registry.stop();
+  });
+
+  /** A module whose start() and stop() wait for the gates set on globalThis, when present. */
+  const gatedModule = (id: string): { open: (step: 'start' | 'stop') => void } => {
+    const gate = (step: string): string => `${callsKey}_${id}_${step}Gate`;
+    const holder = globalThis as unknown as Record<string, { promise: Promise<void> } | undefined>;
+    const opens = new Map<string, () => void>();
+    for (const step of ['start', 'stop']) {
+      let open = (): void => undefined;
+      const promise = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      holder[gate(step)] = { promise };
+      opens.set(step, open);
+    }
+    const name = JSON.stringify(id);
+    writeModule(id, {
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+export default () => ({
+  async register() {},
+  async initialize() {},
+  async start() { calls.push(${name} + ':start'); await globalThis[${JSON.stringify(gate('start'))}]?.promise; },
+  async stop() { calls.push(${name} + ':stop'); await globalThis[${JSON.stringify(gate('stop'))}]?.promise; },
+  async dispose() { calls.push(${name} + ':dispose'); },
+});
+`,
+    });
+    return {
+      open: (step) => {
+        opens.get(step)?.();
+      },
+    };
+  };
+
+  it('makes a setEnabled issued during start() wait for the startup to finish', async () => {
+    const gate = gatedModule('g');
+    toggleModule('a');
+    const registry = createRegistry(1000);
+    await registry.load();
+    const starting = registry.start();
+    let settled = false;
+    const toggle = registry.setEnabled('a', false).then((outcome) => {
+      settled = true;
+      return outcome;
+    });
+    await vi.waitFor(() => {
+      expect(calls()).toContain('g:start');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+
+    gate.open('start');
+    await starting;
+    await expect(toggle).resolves.toMatchObject({ kind: 'changed', entry: { state: 'DISPOSED' } });
+    expect(stateOf(registry, 'g')).toBe('RUNNING');
+    gate.open('stop');
+    await registry.stop();
+  });
+
+  it('lets a toggle in flight finish when stop() begins, and answers stopping to the queued one', async () => {
+    const gate = gatedModule('g');
+    gate.open('start');
+    toggleModule('a');
+    const registry = await started();
+
+    const inFlight = registry.setEnabled('g', false);
+    await vi.waitFor(() => {
+      expect(calls()).toContain('g:stop');
+    });
+    const queued = registry.setEnabled('a', false);
+    const stopping = registry.stop();
+    gate.open('stop');
+
+    await expect(inFlight).resolves.toMatchObject({
+      kind: 'changed',
+      entry: { state: 'DISPOSED' },
+    });
+    await expect(queued).resolves.toEqual({ kind: 'stopping' });
+    await stopping;
+    expect(stateOf(registry, 'a')).toBe('DISPOSED');
+    expect(config.isEnabled('g', true)).toBe(false);
+    expect(config.isEnabled('a', true)).toBe(true);
   });
 });
 

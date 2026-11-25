@@ -1,12 +1,17 @@
 import { EventEmitter } from 'node:events';
 import { createServer, type AddressInfo, type Server } from 'node:net';
 import type { Client } from 'discord.js';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
 import type { EventHandler, SunFlowerEvent } from '../../shared/contracts/events.ts';
-import { DASHBOARD_STATIC_DIR, resyncOnModuleChanges, startPanel } from './main.ts';
+import {
+  createCoalescedSync,
+  DASHBOARD_STATIC_DIR,
+  resyncOnModuleChanges,
+  startPanel,
+} from './main.ts';
 
 const GUILD = '999999999999999999';
 const CLIENT_SECRET = 'fake-client-secret-value';
@@ -91,6 +96,69 @@ describe('startPanel', () => {
     expect(handle).not.toBeNull();
     await handle?.close();
     expect(logger.entries.filter((e) => e.level === 'error')).toEqual([]);
+  });
+});
+
+describe('createCoalescedSync', () => {
+  it('keeps at most one sync queued behind the running one', async () => {
+    const handlers: EventHandler[] = [];
+    const fakeCore = {
+      subscribe: (_type: string, handler: EventHandler) => {
+        handlers.push(handler);
+        return () => undefined;
+      },
+    };
+    let runs = 0;
+    let release = (): void => undefined;
+    const sync = createCoalescedSync(
+      async () => {
+        runs += 1;
+        if (runs === 1) {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        }
+      },
+      () => undefined,
+    );
+    resyncOnModuleChanges(fakeCore, () => {
+      sync.request();
+    });
+    const emit = (state: string): void => {
+      for (const handler of handlers) {
+        void handler({
+          type: 'core.module.state.changed',
+          payload: { moduleId: 'a', state },
+        } as SunFlowerEvent);
+      }
+    };
+
+    emit('RUNNING');
+    await vi.waitFor(() => {
+      expect(runs).toBe(1);
+    });
+    for (let index = 0; index < 5; index += 1) emit(index % 2 === 0 ? 'DISPOSED' : 'RUNNING');
+    release();
+    await sync.idle();
+    expect(runs).toBe(2);
+  });
+
+  it('reports a failed sync and keeps serving later requests', async () => {
+    const errors: unknown[] = [];
+    let runs = 0;
+    const sync = createCoalescedSync(
+      () => {
+        runs += 1;
+        return runs === 1 ? Promise.reject(new Error('boom')) : Promise.resolve();
+      },
+      (error) => errors.push(error),
+    );
+    sync.request();
+    await sync.idle();
+    sync.request();
+    await sync.idle();
+    expect(runs).toBe(2);
+    expect(errors).toHaveLength(1);
   });
 });
 

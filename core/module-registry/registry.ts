@@ -18,7 +18,11 @@ import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
 import { createModuleGuild } from '../guild/module-guild.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
-import { InvalidOperationError, OperationRegistry } from '../operations/operation-registry.ts';
+import {
+  InvalidOperationError,
+  OperationRegistry,
+  UNAVAILABLE,
+} from '../operations/operation-registry.ts';
 import type { PermissionService } from '../permissions/permission-service.ts';
 import { applyModuleMigrations } from '../storage/module-migrations.ts';
 import { createModuleStorage } from '../storage/module-storage.ts';
@@ -334,11 +338,14 @@ export class ModuleRegistry {
     const { id } = record.manifest;
     const state = this.#stateOf(id);
     if (state === 'RUNNING') return { kind: 'unchanged', entry: this.#entry(id) };
-    // A module outside the dependency order always has a dependency that is not RUNNING.
     const inactive = [...new Set(record.manifest.dependencies)].filter(
       (dependency) => this.#stateOf(dependency) !== 'RUNNING',
     );
-    if (inactive.length > 0) return { kind: 'dependencies', ids: inactive };
+    // A module outside the dependency order (missing, invalid or circular dependency) can never
+    // run: commands() and stop() only walk the order.
+    if (inactive.length > 0 || !this.#order.includes(id)) {
+      return { kind: 'dependencies', ids: inactive };
+    }
     if (state === 'FAILED' || state === 'DISPOSED') this.#transition(id, 'VALIDATED');
     this.#deps.config.setEnabled(id, true);
     this.#disabled.delete(id);
@@ -531,7 +538,7 @@ export class ModuleRegistry {
         isActive,
         logger: this.#deps.logger,
       }),
-      admin: createModuleAdmin({ manifest: record.manifest, service: this.#deps.admin }),
+      admin: createModuleAdmin({ manifest: record.manifest, service: this.#deps.admin, isActive }),
       // Reads stay allowed; writes from a FAILED or STOPPED module are refused.
       storage: Object.freeze({
         run: (sql: string, params?: readonly SqlValue[]) => {
@@ -565,8 +572,11 @@ export class ModuleRegistry {
           }
           this.#registerOperation(record, definition);
         },
+        // An old instance never runs operations, not even those of the instance that replaced it.
         execute: (name: string, actor: Actor, input: unknown) =>
-          this.operations.executeOwn(id, name, actor, input),
+          isCurrent()
+            ? this.operations.executeOwn(id, name, actor, input)
+            : Promise.resolve(UNAVAILABLE),
       }),
     });
   }

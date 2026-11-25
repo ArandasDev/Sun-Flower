@@ -46,6 +46,25 @@ describe('createModuleAdmin', () => {
     );
   });
 
+  it('refuses every call while the module is not active', async () => {
+    let active = false;
+    const service = {
+      developers: { list: () => [] },
+      modules: { setEnabled: () => Promise.resolve({ ok: true, data: 'x' }) },
+    } as unknown as AdminService;
+    const admin = createModuleAdmin({
+      manifest: manifest(['core.admin']),
+      service,
+      isActive: () => active,
+    });
+    expect(() => admin.developers.list()).toThrow('Module "plain" is not active');
+    await expect(admin.modules.setEnabled(ACTOR, 'ping', true)).rejects.toThrow(
+      'Module "plain" is not active',
+    );
+    active = true;
+    expect(admin.developers.list()).toEqual([]);
+  });
+
   it('delegates to the service with the capability', async () => {
     const service = {
       developers: { list: () => [] },

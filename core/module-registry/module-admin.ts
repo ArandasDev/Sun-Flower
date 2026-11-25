@@ -5,6 +5,8 @@ export interface ModuleAdminOptions {
   readonly manifest: ModuleManifest;
   /** Undefined until the Core wires the service in. */
   readonly service: AdminService | undefined;
+  /** False once the module failed, stopped or was replaced by a new instance; defaults to true. */
+  readonly isActive?: () => boolean;
 }
 
 /** Lists every AdminService method: adding one to the contract fails the typecheck until listed. */
@@ -27,6 +29,7 @@ const ASYNC_METHODS: ReadonlySet<string> = new Set(['modules.setEnabled']);
  */
 export function createModuleAdmin(options: ModuleAdminOptions): AdminService {
   const { manifest, service } = options;
+  const isActive = options.isActive ?? ((): boolean => true);
   const allowed = manifest.capabilities.includes('core.admin');
 
   const groups: Record<string, Record<string, (...args: unknown[]) => unknown>> = {};
@@ -38,6 +41,7 @@ export function createModuleAdmin(options: ModuleAdminOptions): AdminService {
           if (!allowed) {
             throw new Error(`Module "${manifest.id}" lacks capability core.admin`);
           }
+          if (!isActive()) throw new Error(`Module "${manifest.id}" is not active`);
           if (service === undefined) throw new Error('Admin service is not available');
           const target = (service as unknown as Record<string, Record<string, unknown>>)[group];
           const fn = target?.[method] as ((...a: unknown[]) => unknown) | undefined;
