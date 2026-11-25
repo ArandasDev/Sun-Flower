@@ -20,6 +20,9 @@ export function Menu() {
   const canConfigure = me.permissions.includes('moderation.config.manage');
   const canManageGrants = me.permissions.includes('administration.grants.manage');
   const canManageDevelopers = me.permissions.includes('core.developers.manage');
+  const canManageModules = me.permissions.includes('core.modules.manage');
+  const canReadLogs = me.permissions.includes('core.logs.read');
+  const canManageSessions = me.permissions.includes('core.sessions.manage');
   return (
     <header className="rail">
       <div className="brand">
@@ -37,6 +40,9 @@ export function Menu() {
         {canConfigure ? <NavLink to="/moderacao">Moderação</NavLink> : null}
         {canManageGrants ? <NavLink to="/permissoes">Permissões</NavLink> : null}
         {canManageDevelopers ? <NavLink to="/desenvolvedores">Desenvolvedores</NavLink> : null}
+        {canManageModules ? <NavLink to="/modulos">Módulos</NavLink> : null}
+        {canReadLogs ? <NavLink to="/logs">Logs</NavLink> : null}
+        {canManageSessions ? <NavLink to="/sessoes">Sessões</NavLink> : null}
       </nav>
       <PresenceList />
       <button type="button" className="button button-quiet" onClick={() => logout.mutate()}>

@@ -246,3 +246,17 @@ describe('menu: administration items', () => {
     expect(screen.queryByRole('link', { name: 'Permissões' })).toBeNull();
   });
 });
+
+describe('menu: module, log and session items', () => {
+  it.each([
+    ['core.modules.manage', 'Módulos'],
+    ['core.logs.read', 'Logs'],
+    ['core.sessions.manage', 'Sessões'],
+  ])('shows the item of %s only with that permission', async (permission, label) => {
+    setupOperations([permission], () => okBody({ cases: [] }), '/');
+    expect(await screen.findByRole('link', { name: label })).toBeInTheDocument();
+    for (const other of ['Módulos', 'Logs', 'Sessões']) {
+      if (other !== label) expect(screen.queryByRole('link', { name: other })).toBeNull();
+    }
+  });
+});

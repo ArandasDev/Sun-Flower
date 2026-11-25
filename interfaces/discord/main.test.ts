@@ -26,7 +26,10 @@ const GUILD = '999999999999999999';
 const CLIENT_SECRET = 'fake-client-secret-value';
 const SESSION_SECRET = Buffer.alloc(32, 7).toString('base64');
 
-const core = { subscribe: () => () => undefined } as unknown as CoreHandle;
+const core = {
+  subscribe: () => () => undefined,
+  sessions: { onRevoked: () => () => undefined },
+} as unknown as CoreHandle;
 let blocker: Server | undefined;
 
 afterEach(async () => {
