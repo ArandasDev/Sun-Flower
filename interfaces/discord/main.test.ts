@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
-import { DASHBOARD_STATIC_DIR, startPanel } from './main.ts';
+import type { EventHandler, SunFlowerEvent } from '../../shared/contracts/events.ts';
+import { DASHBOARD_STATIC_DIR, resyncOnModuleChanges, startPanel } from './main.ts';
 
 const GUILD = '999999999999999999';
 const CLIENT_SECRET = 'fake-client-secret-value';
@@ -90,5 +91,39 @@ describe('startPanel', () => {
     expect(handle).not.toBeNull();
     await handle?.close();
     expect(logger.entries.filter((e) => e.level === 'error')).toEqual([]);
+  });
+});
+
+describe('resyncOnModuleChanges', () => {
+  it('resyncs when a module becomes RUNNING, DISPOSED or FAILED, and unsubscribes', () => {
+    const handlers = new Map<string, EventHandler>();
+    let unsubscribed = 0;
+    const fakeCore = {
+      subscribe: (type: string, handler: EventHandler) => {
+        handlers.set(type, handler);
+        return () => {
+          unsubscribed += 1;
+        };
+      },
+    };
+    let resyncs = 0;
+    const unsubscribe = resyncOnModuleChanges(fakeCore, () => {
+      resyncs += 1;
+    });
+    const handler = handlers.get('core.module.state.changed');
+    expect(handler).toBeDefined();
+    const emit = (payload: unknown): void => {
+      void handler?.({ type: 'core.module.state.changed', payload } as SunFlowerEvent);
+    };
+    for (const state of ['VALIDATED', 'REGISTERED', 'INITIALIZED', 'STOPPED']) {
+      emit({ moduleId: 'a', state });
+    }
+    emit(null);
+    emit('RUNNING');
+    expect(resyncs).toBe(0);
+    for (const state of ['RUNNING', 'DISPOSED', 'FAILED']) emit({ moduleId: 'a', state });
+    expect(resyncs).toBe(3);
+    unsubscribe();
+    expect(unsubscribed).toBe(1);
   });
 });

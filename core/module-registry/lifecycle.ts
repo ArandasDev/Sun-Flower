@@ -19,8 +19,9 @@ const TRANSITIONS: Record<ModuleState, readonly ModuleState[]> = {
   INITIALIZED: ['RUNNING', 'FAILED'],
   RUNNING: ['STOPPED', 'FAILED'],
   STOPPED: ['DISPOSED', 'FAILED'],
-  DISPOSED: [],
-  FAILED: [],
+  // Only ModuleRegistry.setEnabled() takes a module back to VALIDATED, to start a new instance.
+  DISPOSED: ['VALIDATED'],
+  FAILED: ['VALIDATED'],
 };
 
 export function canTransition(from: ModuleState, to: ModuleState): boolean {

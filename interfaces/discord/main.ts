@@ -47,8 +47,29 @@ function errorSummary(error: unknown): { name: string; code?: string | number } 
     : { name: error.name };
 }
 
-/** Connects the Core to the Discord client. Nothing here logs the token or any Discord ID. */
-function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): void {
+/** Module states after which the set of commands may have changed. */
+const RESYNC_STATES: ReadonlySet<unknown> = new Set(['RUNNING', 'DISPOSED', 'FAILED']);
+
+/**
+ * Calls `resync` whenever a module becomes RUNNING, DISPOSED or FAILED, so the Discord commands
+ * follow modules enabled or disabled at runtime. Returns the function that cancels it.
+ */
+export function resyncOnModuleChanges(
+  core: Pick<CoreHandle, 'subscribe'>,
+  resync: () => void,
+): () => void {
+  return core.subscribe('core.module.state.changed', (event) => {
+    const { payload } = event;
+    if (typeof payload !== 'object' || payload === null) return;
+    if (RESYNC_STATES.has((payload as { state?: unknown }).state)) resync();
+  });
+}
+
+/**
+ * Connects the Core to the Discord client. Nothing here logs the token or any Discord ID.
+ * Returns the function that cancels the Core subscriptions made here.
+ */
+function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): () => void {
   // Command syncs run one at a time, in the order the events arrive.
   let queue = Promise.resolve();
   const enqueue = (task: () => Promise<void>): void => {
@@ -92,6 +113,11 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     if (guild.id === guildId) enqueue(sync);
   });
 
+  // Modules enabled or disabled at runtime change the commands; sync() skips while not ready.
+  const stopResync = resyncOnModuleChanges(core, () => {
+    enqueue(sync);
+  });
+
   const messageDeps = {
     guildId,
     monitor: new ContentIntentMonitor(logger),
@@ -132,6 +158,8 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
         logger.error({ error: errorMessage(error) }, 'command dispatch failed');
       });
   });
+
+  return stopResync;
 }
 
 export interface StartPanelOptions {
@@ -214,10 +242,12 @@ export async function main(): Promise<void> {
   }
 
   let dashboard: DashboardHandle | null = null;
+  let unwire = (): void => undefined;
   const shutdown = async (): Promise<void> => {
     // Stop feeding events, close the panel, let the modules drain while REST still works, then
     // disconnect.
     client.removeAllListeners();
+    unwire();
     try {
       if (dashboard !== null) {
         try {
@@ -232,7 +262,7 @@ export async function main(): Promise<void> {
     }
   };
   const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
-  wireClient(client, core, environment.guildId, logger);
+  unwire = wireClient(client, core, environment.guildId, logger);
   dashboard = await startPanel({
     source: process.env,
     client,

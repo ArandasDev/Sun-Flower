@@ -19,6 +19,8 @@ export class EntrypointError extends Error {
 
 export interface LoadedModule {
   readonly instance: SunFlowerModule;
+  /** Builds a new, checked instance; the registry calls it to enable a module again. */
+  readonly factory: () => SunFlowerModule;
   readonly configSchema?: z.ZodType<unknown>;
 }
 
@@ -71,11 +73,16 @@ export async function loadModule(directory: string, entrypoint: string): Promise
   if (configSchema !== undefined && !isSchema(configSchema)) {
     throw new EntrypointError('configSchema must be a zod schema');
   }
-  const instance: unknown = (imported.default as ModuleFactory)();
-  if (!isModule(instance)) {
-    throw new EntrypointError(
-      `the module factory must return an object with ${LIFECYCLE_METHODS.join(', ')}`,
-    );
-  }
-  return configSchema === undefined ? { instance } : { instance, configSchema };
+  const moduleFactory = imported.default as ModuleFactory;
+  const factory = (): SunFlowerModule => {
+    const instance: unknown = moduleFactory();
+    if (!isModule(instance)) {
+      throw new EntrypointError(
+        `the module factory must return an object with ${LIFECYCLE_METHODS.join(', ')}`,
+      );
+    }
+    return instance;
+  };
+  const instance = factory();
+  return configSchema === undefined ? { instance, factory } : { instance, factory, configSchema };
 }
