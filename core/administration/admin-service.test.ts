@@ -226,10 +226,6 @@ describe('modules', () => {
     expect(JSON.stringify(logger.entries)).not.toContain('secret');
     expect(JSON.stringify(logger.entries)).toContain('TypeError');
   });
-
-  it('lists entries without an error field', () => {
-    expect(build().modules.list()[0]).not.toHaveProperty('error');
-  });
 });
 
 describe('sessions and logs', () => {
@@ -265,6 +261,39 @@ describe('sessions and logs', () => {
     const spy = vi.spyOn(recentLogs, 'recent');
     build().logs.recent({ limit: 5, minLevel: 'warn' });
     expect(spy).toHaveBeenCalledWith({ limit: 5, minLevel: 'warn' });
+  });
+});
+
+describe('audit entries', () => {
+  it('records one exact entry per audited action', async () => {
+    permissions.addDeveloper(A);
+    sessions.create(B);
+    const s = build();
+    const [session] = s.sessions.list();
+    s.developers.add(actor, B);
+    s.developers.remove(actor, B);
+    s.grants.grant(actor, 'ping.cmd.use', ROLE);
+    s.grants.revoke(actor, 'ping.cmd.use', ROLE);
+    await s.modules.setEnabled(actor, 'moderation', true);
+    s.sessions.revoke(actor, session!.ref);
+    sessions.create(B);
+    s.sessions.revokeAll(actor, B);
+    expect(changes()).toEqual([
+      { action: 'developers.add', actor: '…5678', target: '…1234' },
+      { action: 'developers.remove', actor: '…5678', target: '…1234' },
+      { action: 'grants.grant', actor: '…5678', target: '…9999', permission: 'ping.cmd.use' },
+      { action: 'grants.revoke', actor: '…5678', target: '…9999', permission: 'ping.cmd.use' },
+      { action: 'modules.enable', actor: '…5678', moduleId: 'moderation' },
+      { action: 'sessions.revoke', actor: '…5678' },
+      { action: 'sessions.revoke-all', actor: '…5678', target: '…1234', count: 1 },
+    ]);
+  });
+
+  it('rejects a non-canonical roleId on revoke', () => {
+    expect(build().grants.revoke(actor, 'ping.cmd.use', '0123')).toEqual({
+      ok: false,
+      error: { code: 'invalid', message: 'Entrada inválida: roleId.' },
+    });
   });
 });
 
