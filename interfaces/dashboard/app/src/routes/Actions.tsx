@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
 import { isSnowflake } from '../ids.ts';
-import { NO_PERMISSION_TEXT } from '../labels.ts';
+import { NO_PERMISSION_TEXT, actionErrorText } from '../labels.ts';
 import { useOperationMutation } from '../operations.ts';
 import { useCurrentMe } from '../session.tsx';
 
@@ -251,7 +251,7 @@ export function Actions() {
         </div>
         {confirming ? null : (
           <p role="alert" className="form-error">
-            {mutation.isError ? mutation.error.message : null}
+            {mutation.isError ? actionErrorText(mutation.error) : null}
           </p>
         )}
       </form>
@@ -260,7 +260,7 @@ export function Actions() {
           title={`${current.confirmLabel} este membro?`}
           confirmLabel={current.confirmLabel}
           pending={mutation.isPending}
-          error={mutation.isError ? mutation.error.message : null}
+          error={mutation.isError ? actionErrorText(mutation.error) : null}
           onConfirm={send}
           onCancel={() => {
             setConfirming(false);

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { ApiError } from '../api.ts';
 import { isSnowflake } from '../ids.ts';
-import { NO_PERMISSION_TEXT } from '../labels.ts';
+import { errorText } from '../labels.ts';
 import { runOperation, useOperationMutation, useOperationQuery } from '../operations.ts';
 
 const CONFLICT_TEXT = 'Outra pessoa alterou esta configuração. Recarregue para ver a versão atual.';
@@ -609,11 +609,7 @@ function ConfigForm({ latest, reload }: FormProps) {
           if (error instanceof ApiError && error.status === 409) {
             setConflict(true);
           } else {
-            const message =
-              error instanceof ApiError && error.status === 403
-                ? NO_PERMISSION_TEXT
-                : error.message;
-            setProblems((current) => ({ ...current, [section.id]: message }));
+            setProblems((current) => ({ ...current, [section.id]: errorText(error) }));
           }
         },
       },
@@ -699,7 +695,7 @@ function SectionForm({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
+          if (dirty && Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
         }}
       >
         <div className="config-fields">
@@ -731,7 +727,7 @@ function SectionForm({
           <button
             type="submit"
             className="button button-primary"
-            disabled={pending || emptyAlert || Object.keys(errors).length > 0}
+            disabled={!dirty || pending || emptyAlert || Object.keys(errors).length > 0}
           >
             Salvar
           </button>
@@ -761,13 +757,7 @@ export function ModerationConfig() {
   return (
     <section>
       <h1>Moderação</h1>
-      {query.isError ? (
-        <p role="alert">
-          {query.error instanceof ApiError && query.error.status === 403
-            ? NO_PERMISSION_TEXT
-            : query.error.message}
-        </p>
-      ) : null}
+      {query.isError ? <p role="alert">{errorText(query.error)}</p> : null}
       {query.isPending ? <p className="muted">Carregando…</p> : null}
       {query.data === undefined ? null : <ConfigForm latest={query.data} reload={reload} />}
     </section>

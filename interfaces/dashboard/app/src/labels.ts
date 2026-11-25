@@ -1,3 +1,5 @@
+import { ApiError } from './api.ts';
+
 export type Level = 'developer' | 'owner' | 'staff' | 'member';
 
 const LEVELS: Record<Level, string> = {
@@ -21,6 +23,24 @@ const SCREENS: Record<string, string> = {
 };
 
 export const NO_PERMISSION_TEXT = 'Sem permissão.';
+
+/** The text to show for a failed operation: a 403 is always `Sem permissão.` */
+export function errorText(error: Error): string {
+  return error instanceof ApiError && error.status === 403 ? NO_PERMISSION_TEXT : error.message;
+}
+
+/** The Core's fixed text when the person lacks the operation's permission. */
+const CORE_FORBIDDEN_TEXT = 'Você não tem permissão para isso.';
+
+/**
+ * Like `errorText`, for the actions: the Core's permission refusal becomes `Sem permissão.`, but a
+ * 403 about the target (the person themselves, a protected member) keeps the server's text.
+ */
+export function actionErrorText(error: Error): string {
+  return error instanceof ApiError && error.status === 403 && error.message === CORE_FORBIDDEN_TEXT
+    ? NO_PERMISSION_TEXT
+    : error.message;
+}
 
 const CASE_STATUSES: Record<string, string> = {
   open: 'Aberto',

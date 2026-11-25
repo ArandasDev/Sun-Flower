@@ -1,14 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { ApiError } from '../api.ts';
-import { NO_PERMISSION_TEXT } from '../labels.ts';
+import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
 
 type ListName = 'block' | 'allow';
-
-function errorText(error: Error): string {
-  return error instanceof ApiError && error.status === 403 ? NO_PERMISSION_TEXT : error.message;
-}
 
 function DomainList({ list, title }: { list: ListName; title: string }) {
   const client = useQueryClient();

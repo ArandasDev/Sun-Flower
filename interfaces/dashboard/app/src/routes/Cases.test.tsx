@@ -64,7 +64,7 @@ function setup(permissions: string[], operation: (call: Call) => FakeResponse, p
     return { status: 404, body: { error: { code: 'not_found', message: 'x' } } };
   });
   const view = renderApp(path, clock);
-  return { ...view, calls };
+  return { ...view, calls, clock };
 }
 
 const ok = (data: unknown): FakeResponse => ({ status: 200, body: { data } });
@@ -181,6 +181,77 @@ describe('cases list', () => {
       lastSocket().receive('case.created', { caseId: 6 });
     });
     expect(await screen.findByRole('button', { name: /Caso 6/ })).toBeInTheDocument();
+  });
+
+  it('refetches only the first page, at most twice, for a burst of 20 case.created in 5 s', async () => {
+    const { calls, clock } = setup([READ], (call) => {
+      if (call.name === 'moderation.cases.list') {
+        return call.input['cursor'] === 4
+          ? ok({ cases: [summary(3)], nextCursor: null })
+          : ok({ cases: [summary(5), summary(4)], nextCursor: 4 });
+      }
+      return standard(call);
+    });
+    await userEvent.click(await screen.findByRole('button', { name: 'Carregar mais' }));
+    await screen.findByRole('button', { name: /Caso 3/ });
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    act(() => {
+      lastSocket().open();
+    });
+    const lists = () => calls.filter((call) => call.name === 'moderation.cases.list');
+    const before = lists().length;
+    for (let index = 0; index < 20; index += 1) {
+      act(() => {
+        lastSocket().receive('case.created', { caseId: 100 + index });
+        clock.advance(200);
+      });
+    }
+    await waitFor(() => expect(lists().length).toBe(before + 1));
+    act(() => {
+      clock.advance(5_000);
+    });
+    await waitFor(() => expect(lists().length).toBe(before + 2));
+    act(() => {
+      clock.advance(60_000);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const refetches = lists().slice(before);
+    expect(refetches).toHaveLength(2);
+    expect(refetches.every((call) => call.input['cursor'] === undefined)).toBe(true);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Caso 3/ })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Carregar mais' })).toBeInTheDocument();
+  });
+
+  it('runs the last case.updated after the window, so no event is lost', async () => {
+    const { calls, clock } = setup([READ], standard);
+    await screen.findByRole('button', { name: /Caso 5/ });
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    act(() => {
+      lastSocket().open();
+    });
+    const lists = () => calls.filter((call) => call.name === 'moderation.cases.list').length;
+    const before = lists();
+    act(() => {
+      lastSocket().receive('case.updated', { caseId: 5 });
+      lastSocket().receive('case.updated', { caseId: 4 });
+    });
+    await waitFor(() => expect(lists()).toBe(before + 1));
+    act(() => {
+      clock.advance(4_999);
+    });
+    expect(lists()).toBe(before + 1);
+    act(() => {
+      clock.advance(1);
+    });
+    await waitFor(() => expect(lists()).toBe(before + 2));
+  });
+
+  it('clears the target field when the URL loses the filter', async () => {
+    setup([READ], standard, `/casos?alvo=${TARGET}`);
+    await screen.findByRole('button', { name: /Caso 5/ });
+    expect(screen.getByLabelText('ID do alvo')).toHaveValue(TARGET);
+    await userEvent.click(screen.getByRole('link', { name: 'Casos' }));
+    await waitFor(() => expect(screen.getByLabelText('ID do alvo')).toHaveValue(''));
   });
 
   it('reports the cases screen in presence', async () => {

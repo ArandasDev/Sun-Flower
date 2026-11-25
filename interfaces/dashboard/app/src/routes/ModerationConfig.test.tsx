@@ -102,6 +102,18 @@ describe('moderation settings', () => {
     });
   });
 
+  it('keeps Salvar disabled while the section has no unsaved changes', async () => {
+    const { calls } = setup();
+    const field = await timeoutField();
+    const button = within(section('Silenciamento')).getByRole('button', { name: 'Salvar' });
+    expect(button).toBeDisabled();
+    await userEvent.type(field, '1');
+    expect(button).toBeEnabled();
+    await userEvent.type(field, '{Backspace}');
+    expect(button).toBeDisabled();
+    expect(calls.some((call) => call.name === 'moderation.config.update')).toBe(false);
+  });
+
   it('marks a section with unsaved changes in text', async () => {
     setup();
     const field = await timeoutField();

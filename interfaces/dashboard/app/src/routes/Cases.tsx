@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { ApiError } from '../api.ts';
 import { CaseDetail, formatDate, type CaseSummary } from '../components/CaseDetail.tsx';
 import {
   caseActionLabel,
   caseKindLabel,
   caseRuleLabel,
   caseStatusLabel,
-  NO_PERMISSION_TEXT,
+  errorText,
 } from '../labels.ts';
 import { isSnowflake } from '../ids.ts';
 import { useOperationPages } from '../operations.ts';
@@ -33,6 +32,12 @@ export function Cases() {
   const rawSelected = Number(params.get('caso'));
   const selected = Number.isInteger(rawSelected) && rawSelected > 0 ? rawSelected : null;
   const [targetText, setTargetText] = useState(target ?? '');
+  // Back and forward change the URL without typing: the field follows the filter.
+  const [shownTarget, setShownTarget] = useState(target);
+  if (target !== shownTarget) {
+    setShownTarget(target);
+    setTargetText(target ?? '');
+  }
   const targetInvalid = targetText !== '' && !isSnowflake(targetText);
 
   const filters = {
@@ -118,13 +123,7 @@ export function Cases() {
           {targetInvalid ? <p className="field-hint">Use de 17 a 20 dígitos.</p> : null}
         </form>
 
-        {query.isError ? (
-          <p role="alert">
-            {query.error instanceof ApiError && query.error.status === 403
-              ? NO_PERMISSION_TEXT
-              : query.error.message}
-          </p>
-        ) : null}
+        {query.isError ? <p role="alert">{errorText(query.error)}</p> : null}
         {query.isPending ? <p className="muted">Carregando…</p> : null}
         {!query.isPending && !query.isError && rows.length === 0 ? (
           <p className="muted">Nenhum caso encontrado.</p>

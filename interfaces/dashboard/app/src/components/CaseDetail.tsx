@@ -1,12 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '../api.ts';
 import {
-  NO_PERMISSION_TEXT,
   caseActionLabel,
   caseKindLabel,
   caseRuleLabel,
   caseStatusLabel,
+  errorText,
 } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
 import { useCurrentMe } from '../session.tsx';
@@ -47,10 +46,6 @@ export function formatDate(iso: string): string {
   return Number.isNaN(date.getTime())
     ? iso
     : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-}
-
-function errorText(error: Error): string {
-  return error instanceof ApiError && error.status === 403 ? NO_PERMISSION_TEXT : error.message;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
