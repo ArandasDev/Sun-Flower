@@ -65,6 +65,15 @@ describe('grants screen', () => {
     });
   });
 
+  it('puts focus back on the role id field after granting', async () => {
+    setup();
+    await screen.findByRole('region', { name: 'moderation.cases.read' });
+    await userEvent.type(screen.getByLabelText('ID do cargo'), ROLE_B);
+    await userEvent.click(screen.getByRole('button', { name: 'Associar' }));
+    await screen.findByText(ROLE_B);
+    expect(screen.getByLabelText('ID do cargo')).toHaveFocus();
+  });
+
   it('blocks an invalid role id', async () => {
     const { calls } = setup();
     await screen.findByRole('region', { name: 'moderation.cases.read' });

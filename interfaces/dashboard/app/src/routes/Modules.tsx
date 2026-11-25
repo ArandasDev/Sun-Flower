@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
 import { errorText } from '../labels.ts';
@@ -37,11 +37,13 @@ function situation(entry: ModuleEntry): string {
 export function Modules() {
   const client = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const watchFocus = useRef(false);
   const [disabling, setDisabling] = useState<ModuleEntry | null>(null);
   const query = useOperationQuery<{ modules: ModuleEntry[] }>(
     ['admin', 'modules'],
     'administration.modules.list',
     {},
+    { refetchOnFocus: false },
   );
   // Reloads after a failure too: a failed enable still stores the flag, and the row shows FAILED.
   const toggle = useOperationMutation<unknown, SetEnabledInput>(
@@ -50,11 +52,18 @@ export function Modules() {
       onSuccess: () => {
         setDisabling(null);
       },
-      onSettled: () => {
-        void client.invalidateQueries({ queryKey: ['admin', 'modules'] });
+      onSettled: async () => {
+        await client.invalidateQueries({ queryKey: ['admin', 'modules'] });
       },
     },
   );
+  // After Ligar settles and the list reloads, its button may be gone (the row is now running and
+  // cannot be switched off): move focus to the heading instead of letting it fall to the page.
+  useEffect(() => {
+    if (toggle.isPending || query.isFetching || !watchFocus.current) return;
+    watchFocus.current = false;
+    if (document.activeElement === document.body) headingRef.current?.focus();
+  }, [toggle.isPending, query.isFetching, query.data]);
   const modules = query.data?.modules ?? [];
   const pageError =
     disabling === null && toggle.error !== null ? toggle.error : query.isError ? query.error : null;
@@ -73,55 +82,58 @@ export function Modules() {
       </p>
       {query.isPending ? <p className="muted">Carregando…</p> : null}
       {modules.length === 0 ? null : (
-        <ul className="domain-rows panel">
-          {modules.map((entry) => (
-            <li key={entry.id}>
-              <span>
-                <strong>{entry.name}</strong>
-                <span className="muted"> versão {entry.version}</span>
-                <span className="row-line">{situation(entry)}</span>
-                {entry.description === '' ? null : (
-                  <span className="row-line muted">{entry.description}</span>
-                )}
-                {entry.dependencies.length === 0 ? null : (
-                  <span className="row-line muted">
-                    Depende de: {entry.dependencies.join(', ')}
-                  </span>
-                )}
-                {entry.canDisable || entry.state !== 'RUNNING' ? null : (
-                  <span className="row-line muted">Não pode ser desligado.</span>
-                )}
-              </span>
-              {entry.state === 'RUNNING' ? (
-                entry.canDisable ? (
+        <div className="panel">
+          <ul className="domain-rows">
+            {modules.map((entry) => (
+              <li key={entry.id}>
+                <span>
+                  <strong>{entry.name}</strong>
+                  <span className="muted"> versão {entry.version}</span>
+                  <span className="row-line">{situation(entry)}</span>
+                  {entry.description === '' ? null : (
+                    <span className="row-line muted">{entry.description}</span>
+                  )}
+                  {entry.dependencies.length === 0 ? null : (
+                    <span className="row-line muted">
+                      Depende de: {entry.dependencies.join(', ')}
+                    </span>
+                  )}
+                  {entry.canDisable || entry.state !== 'RUNNING' ? null : (
+                    <span className="row-line muted">Não pode ser desligado.</span>
+                  )}
+                </span>
+                {entry.state === 'RUNNING' ? (
+                  entry.canDisable ? (
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      disabled={toggle.isPending}
+                      onClick={() => {
+                        toggle.reset();
+                        setDisabling(entry);
+                      }}
+                    >
+                      Desligar
+                    </button>
+                  ) : null
+                ) : (
                   <button
                     type="button"
-                    className="button button-quiet"
+                    className="button button-primary"
                     disabled={toggle.isPending}
                     onClick={() => {
                       toggle.reset();
-                      setDisabling(entry);
+                      watchFocus.current = true;
+                      toggle.mutate({ moduleId: entry.id, enabled: true });
                     }}
                   >
-                    Desligar
+                    Ligar
                   </button>
-                ) : null
-              ) : (
-                <button
-                  type="button"
-                  className="button button-primary"
-                  disabled={toggle.isPending}
-                  onClick={() => {
-                    toggle.reset();
-                    toggle.mutate({ moduleId: entry.id, enabled: true });
-                  }}
-                >
-                  Ligar
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {disabling === null ? null : (
         <ConfirmDialog

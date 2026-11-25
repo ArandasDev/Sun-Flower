@@ -89,6 +89,36 @@ describe('modules screen', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('draws the list inside a panel so the rows keep their padding', async () => {
+    setup([entry({})]);
+    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    expect(row.closest('ul')?.parentElement).toHaveClass('panel');
+    expect(row.closest('ul')).not.toHaveClass('panel');
+  });
+
+  it('moves focus to the heading when the Ligar button disappears', async () => {
+    let running = false;
+    const { calls } = setup([entry({})], (call) => {
+      if (call.name === 'administration.modules.list') {
+        return okBody({
+          modules: [entry(running ? { canDisable: false } : { enabled: false, state: 'STOPPED' })],
+        });
+      }
+      if (call.name === 'administration.modules.set-enabled') {
+        running = true;
+        return okBody({ changed: true });
+      }
+      return undefined;
+    });
+    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: 'Ligar' }));
+    await screen.findByText('Não pode ser desligado.');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Módulos', level: 1 })).toHaveFocus(),
+    );
+    expect(listCalls(calls)).toBe(2);
+  });
+
   it('shows the server text of a 409 with dependents inside the dialog', async () => {
     const text = 'Outros módulos dependem deste: ping.';
     setup([entry({ dependents: ['ping'] })], (call) =>

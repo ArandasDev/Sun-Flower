@@ -24,10 +24,13 @@ export function Sessions() {
     ['admin', 'sessions'],
     'administration.sessions.list',
     {},
+    { refetchOnFocus: false },
   );
   const options = {
     onSuccess: () => {
       setEnding(null);
+    },
+    onSettled: () => {
       void client.invalidateQueries({ queryKey: ['admin', 'sessions'] });
     },
   };

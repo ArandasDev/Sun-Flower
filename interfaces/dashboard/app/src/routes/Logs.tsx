@@ -38,6 +38,7 @@ export function Logs() {
     ['admin', 'logs', minLevel],
     'administration.logs.recent',
     { limit: LIMIT, minLevel },
+    { keepPrevious: true, refetchOnFocus: false },
   );
   const entries = query.data?.entries ?? [];
 
@@ -45,8 +46,8 @@ export function Logs() {
     <section>
       <h1>Logs</h1>
       <p className="muted">
-        Os registros mais recentes do bot, do mais novo para o mais antigo. Eles não se atualizam
-        sozinhos.
+        Os registros mais recentes do bot, do mais novo para o mais antigo. Eles só se atualizam
+        quando você abre a tela ou usa o botão Atualizar.
       </p>
       <div className="inline-form panel">
         <label>

@@ -957,6 +957,7 @@ a {
 }
 
 .log-table td:first-child,
-.log-table td:nth-child(2) {
+.log-table td:nth-child(2),
+.log-table td:nth-child(3) {
   white-space: nowrap;
 }

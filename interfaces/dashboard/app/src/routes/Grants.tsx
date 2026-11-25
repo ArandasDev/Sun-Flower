@@ -34,9 +34,17 @@ function groupByPermission(grants: GrantEntry[]): [string, GrantEntry[]][] {
 export function Grants() {
   const client = useQueryClient();
   const selectRef = useRef<HTMLSelectElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [permission, setPermission] = useState('');
   const [roleId, setRoleId] = useState('');
-  const query = useOperationQuery<GrantList>(['admin', 'grants'], 'administration.grants.list', {});
+  const query = useOperationQuery<GrantList>(
+    ['admin', 'grants'],
+    'administration.grants.list',
+    {},
+    {
+      refetchOnFocus: false,
+    },
+  );
   const refresh = (): void => {
     void client.invalidateQueries({ queryKey: ['admin', 'grants'] });
   };
@@ -44,6 +52,7 @@ export function Grants() {
     onSuccess: () => {
       setRoleId('');
       refresh();
+      inputRef.current?.focus();
     },
   });
   const revoke = useOperationMutation<unknown, GrantInput>('administration.grants.revoke', {
@@ -95,6 +104,7 @@ export function Grants() {
         <label>
           ID do cargo
           <input
+            ref={inputRef}
             type="text"
             inputMode="numeric"
             autoComplete="off"

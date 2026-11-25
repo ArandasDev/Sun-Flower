@@ -107,6 +107,22 @@ describe('sessions screen', () => {
     expect(await within(dialog).findByText('Sessão não encontrada.')).toBeInTheDocument();
   });
 
+  it('reloads the list even when ending a session fails', async () => {
+    const { calls } = setup((call) =>
+      call.name === 'administration.sessions.revoke'
+        ? errorBody(404, 'not_found', 'Sessão não encontrada.')
+        : undefined,
+    );
+    const other = await screen.findByRole('region', { name: NAME(OTHER) });
+    await userEvent.click(within(other).getAllByRole('button', { name: 'Encerrar' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
+    await within(dialog).findByText('Sessão não encontrada.');
+    await waitFor(() =>
+      expect(calls.filter((call) => call.name === 'administration.sessions.list')).toHaveLength(2),
+    );
+  });
+
   it('shows "Sem permissão." on a 403', async () => {
     setup((call) =>
       call.name === 'administration.sessions.list'

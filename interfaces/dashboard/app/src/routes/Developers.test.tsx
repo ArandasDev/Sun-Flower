@@ -62,6 +62,22 @@ describe('developers screen', () => {
     });
   });
 
+  it('puts focus back on the id field after adding', async () => {
+    setup();
+    await screen.findByText(OTHER);
+    await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    await screen.findByText(NEW_ID);
+    expect(screen.getByLabelText('ID da pessoa')).toHaveFocus();
+  });
+
+  it('draws the list inside a panel so the rows keep their padding', async () => {
+    setup();
+    const list = (await screen.findByText(SELF)).closest('ul');
+    expect(list?.parentElement).toHaveClass('panel');
+    expect(list).not.toHaveClass('panel');
+  });
+
   it('blocks an invalid id', async () => {
     setup();
     await screen.findByText(OTHER);

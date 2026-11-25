@@ -52,6 +52,28 @@ describe('logs screen', () => {
     expect(logCalls(calls)[1]?.input).toEqual({ limit: 200, minLevel: 'error' });
   });
 
+  it('keeps the previous rows on screen while a new filter loads', async () => {
+    setup([{ time: TIME, level: 'error', message: 'boom', fields: {} }]);
+    await screen.findByText('boom');
+    const original = globalThis.fetch;
+    let release: () => void = () => undefined;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      url.startsWith('/api/operations/') && (init?.body as string).includes('"fatal"')
+        ? new Promise<Response>((resolve) => {
+            release = () => {
+              resolve(original(url, init));
+            };
+          })
+        : original(url, init),
+    );
+    await userEvent.selectOptions(screen.getByLabelText('Nível mínimo'), 'fatal');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeDisabled());
+    expect(screen.getByText('boom')).toBeInTheDocument();
+    expect(screen.queryByText('Carregando…')).toBeNull();
+    release();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+  });
+
   it('fetches again with Atualizar', async () => {
     const { calls } = setup([{ time: TIME, level: 'info', message: 'hello', fields: {} }]);
     await screen.findByText('hello');

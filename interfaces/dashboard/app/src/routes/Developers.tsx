@@ -22,6 +22,7 @@ export function Developers() {
     ['admin', 'developers'],
     'administration.developers.list',
     {},
+    { refetchOnFocus: false },
   );
   const refresh = (): void => {
     void client.invalidateQueries({ queryKey: ['admin', 'developers'] });
@@ -30,6 +31,7 @@ export function Developers() {
     onSuccess: () => {
       setUserId('');
       refresh();
+      inputRef.current?.focus();
     },
   });
   const remove = useOperationMutation<unknown, { userId: string }>(
@@ -81,28 +83,30 @@ export function Developers() {
       </p>
       {query.isPending ? <p className="muted">Carregando…</p> : null}
       {developers.length === 0 ? null : (
-        <ul className="domain-rows panel">
-          {developers.map((entry) => (
-            <li key={entry.userId}>
-              <span>
-                <span className="mono">{entry.userId}</span>
-                {entry.userId === me.id ? <strong className="self-mark"> Você</strong> : null}
-                <span className="muted"> desde {formatDate(entry.addedAt)}</span>
-              </span>
-              <button
-                type="button"
-                className="button button-quiet"
-                onClick={() => {
-                  add.reset();
-                  remove.reset();
-                  setRemoving(entry.userId);
-                }}
-              >
-                Remover
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="panel">
+          <ul className="domain-rows">
+            {developers.map((entry) => (
+              <li key={entry.userId}>
+                <span>
+                  <span className="mono">{entry.userId}</span>
+                  {entry.userId === me.id ? <strong className="self-mark"> Você</strong> : null}
+                  <span className="muted"> desde {formatDate(entry.addedAt)}</span>
+                </span>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => {
+                    add.reset();
+                    remove.reset();
+                    setRemoving(entry.userId);
+                  }}
+                >
+                  Remover
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {removing === null ? null : (
         <ConfirmDialog
