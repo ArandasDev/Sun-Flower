@@ -102,6 +102,17 @@ describe('moderation settings', () => {
     });
   });
 
+  it('marks a section with unsaved changes in text', async () => {
+    setup();
+    const field = await timeoutField();
+    expect(within(section('Silenciamento')).queryByText('Alterações não salvas.')).toBeNull();
+    await userEvent.type(field, '1');
+    expect(
+      within(section('Silenciamento')).getByText('Alterações não salvas.'),
+    ).toBeInTheDocument();
+    expect(within(section('Alertas')).queryByText('Alterações não salvas.')).toBeNull();
+  });
+
   it('uses the returned version for the next save', async () => {
     const { calls } = setup();
     const field = await timeoutField();

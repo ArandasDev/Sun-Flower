@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
 import { isSnowflake } from '../ids.ts';
 import { NO_PERMISSION_TEXT } from '../labels.ts';
@@ -49,6 +49,7 @@ export function Actions() {
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<ActionId, HTMLButtonElement>());
 
   const current = allowed.find((spec) => spec.id === selected) ?? allowed[0];
@@ -63,6 +64,11 @@ export function Actions() {
       },
     },
   );
+
+  // The submit is disabled once the form clears, so the result takes focus.
+  useEffect(() => {
+    if (result !== null) resultRef.current?.focus();
+  }, [result]);
 
   if (current === undefined) {
     return (
@@ -117,6 +123,7 @@ export function Actions() {
   };
 
   const send = (): void => {
+    setResult(null);
     mutation.mutate(buildInput());
   };
 
@@ -232,7 +239,7 @@ export function Actions() {
             {current.submit}
           </button>
         </div>
-        <div role="status" className="action-result">
+        <div ref={resultRef} tabIndex={-1} role="status" className="action-result">
           {result === null ? null : (
             <>
               <p className="notice">Caso #{result.caseId} registrado.</p>
@@ -254,7 +261,6 @@ export function Actions() {
           confirmLabel={current.confirmLabel}
           pending={mutation.isPending}
           error={mutation.isError ? mutation.error.message : null}
-          returnFocusRef={submitRef}
           onConfirm={send}
           onCancel={() => {
             setConfirming(false);

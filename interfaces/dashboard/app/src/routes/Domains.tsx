@@ -103,7 +103,8 @@ export function Domains() {
     <section>
       <h1>Domínios</h1>
       <p className="muted">
-        Domínios bloqueados contam como sinal forte de golpe. Os permitidos nunca são marcados.
+        Domínios bloqueados contam como sinal forte de golpe. Links para domínios permitidos são
+        ignorados na análise.
       </p>
       <div className="domain-grid">
         <DomainList list="block" title="Bloqueados" />

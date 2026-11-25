@@ -655,6 +655,7 @@ function ConfigForm({ latest, reload }: FormProps) {
           pending={save.isPending}
           problem={problems[section.id]}
           saved={saved === section.id}
+          dirty={sectionDirty(section, draft, baseDraft)}
           onEdit={(patch) => {
             edit(section, patch);
           }}
@@ -673,11 +674,21 @@ interface SectionProps {
   pending: boolean;
   problem: string | undefined;
   saved: boolean;
+  dirty: boolean;
   onEdit: (patch: (current: Draft) => Draft) => void;
   onSubmit: () => void;
 }
 
-function SectionForm({ section, draft, pending, problem, saved, onEdit, onSubmit }: SectionProps) {
+function SectionForm({
+  section,
+  draft,
+  pending,
+  problem,
+  saved,
+  dirty,
+  onEdit,
+  onSubmit,
+}: SectionProps) {
   const titleId = useId();
   const errors = sectionErrors(section, draft);
   const emptyAlert =
@@ -725,7 +736,7 @@ function SectionForm({ section, draft, pending, problem, saved, onEdit, onSubmit
             Salvar
           </button>
           <span role="status" className="notice-inline">
-            {saved ? 'Salvo.' : null}
+            {dirty ? 'Alterações não salvas.' : saved ? 'Salvo.' : null}
           </span>
         </div>
         <p role="alert" className="form-error">

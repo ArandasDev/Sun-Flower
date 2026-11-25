@@ -2,6 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock, FakeWebSocket, lastSocket } from './fake-websocket.ts';
+import { screenFor } from './live.ts';
 import { me, renderApp, stubFetch, type FakeResponse } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -461,5 +462,16 @@ describe('presence list', () => {
     expect(screen.queryByText('Só você por aqui agora.')).toBeNull();
     expect(screen.queryByRole('list', { name: 'Quem está online' })).toBeNull();
     expect(screen.queryByLabelText('Ana — Visão geral')).toBeNull();
+  });
+});
+
+describe('screenFor', () => {
+  it.each([
+    ['/acoes', 'actions'],
+    ['/dominios', 'domains'],
+    ['/moderacao', 'moderation-config'],
+    ['/casos', 'cases'],
+  ])('maps %s to %s', (path, screen) => {
+    expect(screenFor(path)).toBe(screen);
   });
 });

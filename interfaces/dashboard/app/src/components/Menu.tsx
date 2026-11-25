@@ -3,12 +3,19 @@ import { useCurrentMe, useLogout } from '../session.tsx';
 import { PresenceList } from './PresenceList.tsx';
 import { SeedMark } from './SeedMark.tsx';
 
+const ACTION_PERMISSIONS = [
+  'moderation.actions.warn',
+  'moderation.actions.timeout',
+  'moderation.actions.kick',
+  'moderation.actions.ban',
+];
+
 export function Menu() {
   const me = useCurrentMe();
   const logout = useLogout();
   const canSeeOverview = me.level === 'developer' || me.level === 'owner';
   const canSeeCases = me.permissions.includes('moderation.cases.read');
-  const canAct = me.permissions.some((permission) => permission.startsWith('moderation.actions.'));
+  const canAct = ACTION_PERMISSIONS.some((permission) => me.permissions.includes(permission));
   const canManageDomains = me.permissions.includes('moderation.domains.manage');
   const canConfigure = me.permissions.includes('moderation.config.manage');
   return (

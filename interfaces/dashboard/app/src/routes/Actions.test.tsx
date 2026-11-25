@@ -49,6 +49,14 @@ describe('actions screen', () => {
     ]);
   });
 
+  it('moves focus to the result after a send', async () => {
+    setup();
+    await fill();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar aviso' }));
+    const status = await screen.findByText('Caso #9 registrado.');
+    await waitFor(() => expect(status.parentElement).toHaveFocus());
+  });
+
   it('mentions a failed direct message', async () => {
     setup(ALL, () => okBody({ caseId: 3, dmFailed: true }));
     await fill();
