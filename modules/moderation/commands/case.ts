@@ -1,17 +1,7 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
-import type { GuildActionResult } from '../../../shared/contracts/guild.ts';
-import type { CaseRecord } from '../cases.ts';
-import { isLookalike } from '../detection/lookalike.ts';
+import type { CaseDetail, CaseSummary } from '../operations/cases.ts';
 import type { ModCommandDeps } from './mod-command.ts';
-import {
-  CASE_DISMISSED,
-  CASE_NOT_FOUND,
-  CASE_NOT_OPEN,
-  CASE_NOT_REVERTIBLE,
-  CASE_REVERTED,
-  DISCORD_REFUSED,
-  LOOKALIKE_NOT_ALLOWED,
-} from './replies.ts';
+import { CASE_DISMISSED, CASE_NOT_FOUND, CASE_REVERTED } from './replies.ts';
 
 const EPHEMERAL = { ephemeral: true } as const;
 const RECENT_LIMIT = 10;
@@ -22,22 +12,23 @@ const REPLY_MAX = 2000;
 const clip = (text: string): string =>
   text.length > DOMAIN_MAX ? `${text.slice(0, DOMAIN_MAX - 1)}…` : text;
 
-const nowIso = (deps: ModCommandDeps): string => (deps.now ?? (() => new Date()))().toISOString();
-
-function readCase(interaction: CommandInteraction, deps: ModCommandDeps): CaseRecord | undefined {
-  const number = interaction.options.getInteger('number');
-  return number === undefined ? undefined : deps.cases.get(number);
-}
-
 export async function caseView(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const record = readCase(interaction, deps);
-  if (record === undefined) {
+  const number = interaction.options.getInteger('number');
+  if (number === undefined) {
     await interaction.reply(CASE_NOT_FOUND, EPHEMERAL);
     return;
   }
+  const result = await deps.operations.execute('moderation.cases.view', interaction.actor, {
+    id: number,
+  });
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
+    return;
+  }
+  const record = result.data as CaseDetail;
   const lines = [
     `Caso #${String(record.id)}`,
     `Nível: ${record.level ?? 'manual'}`,
@@ -82,7 +73,14 @@ export async function caseList(
   deps: ModCommandDeps,
 ): Promise<void> {
   const user = interaction.options.getUser('user');
-  const records = deps.cases.listRecent(RECENT_LIMIT, user);
+  const result = await deps.operations.execute('moderation.cases.list', interaction.actor, {
+    ...(user === undefined ? {} : { targetUserId: user }),
+  });
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
+    return;
+  }
+  const records = (result.data as { cases: CaseSummary[] }).cases.slice(0, RECENT_LIMIT);
   if (records.length === 0) {
     await interaction.reply('Nenhum caso.', EPHEMERAL);
     return;
@@ -94,83 +92,41 @@ export async function caseList(
   await interaction.reply(lines.join('\n'), EPHEMERAL);
 }
 
-function undoOnDiscord(record: CaseRecord, deps: ModCommandDeps): Promise<GuildActionResult> {
-  switch (record.action) {
-    case 'delete_timeout':
-    case 'timeout':
-      return deps.guild.removeTimeout(record.targetUserId);
-    case 'ban':
-      return deps.guild.unban(record.targetUserId);
-    case 'kick':
-    case 'warn':
-    case 'none':
-      return Promise.resolve({ ok: true });
-  }
-}
-
 export async function caseRevert(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const record = readCase(interaction, deps);
-  if (record === undefined) {
+  const number = interaction.options.getInteger('number');
+  if (number === undefined) {
     await interaction.reply(CASE_NOT_FOUND, EPHEMERAL);
     return;
   }
-  if (record.status !== 'open' && record.status !== 'actioned') {
-    await interaction.reply(CASE_NOT_REVERTIBLE, EPHEMERAL);
+  const result = await deps.operations.execute('moderation.cases.revert', interaction.actor, {
+    id: number,
+    allowDomains: interaction.options.getBoolean('allow-domain') === true,
+  });
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
     return;
   }
-  const allowDomain = interaction.options.getBoolean('allow-domain') === true;
-  // Validate before any Discord call so a refusal leaves everything untouched.
-  if (allowDomain && record.domains.some((domain) => isLookalike(domain))) {
-    await interaction.reply(LOOKALIKE_NOT_ALLOWED, EPHEMERAL);
-    return;
-  }
-
-  const result = await undoOnDiscord(record, deps);
-  if (!result.ok && result.error !== 'not_found') {
-    await interaction.reply(
-      DISCORD_REFUSED(result.error === 'forbidden' ? 'sem permissão' : 'falha'),
-      EPHEMERAL,
-    );
-    return;
-  }
-
-  const now = nowIso(deps);
-  if (!deps.cases.setStatus(record.id, 'reverted', interaction.actor.userId, now)) {
-    await interaction.reply(CASE_NOT_REVERTIBLE, EPHEMERAL);
-    return;
-  }
-  if (allowDomain) {
-    for (const domain of record.domains) {
-      deps.domains.set(domain, 'allow', interaction.actor.userId, now);
-    }
-  }
-  deps.publish('moderation.case.reverted', { caseId: record.id });
-  await interaction.reply(CASE_REVERTED(record.id, deletedMessages(record)), EPHEMERAL);
-}
-
-/** Whether the case removed messages that a revert cannot bring back. */
-function deletedMessages(record: CaseRecord): boolean {
-  if (record.action === 'delete_timeout') return true;
-  const spam = record.kind === 'automatic' && record.rules.length > 0;
-  return (
-    spam &&
-    (record.action === 'kick' || record.action === 'ban') &&
-    Number(record.outcome['deleted'] ?? '0') > 0
-  );
+  const data = result.data as { case: CaseDetail; deletedMessage: boolean };
+  await interaction.reply(CASE_REVERTED(data.case.id, data.deletedMessage), EPHEMERAL);
 }
 
 export async function caseDismiss(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const record = readCase(interaction, deps);
-  if (record === undefined) {
+  const number = interaction.options.getInteger('number');
+  if (number === undefined) {
     await interaction.reply(CASE_NOT_FOUND, EPHEMERAL);
     return;
   }
-  const ok = deps.cases.setStatus(record.id, 'dismissed', interaction.actor.userId, nowIso(deps));
-  await interaction.reply(ok ? CASE_DISMISSED(record.id) : CASE_NOT_OPEN, EPHEMERAL);
+  const result = await deps.operations.execute('moderation.cases.dismiss', interaction.actor, {
+    id: number,
+  });
+  await interaction.reply(
+    result.ok ? CASE_DISMISSED((result.data as CaseDetail).id) : result.error.message,
+    EPHEMERAL,
+  );
 }

@@ -9,8 +9,8 @@ import { CaseStore } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
+import { createLocalOperations } from './operations-harness.ts';
 
 const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const CHANNEL = '333333333333333333';
@@ -60,13 +60,19 @@ function setup(initial: Partial<ModerationConfig> = {}, granted = true) {
   const check = vi.fn(() => granted);
   const guild = createFakeGuild();
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
-  const deps: ModCommandDeps = {
-    permissions: { check, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => current as T, set },
+  const config = { get: <T>() => current as T, set, version: () => 0 };
+  const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
+  const publish = vi.fn();
+  const permissions = { check, isDeveloper: () => false, hasAnyGrant: () => false };
+  const deps = {
+    permissions,
+    config,
+    operations: createLocalOperations({ config, permissions, domains, cases, guild, publish }),
     guild,
-    cases: new CaseStore(ctx.storage),
-    domains: new DomainStore(ctx.storage),
-    publish: vi.fn(),
+    cases,
+    domains,
+    publish,
   };
   return { deps, set, check, guild, command: buildModCommand(deps), current: () => current };
 }
@@ -151,6 +157,14 @@ describe('/mod config', () => {
     expect(reply.mock.calls[0]?.[1]).toEqual({ ephemeral: true });
   });
 
+  it('view reads through moderation.config.view', async () => {
+    const { command, deps } = setup();
+    const execute = vi.spyOn(deps.operations, 'execute');
+    const { value } = interaction('config', 'view');
+    await command.handle(value);
+    expect(execute).toHaveBeenCalledWith('moderation.config.view', ACTOR, {});
+  });
+
   it('view shows placeholders when unset', async () => {
     const { command } = setup();
     const { value, reply } = interaction('config', 'view');
@@ -164,7 +178,7 @@ describe('/mod config', () => {
     const { command, set } = setup();
     const { value, reply } = interaction('config', 'alert-channel', { channel: CHANNEL });
     await command.handle(value);
-    expect(set).toHaveBeenCalledWith({ alertChannelId: CHANNEL });
+    expect(set).toHaveBeenCalledWith({ alertChannelId: CHANNEL }, 0);
     expect(reply).toHaveBeenCalledWith('Configuração atualizada.', { ephemeral: true });
   });
 
@@ -172,7 +186,7 @@ describe('/mod config', () => {
     const { command, set } = setup();
     const { value, reply } = interaction('config', 'timeout', { minutes: 120 });
     await command.handle(value);
-    expect(set).toHaveBeenCalledWith({ timeoutMinutes: 120 });
+    expect(set).toHaveBeenCalledWith({ timeoutMinutes: 120 }, 0);
     expect(reply).toHaveBeenCalledWith('Configuração atualizada.', { ephemeral: true });
   });
 
@@ -180,7 +194,7 @@ describe('/mod config', () => {
     const { command, set } = setup();
     const { value } = interaction('config', 'thresholds', { confirmed: 90, suspicious: 30 });
     await command.handle(value);
-    expect(set).toHaveBeenCalledWith({ thresholds: { confirmed: 90, suspicious: 30 } });
+    expect(set).toHaveBeenCalledWith({ thresholds: { confirmed: 90, suspicious: 30 } }, 0);
   });
 
   it('thresholds 40 40 replies CONFIG_INVALID naming thresholds', async () => {
@@ -195,13 +209,13 @@ describe('/mod config', () => {
     const { command, set } = setup({ exemptRoleIds: [ROLE_A] });
     const add = interaction('config', 'exempt-role', { role: ROLE_A, action: 'add' });
     await command.handle(add.value);
-    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_A] });
+    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_A] }, 0);
     const add2 = interaction('config', 'exempt-role', { role: ROLE_B, action: 'add' });
     await command.handle(add2.value);
-    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_A, ROLE_B] });
+    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_A, ROLE_B] }, 0);
     const remove = interaction('config', 'exempt-role', { role: ROLE_A, action: 'remove' });
     await command.handle(remove.value);
-    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_B] });
+    expect(set).toHaveBeenLastCalledWith({ exemptRoleIds: [ROLE_B] }, 0);
     const absent = interaction('config', 'exempt-role', { role: ROLE_A, action: 'remove' });
     await command.handle(absent.value);
     expect(absent.reply).toHaveBeenCalledWith('Configuração atualizada.', { ephemeral: true });
@@ -236,6 +250,21 @@ describe('/mod config', () => {
     const text = reply.mock.calls[0]?.[0] ?? '';
     expect(text.length).toBeLessThanOrEqual(2000);
     expect(text).toMatch(/… \(\+\d+\)/);
+  });
+
+  it('replies the conflict text when the settings changed in between', async () => {
+    const { command, set } = setup();
+    set.mockImplementation(() => {
+      const error = new Error('stale');
+      error.name = 'ConfigVersionConflictError';
+      throw error;
+    });
+    const { value, reply } = interaction('config', 'timeout', { minutes: 5 });
+    await command.handle(value);
+    expect(reply).toHaveBeenCalledExactlyOnceWith(
+      'Outra pessoa alterou esta configuração. Recarregue para ver a versão atual.',
+      { ephemeral: true },
+    );
   });
 
   it('rethrows unexpected errors from config.set', async () => {

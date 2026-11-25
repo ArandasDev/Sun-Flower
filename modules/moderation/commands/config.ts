@@ -1,5 +1,6 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
 import type { ModerationConfig, Punishment, SpamRuleName } from '../config.ts';
+import type { ConfigSnapshot } from '../operations/config.ts';
 import { formatSteps, parseSteps } from '../spam/escalation.ts';
 import type { ModCommandDeps } from './mod-command.ts';
 import { CONFIG_INVALID, CONFIG_UPDATED, INVALID_OPTION } from './replies.ts';
@@ -8,27 +9,16 @@ const EPHEMERAL = { ephemeral: true } as const;
 const MAX_REPLY = 2000;
 const RULES = ['flood', 'repeat', 'mentions'] as const;
 
-function invalidFields(error: unknown): string | undefined {
-  if (!(error instanceof Error) || error.name !== 'InvalidModuleConfigError') return undefined;
-  const marker = ' at: ';
-  const index = error.message.indexOf(marker);
-  return index === -1 ? error.message : error.message.slice(index + marker.length);
-}
-
 async function applyConfig(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
-  partial: Record<string, unknown>,
+  changes: Record<string, unknown>,
 ): Promise<void> {
-  try {
-    deps.config.set(partial);
-  } catch (error) {
-    const fields = invalidFields(error);
-    if (fields === undefined) throw error;
-    await interaction.reply(CONFIG_INVALID(fields), EPHEMERAL);
-    return;
-  }
-  await interaction.reply(CONFIG_UPDATED, EPHEMERAL);
+  const result = await deps.operations.execute('moderation.config.update', interaction.actor, {
+    expectedVersion: deps.config.version(),
+    changes,
+  });
+  await interaction.reply(result.ok ? CONFIG_UPDATED : result.error.message, EPHEMERAL);
 }
 
 function describePunishment(p: Punishment): string {
@@ -78,7 +68,12 @@ export async function configView(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const config = deps.config.get<ModerationConfig>();
+  const result = await deps.operations.execute('moderation.config.view', interaction.actor, {});
+  if (!result.ok) {
+    await interaction.reply(result.error.message, EPHEMERAL);
+    return;
+  }
+  const { config } = result.data as ConfigSnapshot;
   const channel =
     config.alertChannelId === undefined ? 'não configurado' : `<#${config.alertChannelId}>`;
   const roles =

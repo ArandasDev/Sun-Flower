@@ -3,7 +3,7 @@
   "name": "Moderation",
   "description": "Phishing detection and moderation actions",
   "version": "1.0.0",
-  "apiVersion": "1.2.0",
+  "apiVersion": "1.3.0",
   "entrypoint": "index.ts",
   "enabledByDefault": true,
   "dependencies": [],
@@ -20,6 +20,10 @@
   ],
   "events": {
     "subscribes": ["discord.message.created", "discord.message.updated"],
-    "publishes": ["moderation.case.created", "moderation.case.reverted"]
+    "publishes": [
+      "moderation.case.created",
+      "moderation.case.reverted",
+      "moderation.case.dismissed"
+    ]
   }
 }

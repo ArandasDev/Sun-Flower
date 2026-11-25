@@ -9,8 +9,8 @@ import { createTestModuleStorage } from '../../../tests/helpers/module-storage.t
 import { CaseStore } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { DomainStore } from '../domains.ts';
+import { createLocalOperations } from './operations-harness.ts';
 
 const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const TARGET = '333333333333333333';
@@ -36,16 +36,30 @@ function setup(options: SetupOptions = {}) {
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const publish = vi.fn();
   const developers = new Set(options.developers ?? []);
-  const deps: ModCommandDeps = {
-    permissions: {
-      check: () => true,
-      isDeveloper: (userId) => developers.has(userId),
-      hasAnyGrant: (roleIds, prefix) => prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
-    },
-    config: { get: <T>() => config as T, set: vi.fn() },
+  const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
+  const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
+  const permissions = {
+    check: () => true,
+    isDeveloper: (userId: string) => developers.has(userId),
+    hasAnyGrant: (roleIds: readonly string[], prefix: string) =>
+      prefix === 'moderation.' && roleIds.includes(STAFF_ROLE),
+  };
+  const deps = {
+    permissions,
+    config: configApi,
+    operations: createLocalOperations({
+      config: configApi,
+      permissions,
+      domains,
+      cases,
+      guild,
+      publish,
+      now: () => NOW,
+    }),
     guild,
-    cases: new CaseStore(ctx.storage),
-    domains: new DomainStore(ctx.storage),
+    cases,
+    domains,
     publish,
     now: () => NOW,
   };

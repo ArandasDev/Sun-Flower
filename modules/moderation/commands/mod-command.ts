@@ -6,8 +6,6 @@ import type {
 } from '../../../shared/contracts/commands.ts';
 import type { GuildActions } from '../../../shared/contracts/guild.ts';
 import type { ModuleContext } from '../../../shared/contracts/module.ts';
-import type { CaseStore } from '../cases.ts';
-import type { DomainStore } from '../domains.ts';
 import {
   configAlertChannel,
   configExemptRole,
@@ -26,9 +24,8 @@ import { NO_PERMISSION } from './replies.ts';
 export interface ModCommandDeps {
   readonly permissions: ModuleContext['permissions'];
   readonly config: ModuleContext['config'];
+  readonly operations: Pick<ModuleContext['operations'], 'execute'>;
   readonly guild: GuildActions;
-  readonly cases: CaseStore;
-  readonly domains: DomainStore;
   publish(type: string, payload: unknown): void;
   readonly now?: () => Date;
 }

@@ -11,13 +11,17 @@ function fakeContext(registered: CommandDefinition[]): ModuleContext {
     logger: createRecordingLogger(),
     events: { publish: () => {}, subscribe: () => {} },
     permissions: { check: () => false, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => ({}) as T, set: () => {} },
+    config: { get: <T>() => ({}) as T, set: () => {}, version: () => 0 },
     guild: {} as ModuleContext['guild'],
     storage: {} as ModuleContext['storage'],
     commands: {
       register: (command) => {
         registered.push(command);
       },
+    },
+    operations: {
+      register: () => {},
+      execute: () => Promise.resolve({ ok: false, error: { code: 'not_found', message: '' } }),
     },
   };
 }

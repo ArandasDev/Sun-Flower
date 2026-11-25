@@ -52,6 +52,15 @@ describe('moderation configSchema', () => {
   it('rejects a malformed alertChannelId and accepts a snowflake', () => {
     expect(configSchema.safeParse({ alertChannelId: 'abc' }).success).toBe(false);
     expect(configSchema.safeParse({ alertChannelId: '222222222222222222' }).success).toBe(true);
+    for (const id of [
+      '0222222222222222222',
+      '18446744073709551616',
+      '1'.repeat(21),
+      '1'.repeat(16),
+    ]) {
+      expect(configSchema.safeParse({ alertChannelId: id }).success).toBe(false);
+      expect(configSchema.safeParse({ exemptRoleIds: [id] }).success).toBe(false);
+    }
   });
 
   it('rejects malformed exemptRoleIds', () => {
@@ -125,7 +134,7 @@ describe('moderation configSchema spam block', () => {
   });
 
   it('limits ignoredChannelIds to 25 snowflakes', () => {
-    const ids = (n: number) => Array.from({ length: n }, () => '000000000000000000');
+    const ids = (n: number) => Array.from({ length: n }, () => '111111111111111111');
     expect(spam({ ignoredChannelIds: ids(25) }).success).toBe(true);
     expect(spam({ ignoredChannelIds: ids(26) }).success).toBe(false);
     expect(spam({ ignoredChannelIds: ['abc'] }).success).toBe(false);

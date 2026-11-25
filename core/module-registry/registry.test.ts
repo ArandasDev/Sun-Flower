@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { ModuleContext } from '../../shared/contracts/module.ts';
-import { ModuleConfigStore } from '../configuration/module-config.ts';
+import { ConfigVersionConflictError, ModuleConfigStore } from '../configuration/module-config.ts';
 import { EventBus } from '../event-bus/event-bus.ts';
 import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
+import { InvalidOperationError } from '../operations/operation-registry.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
 import { EntrypointError, resolveEntrypoint } from './entrypoint.ts';
 import { ModuleRegistry, RegistryStateError } from './registry.ts';
@@ -1072,6 +1073,152 @@ export default () => ({
       await registry.stop();
       await expectRefused(context);
     });
+  });
+});
+
+describe('ModuleRegistry operations', () => {
+  const OWNER = { userId: '444444444444444444', roleIds: [], isOwner: true };
+  const PASS_SCHEMA = '{ safeParse: (value) => ({ success: true, data: value }) }';
+  const contextKey = (id: string): string => `${callsKey}_${id}_context`;
+  const takeContext = (id: string): ModuleContext => {
+    const record = globalThis as unknown as Record<string, ModuleContext | undefined>;
+    const context = record[contextKey(id)];
+    Reflect.deleteProperty(globalThis, contextKey(id));
+    if (context === undefined) throw new Error('context not captured');
+    return context;
+  };
+  const operationModule = (
+    id: string,
+    options: { throwInStart?: boolean; registerBody?: string } = {},
+  ): void => {
+    writeModule(id, {
+      manifest: { permissions: [`${id}.items.write`] },
+      rawSource: `export const configSchema = { safeParse: (value) => ({ success: true, data: { greeting: 'hi', ...value } }) };
+export default () => ({
+  async register(ctx) {
+    globalThis[${JSON.stringify(contextKey(id))}] = ctx;
+    ${
+      options.registerBody ??
+      `ctx.operations.register({
+      name: '${id}.items.mine',
+      permission: null,
+      input: ${PASS_SCHEMA},
+      handler: async (actor, input) => ({ ok: true, data: { module: '${id}', input } }),
+    });`
+    }
+  },
+  async initialize() {},
+  async start() { ${options.throwInStart === true ? "throw new Error('start failed');" : ''} },
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+  };
+
+  it('exposes the operations of a running module and drops them when it stops', async () => {
+    operationModule('a');
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.operations.names()).toEqual(['a.items.mine']);
+    await expect(
+      registry.operations.execute('a.items.mine', OWNER, { n: 1 }, 'dashboard'),
+    ).resolves.toEqual({ ok: true, data: { module: 'a', input: { n: 1 } } });
+    await registry.stop();
+    expect(registry.operations.names()).toEqual([]);
+    await expect(
+      registry.operations.execute('a.items.mine', OWNER, {}, 'dashboard'),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'not_found' } });
+  });
+
+  it('drops the operations of a module that fails', async () => {
+    operationModule('a', { throwInStart: true });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'start' });
+    expect(registry.operations.names()).toEqual([]);
+    await registry.stop();
+  });
+
+  it('lets a module execute only its own operations, with source discord', async () => {
+    operationModule('a');
+    operationModule('b');
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const context = takeContext('a');
+    takeContext('b');
+    await expect(context.operations.execute('b.items.mine', OWNER, {})).resolves.toEqual({
+      ok: false,
+      error: { code: 'not_found', message: 'Operação desconhecida.' },
+    });
+    await expect(context.operations.execute('a.items.mine', OWNER, {})).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(logger.calls.map((call) => call.obj)).toContainEqual({
+      module: 'a',
+      operation: 'a.items.mine',
+      source: 'discord',
+      result: 'ok',
+    });
+    await registry.stop();
+  });
+
+  it('fails a module that swallows an invalid operation error', async () => {
+    operationModule('a', {
+      registerBody: `try {
+      ctx.operations.register({ name: 'other.items.mine', permission: null, input: ${PASS_SCHEMA}, handler: async () => ({ ok: true, data: null }) });
+    } catch {}`,
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(registry.status().get('a')).toMatchObject({ state: 'FAILED', failedAt: 'register' });
+    expect(registry.status().get('a')?.error).toMatch(/other\.items\.mine/);
+    expect(registry.operations.names()).toEqual([]);
+    await registry.stop();
+  });
+
+  it('refuses an operation registered after register()', async () => {
+    operationModule('a', { registerBody: '' });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const context = takeContext('a');
+    expect(() => {
+      context.operations.register({
+        name: 'a.items.mine',
+        permission: null,
+        input: { safeParse: (value: unknown) => ({ success: true, data: value }) },
+        handler: () => Promise.resolve({ ok: true, data: null }),
+      });
+    }).toThrow(InvalidOperationError);
+    expect(registry.operations.names()).toEqual([]);
+    await registry.stop();
+  });
+
+  it('config.set with a wrong expectedVersion throws and does not write', async () => {
+    operationModule('a', { registerBody: '' });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    const context = takeContext('a');
+    expect(context.config.version()).toBe(0);
+    context.config.set({ greeting: 'one' }, 0);
+    expect(context.config.version()).toBe(1);
+    context.config.set({ greeting: 'two' });
+    expect(context.config.version()).toBe(2);
+    expect(() => {
+      context.config.set({ greeting: 'three' }, 1);
+    }).toThrow(ConfigVersionConflictError);
+    expect(context.config.version()).toBe(2);
+    expect(context.config.get()).toEqual({ greeting: 'two' });
+    const row = db.prepare('SELECT settings FROM module_config WHERE module_id = ?').get('a') as
+      { settings: string } | undefined;
+    expect(JSON.parse(row?.settings ?? 'null')).toEqual({ greeting: 'two' });
+    await registry.stop();
   });
 });
 

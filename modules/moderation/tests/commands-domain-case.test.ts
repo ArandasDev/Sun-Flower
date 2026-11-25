@@ -7,11 +7,11 @@ import type { GuildActionResult } from '../../../shared/contracts/guild.ts';
 import { createFakeGuild } from '../../../tests/helpers/fake-guild.ts';
 import { createTestModuleStorage } from '../../../tests/helpers/module-storage.ts';
 import { buildModCommand } from '../commands/mod-command.ts';
-import type { ModCommandDeps } from '../commands/mod-command.ts';
 import { CaseStore } from '../cases.ts';
 import type { CaseAction, CaseStatus, NewCase } from '../cases.ts';
 import { configSchema } from '../config.ts';
 import { DomainStore } from '../domains.ts';
+import { createLocalOperations } from './operations-harness.ts';
 
 const ACTOR = { userId: '111111111111111111', roleIds: ['222222222222222222'], isOwner: false };
 const TARGET = '333333333333333333';
@@ -25,12 +25,25 @@ function setup(guildOverrides: Parameters<typeof createFakeGuild>[0] = {}) {
   const guild = createFakeGuild(guildOverrides);
   const ctx = createTestModuleStorage(fileURLToPath(new URL('..', import.meta.url)));
   const publish = vi.fn();
-  const deps: ModCommandDeps = {
-    permissions: { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false },
-    config: { get: <T>() => config as T, set: vi.fn() },
+  const configApi = { get: <T>() => config as T, set: vi.fn(), version: () => 0 };
+  const domains = new DomainStore(ctx.storage);
+  const cases = new CaseStore(ctx.storage);
+  const permissions = { check: () => true, isDeveloper: () => false, hasAnyGrant: () => false };
+  const deps = {
+    permissions,
+    config: configApi,
+    operations: createLocalOperations({
+      config: configApi,
+      permissions,
+      domains,
+      cases,
+      guild,
+      publish,
+      now: () => NOW,
+    }),
     guild,
-    cases: new CaseStore(ctx.storage),
-    domains: new DomainStore(ctx.storage),
+    cases,
+    domains,
     publish,
     now: () => NOW,
   };
@@ -142,6 +155,15 @@ describe('/mod domain', () => {
     expect(text).toBe('Bloqueados:\n`golpe.com`\nPermitidos:\nNenhum domínio.');
   });
 
+  it('list reads through moderation.domains.list', async () => {
+    const t = setup();
+    const execute = vi.spyOn(t.deps.operations, 'execute');
+    await run(t, 'domain', 'list', { list: 'allow' });
+    expect(execute).toHaveBeenCalledExactlyOnceWith('moderation.domains.list', ACTOR, {
+      list: 'allow',
+    });
+  });
+
   it('list block shows only that list and at most 50 domains', async () => {
     const t = setup();
     for (let i = 0; i < 60; i += 1) {
@@ -219,6 +241,15 @@ describe('/mod case view and list', () => {
     expect(text.length).toBeLessThanOrEqual(2000);
     expect(text).toContain('e mais 15');
     expect(text).toContain('…');
+  });
+
+  it('list reads through moderation.cases.list with the user filter', async () => {
+    const t = setup();
+    const execute = vi.spyOn(t.deps.operations, 'execute');
+    await run(t, 'case', 'list', { user: OTHER });
+    expect(execute).toHaveBeenCalledWith('moderation.cases.list', ACTOR, { targetUserId: OTHER });
+    await run(t, 'case', 'list');
+    expect(execute).toHaveBeenLastCalledWith('moderation.cases.list', ACTOR, {});
   });
 
   it('list replies with an empty marker', async () => {
@@ -411,14 +442,14 @@ describe('/mod case revert', () => {
 });
 
 describe('/mod case dismiss', () => {
-  it('dismisses an open case and publishes nothing', async () => {
+  it('dismisses an open case and publishes moderation.case.dismissed', async () => {
     const t = setup();
     const id = seed(t, 'none', { status: 'open' });
     expect(await run(t, 'case', 'dismiss', { number: id })).toBe(`Caso #${String(id)} descartado.`);
     const record = t.deps.cases.get(id);
     expect(record?.status).toBe('dismissed');
     expect(record?.revertedBy).toBe(ACTOR.userId);
-    expect(t.publish).not.toHaveBeenCalled();
+    expect(t.publish).toHaveBeenCalledExactlyOnceWith('moderation.case.dismissed', { caseId: id });
     expect(t.guild.calls).toHaveLength(0);
   });
 

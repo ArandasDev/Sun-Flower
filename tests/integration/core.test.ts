@@ -106,6 +106,40 @@ describe('startCore', () => {
     expect(closedDatabases(close)[0]?.isOpen).toBe(false);
   });
 
+  it('exposes the module operations behind the Core checks', async () => {
+    writeModule(
+      'ops',
+      { ...manifest('ops'), permissions: ['ops.items.write'] },
+      `
+export default () => ({
+  async register(ctx) {
+    ctx.operations.register({
+      name: 'ops.items.write',
+      permission: 'ops.items.write',
+      input: { safeParse: (value) => ({ success: true, data: value }) },
+      handler: async () => ({ ok: true, data: 'done' }),
+    });
+  },
+  async initialize() {},
+  async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`,
+    );
+    const core = await startCore({ dbPath: ':memory:', modulesDir, logger, stepTimeoutMs: 1000 });
+    const member = { userId: '111111111111111111', roleIds: [], isOwner: false };
+    expect(core.operations.names()).toEqual(['ops.items.write']);
+    await expect(
+      core.operations.execute('ops.items.write', member, {}, 'dashboard'),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'forbidden' } });
+    await expect(
+      core.operations.execute('ops.items.write', { ...member, isOwner: true }, {}, 'dashboard'),
+    ).resolves.toEqual({ ok: true, data: 'done' });
+    await core.stop();
+    expect(core.operations.names()).toEqual([]);
+  });
+
   it('closes the database and rethrows when a migration fails', async () => {
     const migrationsDir = path.join(tempDir, 'migrations');
     fs.mkdirSync(migrationsDir);

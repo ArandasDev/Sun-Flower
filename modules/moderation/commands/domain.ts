@@ -1,8 +1,7 @@
 import type { CommandInteraction } from '../../../shared/contracts/commands.ts';
-import { normalizeDomain } from '../detection/links.ts';
 import type { DomainList } from '../domains.ts';
 import type { ModCommandDeps } from './mod-command.ts';
-import { DOMAIN_REMOVED, DOMAIN_SET, DOMAIN_UNKNOWN, INVALID_DOMAIN } from './replies.ts';
+import { DOMAIN_REMOVED, DOMAIN_SET, INVALID_DOMAIN } from './replies.ts';
 
 const EPHEMERAL = { ephemeral: true } as const;
 const LIST_LIMIT = 50;
@@ -13,24 +12,23 @@ const DOMAIN_MAX = 100;
 const clip = (domain: string): string =>
   domain.length > DOMAIN_MAX ? `${domain.slice(0, DOMAIN_MAX - 1)}…` : domain;
 
-function readDomain(interaction: CommandInteraction): string | undefined {
-  const input = interaction.options.getString('domain');
-  return input === undefined ? undefined : normalizeDomain(input);
-}
-
 async function setList(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
   list: DomainList,
 ): Promise<void> {
-  const domain = readDomain(interaction);
-  if (domain === undefined) {
+  const input = interaction.options.getString('domain');
+  if (input === undefined) {
     await interaction.reply(INVALID_DOMAIN, EPHEMERAL);
     return;
   }
-  const now = (deps.now ?? (() => new Date()))();
-  deps.domains.set(domain, list, interaction.actor.userId, now.toISOString());
-  await interaction.reply(DOMAIN_SET(list, domain), EPHEMERAL);
+  const result = await deps.operations.execute(`moderation.domains.${list}`, interaction.actor, {
+    domain: input,
+  });
+  await interaction.reply(
+    result.ok ? DOMAIN_SET(list, (result.data as { domain: string }).domain) : result.error.message,
+    EPHEMERAL,
+  );
 }
 
 export function domainBlock(interaction: CommandInteraction, deps: ModCommandDeps): Promise<void> {
@@ -45,13 +43,18 @@ export async function domainRemove(
   interaction: CommandInteraction,
   deps: ModCommandDeps,
 ): Promise<void> {
-  const domain = readDomain(interaction);
-  if (domain === undefined) {
+  const input = interaction.options.getString('domain');
+  if (input === undefined) {
     await interaction.reply(INVALID_DOMAIN, EPHEMERAL);
     return;
   }
-  const removed = deps.domains.remove(domain);
-  await interaction.reply(removed ? DOMAIN_REMOVED(domain) : DOMAIN_UNKNOWN, EPHEMERAL);
+  const result = await deps.operations.execute('moderation.domains.remove', interaction.actor, {
+    domain: input,
+  });
+  await interaction.reply(
+    result.ok ? DOMAIN_REMOVED((result.data as { domain: string }).domain) : result.error.message,
+    EPHEMERAL,
+  );
 }
 
 export async function domainList(
@@ -62,10 +65,21 @@ export async function domainList(
   const lists: readonly DomainList[] =
     chosen === 'block' ? ['block'] : chosen === 'allow' ? ['allow'] : ['block', 'allow'];
   const budget = Math.floor(REPLY_BUDGET / lists.length);
-  const sections = lists.map((list) => {
+  const sections: string[] = [];
+  for (const list of lists) {
     const header = list === 'block' ? 'Bloqueados:' : 'Permitidos:';
-    const domains = deps.domains.list(list, LIST_LIMIT);
-    if (domains.length === 0) return `${header}\nNenhum domínio.`;
+    const result = await deps.operations.execute('moderation.domains.list', interaction.actor, {
+      list,
+    });
+    if (!result.ok) {
+      await interaction.reply(result.error.message, EPHEMERAL);
+      return;
+    }
+    const domains = (result.data as { domains: string[] }).domains.slice(0, LIST_LIMIT);
+    if (domains.length === 0) {
+      sections.push(`${header}\nNenhum domínio.`);
+      continue;
+    }
     const lines: string[] = [];
     let used = header.length + MORE_RESERVE;
     for (const domain of domains) {
@@ -77,7 +91,7 @@ export async function domainList(
     if (lines.length < domains.length) {
       lines.push(`… (+${String(domains.length - lines.length)})`);
     }
-    return [header, ...lines].join('\n');
-  });
+    sections.push([header, ...lines].join('\n'));
+  }
   await interaction.reply(sections.join('\n'), EPHEMERAL);
 }

@@ -155,6 +155,46 @@ export class CaseStore {
       .map(toRecord);
   }
 
+  /** Cases in descending `id` order, one page at a time; `before` is the last `id` already seen. */
+  listPage(query: {
+    status?: CaseStatus;
+    rule?: SpamRuleName;
+    targetUserId?: string;
+    before?: number;
+    limit: number;
+  }): CaseRecord[] {
+    const where: string[] = [];
+    const params: SqlValue[] = [];
+    if (query.status !== undefined) {
+      where.push('status = ?');
+      params.push(query.status);
+    }
+    if (query.targetUserId !== undefined) {
+      where.push('target_user_id = ?');
+      params.push(query.targetUserId);
+    }
+    if (query.before !== undefined) {
+      where.push('id < ?');
+      params.push(query.before);
+    }
+    if (query.rule !== undefined) {
+      where.push(
+        "EXISTS (SELECT 1 FROM json_each(moderation_cases.rules) WHERE json_extract(value, '$.rule') = ?)",
+      );
+      params.push(query.rule);
+    }
+    params.push(query.limit);
+    const clause = where.length === 0 ? '' : `WHERE ${where.join(' AND ')}`;
+    return this.storage
+      .all<CaseRow>(`SELECT * FROM moderation_cases ${clause} ORDER BY id DESC LIMIT ?`, params)
+      .map(toRecord);
+  }
+
+  /** The latest cases where the user is the target, newest `id` first. */
+  listForTarget(targetUserId: string, limit: number): CaseRecord[] {
+    return this.listPage({ targetUserId, limit });
+  }
+
   /** Automatic spam cases (non-empty `rules`) that were actioned since the given instant. */
   countActionedSpamSince(targetUserId: string, sinceIso: string): number {
     const row = this.storage.get<{ total: number }>(

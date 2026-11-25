@@ -1,7 +1,8 @@
-import type { CommandDefinition } from '../../shared/contracts/commands.ts';
+import type { Actor, CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
+import type { OperationResult, OperationSource } from '../../shared/contracts/operations.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
 import { EventBus } from '../event-bus/event-bus.ts';
 import { UNAVAILABLE_GUILD } from '../guild/module-guild.ts';
@@ -31,6 +32,16 @@ export interface CoreHandle {
   subscribe(type: string, handler: EventHandler): () => void;
   /** The permissions declared by the manifests of the loaded modules. */
   declaredPermissions(): ReadonlySet<string>;
+  /** The module operations; the Core checks module state, permission and input before each one. */
+  readonly operations: {
+    names(): string[];
+    execute(
+      name: string,
+      actor: Actor,
+      input: unknown,
+      source: OperationSource,
+    ): Promise<OperationResult>;
+  };
   /**
    * Publishes a `discord.*` or `core.*` event with source `core`. Once stop() has begun the event is
    * dropped with a warning instead of thrown.
@@ -100,6 +111,11 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
       sessions,
       subscribe: (type, handler) => events.subscribeFromCore(type, handler),
       declaredPermissions: () => started.declaredPermissions(),
+      operations: Object.freeze({
+        names: () => started.operations.names(),
+        execute: (name: string, actor: Actor, input: unknown, source: OperationSource) =>
+          started.operations.execute(name, actor, input, source),
+      }),
       publishCoreEvent: (type, payload, context) => {
         if (stopping !== undefined) {
           logger.warn({ event: type }, 'core event dropped: core is stopping');

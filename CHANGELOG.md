@@ -22,6 +22,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Diretório de membros e estado da conexão na interface Discord, que publica `core.discord.connection.changed`.
 - App React do painel: login, perfil, visão geral, conexão ao vivo com reconexão automática (a espera só volta a 1 s depois de uma conexão estável) e presença de quem está no painel.
 - Documentação de hospedagem do painel (Caddy, Nginx e túnel), das variáveis, do endereço de retorno no Discord e do teste manual da etapa 1.
+- Core 1.3.0: operações de módulo (`ctx.operations`), com checagem de módulo, permissão e entrada antes do handler, erros tipados e log sem dados.
+- O módulo `moderation` expõe operações de configuração, domínios, casos e ações manuais (`moderation.config.*`, `moderation.domains.*`, `moderation.cases.*`, `moderation.actions.*`), e o `/mod` passou a usá-las, com as respostas inalteradas.
+- Evento `moderation.case.dismissed`, publicado quando um caso é descartado.
 
 ### Changed
 
