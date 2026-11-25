@@ -1,17 +1,10 @@
 import type { CommandDefinition } from '../../shared/contracts/commands.ts';
+import type { ModuleState } from '../../shared/contracts/module.ts';
 
 const COMMAND_NAME = /^[a-z0-9_-]{1,32}$/;
 const MAX_DESCRIPTION = 100;
 
-export type ModuleState =
-  | 'DISCOVERED'
-  | 'VALIDATED'
-  | 'REGISTERED'
-  | 'INITIALIZED'
-  | 'RUNNING'
-  | 'STOPPED'
-  | 'DISPOSED'
-  | 'FAILED';
+export type { ModuleState };
 
 export interface ModuleStatus {
   readonly state: ModuleState;
@@ -26,8 +19,9 @@ const TRANSITIONS: Record<ModuleState, readonly ModuleState[]> = {
   INITIALIZED: ['RUNNING', 'FAILED'],
   RUNNING: ['STOPPED', 'FAILED'],
   STOPPED: ['DISPOSED', 'FAILED'],
-  DISPOSED: [],
-  FAILED: [],
+  // Only ModuleRegistry.setEnabled() takes a module back to VALIDATED, to start a new instance.
+  DISPOSED: ['VALIDATED'],
+  FAILED: ['VALIDATED'],
 };
 
 export function canTransition(from: ModuleState, to: ModuleState): boolean {

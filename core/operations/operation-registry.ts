@@ -29,7 +29,8 @@ const WRAPPER_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 const NOT_FOUND = fail('not_found', 'Operação desconhecida.');
-const UNAVAILABLE = fail('unavailable', 'Módulo indisponível.');
+/** The result of an operation whose module is not running. */
+export const UNAVAILABLE = fail('unavailable', 'Módulo indisponível.');
 const FORBIDDEN = fail('forbidden', 'Você não tem permissão para isso.');
 const FAILED = fail('failed', 'Erro interno.');
 const ERROR_CODES: ReadonlySet<string> = new Set<OperationErrorCode>([

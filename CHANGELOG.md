@@ -36,6 +36,13 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Eventos ao vivo de caso atualizam cada consulta no máximo uma vez a cada 5 s, sempre aplicando o último; um caso novo recarrega só a primeira página da lista.
 - Uma resposta 401 de qualquer operação do painel leva ao login, como já acontecia com as consultas.
 - Teste manual da etapa 2 e limites conhecidos no README: ainda não é possível limpar o canal de alertas (no painel, campo vazio mantém o atual) nem editar os `baitTerms`, nem no painel nem no `/mod`.
+- Core 1.4.0 (aditivo), PR M da etapa 3 do painel:
+  - capacidade `core.admin`, que libera `context.admin` e é a única a poder declarar permissões `core.*`;
+  - ligar e desligar módulos em tempo de execução, em fila, com recusa de módulos com `core.admin` e de dependências ativas, e ressincronização dos comandos no Discord; uma falha ao ligar deixa o módulo ligado, e o log de alteração a registra com `result: 'failed'`;
+  - logs recentes em memória (500 entradas de nível `info` ou acima, com redação de IDs, também em nomes de campo e números, e de campos sensíveis);
+  - listagem de sessões do painel por referência opaca, sem o hash;
+  - serviço `admin` (desenvolvedores, permissões de cargos, módulos, logs e sessões), com log de alteração de IDs mascarados.
+- Módulo `administration` (decisão 0023), com uma operação para cada função do serviço `admin` (`administration.grants.*`, `developers.*`, `modules.*`, `logs.recent` e `sessions.*`), não desligável pelo painel.
 
 ### Changed
 

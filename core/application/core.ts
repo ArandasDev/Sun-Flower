@@ -3,11 +3,13 @@ import type { EventContext, EventHandler } from '../../shared/contracts/events.t
 import type { GuildActions } from '../../shared/contracts/guild.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { OperationResult, OperationSource } from '../../shared/contracts/operations.ts';
+import { createAdminService } from '../administration/admin-service.ts';
 import { ModuleConfigStore } from '../configuration/module-config.ts';
 import { EventBus } from '../event-bus/event-bus.ts';
 import { UNAVAILABLE_GUILD } from '../guild/module-guild.ts';
 import { openDatabase } from '../infrastructure/database.ts';
 import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
+import type { RecentLogs } from '../infrastructure/recent-logs.ts';
 import { ModuleRegistry, type ModuleStatus } from '../module-registry/registry.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
 import { PURGE_INTERVAL_MS, SessionStore } from '../sessions/session-store.ts';
@@ -21,6 +23,8 @@ export interface StartCoreOptions {
   readonly migrationsDir?: string;
   /** The Discord port given to modules; defaults to one where every action fails. */
   readonly guild?: GuildActions;
+  /** The in-memory log ring behind the admin service; without it the admin logs are empty. */
+  readonly recentLogs?: RecentLogs;
 }
 
 export interface CoreHandle {
@@ -78,6 +82,16 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
     runMigrations(db, options.migrationsDir ?? MIGRATIONS_DIR);
     const permissions = new PermissionService(db);
     const sessions = new SessionStore(db);
+    const admin = createAdminService({
+      permissions,
+      sessions,
+      registry: () => {
+        if (registry === undefined) throw new Error('Module registry is not available');
+        return registry;
+      },
+      ...(options.recentLogs === undefined ? {} : { recentLogs: options.recentLogs }),
+      logger,
+    });
     registry = new ModuleRegistry({
       modulesDir: options.modulesDir,
       logger,
@@ -86,6 +100,7 @@ export async function startCore(options: StartCoreOptions): Promise<CoreHandle> 
       config: new ModuleConfigStore(db),
       db,
       guild: options.guild ?? UNAVAILABLE_GUILD,
+      admin,
       ...(options.stepTimeoutMs === undefined ? {} : { stepTimeoutMs: options.stepTimeoutMs }),
     });
     await registry.load();

@@ -48,6 +48,7 @@ function toRecord(row: SessionRow): SessionRecord {
 export class SessionStore {
   readonly #db: DatabaseSync;
   readonly #now: () => number;
+  readonly #listeners = new Set<(idHashes: readonly string[]) => void>();
 
   constructor(db: DatabaseSync, now: () => number = Date.now) {
     this.#db = db;
@@ -113,6 +114,69 @@ export class SessionStore {
     return Number(
       this.#db.prepare('DELETE FROM panel_sessions WHERE user_id = ?').run(userId).changes,
     );
+  }
+
+  /** Live sessions (same expiry rule as `peek`), newest first. */
+  list(): SessionRecord[] {
+    const rows = this.#db
+      .prepare('SELECT * FROM panel_sessions ORDER BY created_at DESC, id_hash')
+      .all() as unknown as SessionRow[];
+    const now = this.#now();
+    return rows
+      .map(toRecord)
+      .filter(
+        (record) =>
+          Number.isFinite(record.expiresAt) &&
+          Number.isFinite(record.lastSeenAt) &&
+          now <= record.expiresAt &&
+          now <= record.lastSeenAt + IDLE_EXPIRY_MS,
+      );
+  }
+
+  /** An opaque, stable reference for a session; the hash itself never leaves the Core. */
+  refOf(idHash: string): string {
+    return createHash('sha256').update(`ref:${idHash}`).digest('hex').slice(0, 16);
+  }
+
+  /** Deletes the session with this reference. Notifies listeners only if one was deleted. */
+  revokeByRef(ref: string): boolean {
+    const rows = this.#db.prepare('SELECT id_hash FROM panel_sessions').all() as unknown as {
+      id_hash: string;
+    }[];
+    const match = rows.find((row) => this.refOf(row.id_hash) === ref);
+    if (match === undefined) return false;
+    this.deleteByHash(match.id_hash);
+    this.#notify([match.id_hash]);
+    return true;
+  }
+
+  /** Deletes every session of the user. Notifies listeners once, only if any was deleted. */
+  revokeForUser(userId: string): number {
+    const rows = this.#db
+      .prepare('SELECT id_hash FROM panel_sessions WHERE user_id = ?')
+      .all(userId) as unknown as { id_hash: string }[];
+    if (rows.length === 0) return 0;
+    const removed = this.deleteForUser(userId);
+    this.#notify(rows.map((row) => row.id_hash));
+    return removed;
+  }
+
+  /** Listens to revocations made by `revokeByRef` and `revokeForUser`. Returns the unsubscribe function. */
+  onRevoked(listener: (idHashes: readonly string[]) => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  #notify(idHashes: readonly string[]): void {
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener(idHashes);
+      } catch {
+        // A faulty listener must not stop the others or undo the revocation.
+      }
+    }
   }
 
   purgeExpired(): number {

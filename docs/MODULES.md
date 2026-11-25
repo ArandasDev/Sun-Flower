@@ -143,18 +143,23 @@ Esse arquivo será responsável por declarar sua identidade, versão, compatibil
 | Campo               | Tipo     | Valor padrão | Regra                                                                                      |
 | ------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------ |
 | `enabledByDefault`  | boolean  | `false`      | Se o módulo é ativado na primeira execução, antes de qualquer configuração administrativa. |
-| `capabilities`      | string[] | `[]`         | Capacidades do serviço `guild` que o módulo usa (ver abaixo).                              |
+| `capabilities`      | string[] | `[]`         | Capacidades que o módulo usa: ações do `guild` e o serviço `admin` (ver abaixo).           |
 | `events.subscribes` | string[] | `[]`         | Eventos que o módulo consome.                                                              |
 | `events.publishes`  | string[] | `[]`         | Eventos que o módulo publica.                                                              |
 
 Campos não listados nas seções 4.2 e 4.3 tornam o manifesto inválido.
 
-**Capacidades (`capabilities`).** O serviço `guild` do contexto só executa ações no servidor que o manifesto declarou. Valores aceitos:
+**Capacidades (`capabilities`).** Uma capacidade libera uma parte do contexto que o manifesto precisa declarar: as ações do serviço `guild` no servidor ou o serviço `admin`. Valores aceitos:
 
-| Capacidade       | Libera                                                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `guild.moderate` | `deleteMessage`, `bulkDeleteMessages`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`. |
-| `guild.message`  | `sendMessage`.                                                                                                                       |
+| Capacidade       | Libera                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guild.moderate` | `deleteMessage`, `bulkDeleteMessages`, `timeout`, `removeTimeout`, `kick`, `ban`, `unban`, `sendDirectMessage` e `getMemberRoleIds`.            |
+| `guild.message`  | `sendMessage`.                                                                                                                                  |
+| `core.admin`     | O serviço `admin` do contexto (`context.admin`): desenvolvedores, permissões de cargos, ativação de módulos, logs recentes e sessões do painel. |
+
+**`core.admin` e `context.admin`.** Só um manifesto com `core.admin` pode declarar permissões `core.*` (um manifesto de outro módulo com `core.*` é recusado com `permission "<p>" must start with "<id>."`), e só ele usa `context.admin`: em qualquer outro módulo, chamar o serviço lança `Module "<id>" lacks capability core.admin`. As funções recebem o ator como primeiro argumento e devolvem `OperationResult`, exceto as de listagem (dados simples) e `modules.setEnabled` (uma `Promise`). Não chame `setEnabled` dentro do ciclo de vida do próprio módulo. O módulo `administration` é o único que declara `core.admin`; um Pull Request que a adicione a outro módulo exige uma decisão própria ([0023](decisions/0023-administration-module.md)).
+
+**Nome de comando e ativação em tempo de execução.** Quando módulos são ligados e desligados com o Core em execução, um nome de comando tomado por outro módulo enquanto o seu estava desligado faz o seu `register` falhar ao ser ligado de novo.
 
 Chamar uma ação sem a capacidade correspondente lança erro e o Core registra o aviso. Os resultados das ações são `{ ok: true }` ou `{ ok: false, error }`, com `error` igual a `forbidden`, `not_found` ou `failed`, exceto `bulkDeleteMessages`, descrito abaixo. O `reason` repassado a `timeout`, `kick` e `ban` é registrado em log pelo Core, com toda sequência de 17 a 20 dígitos trocada por `[id]`; o Discord recebe o motivo original. Mesmo assim, nunca inclua nele conteúdo de mensagens. Depois que o módulo fica `FAILED` ou `STOPPED`, toda ação devolve `{ ok: false, error: 'failed' }` sem chegar ao Discord (`getMemberRoleIds` devolve `undefined`), e o Core registra o aviso. Um resultado `failed` não garante que a ação não aconteceu: o limite de 10 s não cancela a chamada ao Discord, que pode ser concluída depois. O módulo não deve presumir que uma ação `failed` não foi aplicada.
 
@@ -335,6 +340,16 @@ Quando uma etapa falha para um módulo, o Core:
 4. Não inicia os módulos que dependem dele, marcando-os também como `FAILED`.
 5. Continua o ciclo de vida dos demais módulos.
 
+### 6.11. Ligar e desligar em tempo de execução
+
+O serviço `admin` pode ligar e desligar um módulo com o Core em execução. Por isso, o ciclo de vida de um módulo pode se repetir no mesmo processo:
+
+- **Desligar** um módulo em `RUNNING` chama `stop()` e `dispose()`, e o módulo fica em `DISPOSED`. Desligar um módulo em `FAILED`, ou um que nunca iniciou, só grava o estado desligado.
+- **Ligar** de novo um módulo em `DISPOSED` ou `FAILED` o leva de volta a `VALIDATED` e cria outra instância: o Core chama a função exportada pelo `entrypoint` outra vez, roda as migrações do módulo de novo (as já aplicadas são puladas) e chama `register()`, `initialize()` e `start()` com um contexto novo. Como numa primeira inicialização, `config.get()` e `config.set()` só funcionam a partir de `initialize()`.
+- **O contexto antigo fica inativo.** Depois que a instância antiga para ou falha, o contexto dela não publica nem recebe eventos, não registra comandos nem operações, não executa ações no servidor, não usa o `storage`, não grava configurações e não usa o serviço `admin`. O módulo não deve guardar estado em variáveis do arquivo esperando reencontrá-lo na nova instância: o que precisa durar vai para o `storage` ou para as configurações.
+- **Uma falha ao ligar deixa o módulo ligado.** O estado ligado é gravado antes de iniciar. Se `register()`, `initialize()` ou `start()` falhar, o módulo fica em `FAILED`, continua gravado como ligado e é tentado de novo na próxima inicialização do bot. O log de alteração registra a tentativa com `result: 'failed'`.
+- **Um dependente não volta sozinho.** Um módulo que ficou em `FAILED` porque uma dependência estava desligada continua em `FAILED` depois que a dependência é ligada: ele precisa ser ligado de novo, ou o bot reiniciado.
+
 ## 7. Comunicação entre Módulos
 
 A comunicação entre módulos deverá ocorrer por mecanismos disponibilizados pelo Core.
@@ -404,7 +419,7 @@ Exemplo:
 
 Um módulo só publica eventos cujo prefixo `<origem>` é o seu próprio id. O prefixo `discord.` é reservado à interface do Discord: um manifesto que declare publicar `discord.*` é recusado. Os módulos apenas consomem esses eventos (`discord.message.created`, `discord.message.updated`), declarando-os em `events.subscribes`.
 
-O prefixo `core.` também é reservado, ao Core, e vale a mesma recusa no manifesto. O Core publica `core.config.changed` (configurações de um módulo alteradas, com a nova versão), `core.module.state.changed` (módulo ativado, desativado ou com falha) e `core.discord.connection.changed` (conexão do bot com o Discord). As interfaces os recebem por `subscribe`; módulos podem consumi-los em `events.subscribes`.
+O prefixo `core.` também é reservado, ao Core, e vale a mesma recusa no manifesto. O Core publica `core.config.changed` (configurações de um módulo alteradas, com a nova versão), `core.module.state.changed` (módulo ativado, desativado ou com falha; também com o estado de sempre quando só muda o estado ligado gravado, como ao desligar um módulo em `FAILED`) e `core.discord.connection.changed` (conexão do bot com o Discord). As interfaces os recebem por `subscribe`; módulos podem consumi-los em `events.subscribes`.
 
 ### 7.3. Regras de comunicação
 

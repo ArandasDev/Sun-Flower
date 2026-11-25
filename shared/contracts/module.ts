@@ -1,3 +1,4 @@
+import type { AdminService } from './admin.ts';
 import type { Actor, CommandDefinition } from './commands.ts';
 import type { GuildActions } from './guild.ts';
 import type { EventContext, EventHandler } from './events.ts';
@@ -5,9 +6,19 @@ import type { Logger } from './logger.ts';
 import type { OperationDefinition, OperationResult } from './operations.ts';
 import type { ModuleStorage } from './storage.ts';
 
-export const CORE_API_VERSION = '1.3.0';
+export const CORE_API_VERSION = '1.4.0';
 
-export type Capability = 'guild.moderate' | 'guild.message';
+export type ModuleState =
+  | 'DISCOVERED'
+  | 'VALIDATED'
+  | 'REGISTERED'
+  | 'INITIALIZED'
+  | 'RUNNING'
+  | 'STOPPED'
+  | 'DISPOSED'
+  | 'FAILED';
+
+export type Capability = 'guild.moderate' | 'guild.message' | 'core.admin';
 
 export interface ModuleManifest {
   readonly id: string;
@@ -46,6 +57,8 @@ export interface ModuleContext {
     version(): number;
   };
   readonly guild: GuildActions;
+  /** Every method throws unless the manifest declares `core.admin`. */
+  readonly admin: AdminService;
   readonly storage: ModuleStorage;
   readonly commands: { register(command: CommandDefinition): void };
   readonly operations: {

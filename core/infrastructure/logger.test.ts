@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
 import { createLogger } from './logger.ts';
+import { RecentLogs } from './recent-logs.ts';
 
 function sink(lines: string[]): Writable {
   return new Writable({
@@ -81,6 +82,38 @@ describe('createLogger', () => {
       l.child({ token: 'fake' }).info('x');
     });
     expect(entry).toMatchObject({ token: '[REDACTED]' });
+  });
+
+  it('feeds recent at info while the destination keeps its own level', () => {
+    const lines: string[] = [];
+    const recent = new RecentLogs();
+    const logger = createLogger({ level: 'error', destination: sink(lines), recent });
+    logger.info('only recent');
+    logger.error('both');
+    expect(lines).toHaveLength(1);
+    expect(recent.recent({ limit: 10, minLevel: 'info' }).map((e) => e.message)).toEqual([
+      'both',
+      'only recent',
+    ]);
+  });
+
+  it('keeps debug on the destination but out of recent when the level is debug', () => {
+    const lines: string[] = [];
+    const recent = new RecentLogs();
+    const logger = createLogger({ level: 'debug', destination: sink(lines), recent });
+    logger.debug('dbg');
+    logger.info('inf');
+    expect(lines).toHaveLength(2);
+    expect(recent.recent({ limit: 10, minLevel: 'info' }).map((e) => e.message)).toEqual(['inf']);
+  });
+
+  it('feeds info to recent but not to the destination when the level is warn', () => {
+    const lines: string[] = [];
+    const recent = new RecentLogs();
+    const logger = createLogger({ level: 'warn', destination: sink(lines), recent });
+    logger.info('inf');
+    expect(lines).toHaveLength(0);
+    expect(recent.recent({ limit: 10, minLevel: 'info' })).toHaveLength(1);
   });
 
   it('respects the level', () => {

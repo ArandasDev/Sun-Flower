@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuildActionResult, GuildActions } from '../../shared/contracts/guild.ts';
+import type { AdminService } from '../../shared/contracts/admin.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import type { ModuleContext } from '../../shared/contracts/module.ts';
 import { ConfigVersionConflictError, ModuleConfigStore } from '../configuration/module-config.ts';
@@ -13,7 +14,7 @@ import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import { InvalidOperationError } from '../operations/operation-registry.ts';
 import { PermissionService } from '../permissions/permission-service.ts';
 import { EntrypointError, resolveEntrypoint } from './entrypoint.ts';
-import { ModuleRegistry, RegistryStateError } from './registry.ts';
+import { CommandRegistrationError, ModuleRegistry, RegistryStateError } from './registry.ts';
 
 interface LogCall {
   readonly level: string;
@@ -151,8 +152,13 @@ const fakeGuild: GuildActions = {
   getMemberRoleIds: () => Promise.resolve([]),
 };
 
-function createRegistry(stepTimeoutMs = 50): ModuleRegistry {
+const fakeAdmin = {
+  developers: { list: () => [{ userId: '1', addedAt: 't' }] },
+} as unknown as AdminService;
+
+function createRegistry(stepTimeoutMs = 50, admin?: AdminService): ModuleRegistry {
   return new ModuleRegistry({
+    ...(admin === undefined ? {} : { admin }),
     modulesDir,
     logger,
     events: bus,
@@ -967,6 +973,63 @@ export default () => ({
     await registry.stop();
   });
 
+  it('gates context.admin on the core.admin capability', async () => {
+    const source = (id: string): string => `${recorder()}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {},
+    async start() {
+      try {
+        calls.push(${JSON.stringify(id)} + ':admin:' + JSON.stringify(context.admin.developers.list()));
+      } catch (error) {
+        calls.push(${JSON.stringify(id)} + ':admin:' + error.message);
+      }
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`;
+    writeModule('plain', { rawSource: source('plain') });
+    writeModule('boss', { rawSource: source('boss'), manifest: { capabilities: ['core.admin'] } });
+    const registry = createRegistry(50, fakeAdmin);
+    await registry.load();
+    await registry.start();
+    expect([...calls()].sort()).toEqual([
+      'boss:admin:[{"userId":"1","addedAt":"t"}]',
+      'plain:admin:Module "plain" lacks capability core.admin',
+    ]);
+    await registry.stop();
+  });
+
+  it('context.admin throws while the registry has no admin service', async () => {
+    writeModule('boss', {
+      rawSource: `${recorder()}
+export default () => {
+  let context;
+  return {
+    async register(ctx) { context = ctx; },
+    async initialize() {},
+    async start() {
+      try { context.admin.logs.recent({ limit: 1, minLevel: 'info' }); }
+      catch (error) { calls.push('boss:' + error.message); }
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+      manifest: { capabilities: ['core.admin'] },
+    });
+    const registry = createRegistry();
+    await registry.load();
+    await registry.start();
+    expect(calls()).toEqual(['boss:Admin service is not available']);
+    await registry.stop();
+  });
+
   it('guild is gated by the manifest capabilities', async () => {
     const source = (id: string): string => `${recorder()}
 export default () => {
@@ -1219,6 +1282,621 @@ export default () => ({
       { settings: string } | undefined;
     expect(JSON.parse(row?.settings ?? 'null')).toEqual({ greeting: 'two' });
     await registry.stop();
+  });
+});
+
+describe('ModuleRegistry setEnabled', () => {
+  const OWNER = { userId: '444444444444444444', roleIds: [], isOwner: true };
+  const EVENT = 'discord.test.pinged';
+  const STALE_EVENT = 'a.thing.done';
+  const flags = globalThis as unknown as Record<string, boolean | undefined>;
+  const failKey = (id: string): string => `${callsKey}_${id}_failStart`;
+  const failStart = (id: string, fail: boolean): void => {
+    if (fail) flags[failKey(id)] = true;
+    else Reflect.deleteProperty(globalThis, failKey(id));
+  };
+
+  interface ToggleOptions {
+    readonly dependencies?: string[];
+    readonly enabledByDefault?: boolean;
+    readonly capabilities?: string[];
+  }
+
+  /** A module with a command, an operation and a subscription; each instance is numbered. */
+  const toggleModule = (id: string, options: ToggleOptions = {}): void => {
+    const name = JSON.stringify(id);
+    writeModule(id, {
+      ...(options.dependencies === undefined ? {} : { dependencies: options.dependencies }),
+      ...(options.enabledByDefault === undefined
+        ? {}
+        : { enabledByDefault: options.enabledByDefault }),
+      manifest: {
+        capabilities: options.capabilities ?? [],
+        permissions: [`${id}.items.write`],
+        events: { subscribes: [EVENT], publishes: [] },
+      },
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+let instances = 0;
+export default () => {
+  instances += 1;
+  const instance = instances;
+  const mark = (step) => calls.push(${name} + ':' + step + ':' + instance);
+  mark('factory');
+  return {
+    async register(ctx) {
+      ctx.commands.register({ name: ${JSON.stringify(`${id}-cmd`)}, description: 'Test command', handle: async () => {} });
+      ctx.operations.register({
+        name: ${JSON.stringify(`${id}.items.mine`)},
+        permission: null,
+        input: { safeParse: (value) => ({ success: true, data: value }) },
+        handler: async () => ({ ok: true, data: instance }),
+      });
+      ctx.events.subscribe(${JSON.stringify(EVENT)}, () => { mark('event'); });
+    },
+    async initialize() {},
+    async start() {
+      mark('start');
+      if (globalThis[${JSON.stringify(failKey(id))}] === true) throw new Error(${name} + ' start failed');
+    },
+    async stop() { mark('stop'); },
+    async dispose() { mark('dispose'); },
+  };
+};
+`,
+    });
+  };
+
+  const started = async (): Promise<ModuleRegistry> => {
+    const registry = createRegistry(1000);
+    await registry.load();
+    await registry.start();
+    return registry;
+  };
+
+  const ping = async (): Promise<string[]> => {
+    const before = calls().length;
+    bus.publishFromCore(EVENT, {});
+    await bus.idle();
+    return calls().slice(before);
+  };
+
+  afterEach(() => {
+    for (const key of Object.keys(globalThis)) {
+      if (key.startsWith(`${callsKey}_`)) Reflect.deleteProperty(globalThis, key);
+    }
+  });
+
+  it('lists the modules in dependency order, then the failed ones outside it', async () => {
+    toggleModule('b', { dependencies: ['a'] });
+    toggleModule('a');
+    toggleModule('boss', { capabilities: ['core.admin'] });
+    toggleModule('orphan', { dependencies: ['ghost'] });
+    fs.mkdirSync(path.join(modulesDir, 'broken'));
+    fs.writeFileSync(path.join(modulesDir, 'broken', 'manifest.json'), '{}');
+    const registry = await started();
+
+    const entries = registry.entries();
+    expect(entries.map((entry) => entry.id)).toEqual(['a', 'b', 'boss', 'orphan']);
+    expect(entries[0]).toEqual({
+      id: 'a',
+      name: 'a',
+      description: 'Test module a',
+      version: '1.0.0',
+      state: 'RUNNING',
+      enabled: true,
+      canDisable: true,
+      dependencies: [],
+      dependents: ['b'],
+    });
+    expect(entries[2]).toMatchObject({ id: 'boss', canDisable: false, dependents: [] });
+    expect(entries[3]).toMatchObject({
+      id: 'orphan',
+      state: 'FAILED',
+      failedAt: 'dependencies',
+      dependencies: ['ghost'],
+    });
+    expect(entries[3]).not.toHaveProperty('error');
+    await registry.stop();
+  });
+
+  it('disables a running module and releases its commands, operations and events', async () => {
+    toggleModule('a');
+    toggleModule('c');
+    const registry = await started();
+    expect(await ping()).toEqual(expect.arrayContaining(['a:event:1', 'c:event:1']));
+
+    const outcome = await registry.setEnabled('a', false);
+
+    expect(outcome).toMatchObject({
+      kind: 'changed',
+      entry: { state: 'DISPOSED', enabled: false },
+    });
+    expect(stateOf(registry, 'a')).toBe('DISPOSED');
+    expect(calls()).toEqual(expect.arrayContaining(['a:stop:1', 'a:dispose:1']));
+    expect([...registry.commands().keys()]).toEqual(['c-cmd']);
+    expect(registry.operations.names()).toEqual(['c.items.mine']);
+    expect(await ping()).toEqual(['c:event:1']);
+    expect(config.isEnabled('a', true)).toBe(false);
+    expect(stateOf(registry, 'c')).toBe('RUNNING');
+    await registry.stop();
+  });
+
+  it('refuses to disable a module with a running dependent and stops nothing', async () => {
+    toggleModule('a');
+    toggleModule('b', { dependencies: ['a'] });
+    toggleModule('z', { dependencies: ['a'], enabledByDefault: false });
+    const registry = await started();
+
+    await expect(registry.setEnabled('a', false)).resolves.toEqual({
+      kind: 'dependents',
+      ids: ['b'],
+    });
+    expect(stateOf(registry, 'a')).toBe('RUNNING');
+    expect(stateOf(registry, 'b')).toBe('RUNNING');
+    expect(calls().filter((call) => call.includes(':stop:'))).toEqual([]);
+    expect(config.isEnabled('a', true)).toBe(true);
+    expect([...registry.commands().keys()].sort()).toEqual(['a-cmd', 'b-cmd']);
+    await registry.stop();
+  });
+
+  it('refuses to disable a module with core.admin', async () => {
+    toggleModule('boss', { capabilities: ['core.admin'] });
+    const registry = await started();
+    await expect(registry.setEnabled('boss', false)).resolves.toEqual({ kind: 'protected' });
+    expect(stateOf(registry, 'boss')).toBe('RUNNING');
+    expect(config.isEnabled('boss', true)).toBe(true);
+    await registry.stop();
+  });
+
+  it('answers unknown for a module without a valid manifest', async () => {
+    fs.mkdirSync(path.join(modulesDir, 'broken'));
+    fs.writeFileSync(path.join(modulesDir, 'broken', 'manifest.json'), '{}');
+    const registry = await started();
+    await expect(registry.setEnabled('broken', true)).resolves.toEqual({ kind: 'unknown' });
+    await expect(registry.setEnabled('nope', false)).resolves.toEqual({ kind: 'unknown' });
+    await registry.stop();
+  });
+
+  it('enables a disabled module again with a new instance', async () => {
+    toggleModule('a');
+    const registry = await started();
+    await registry.setEnabled('a', false);
+
+    const outcome = await registry.setEnabled('a', true);
+
+    expect(outcome).toMatchObject({ kind: 'changed', entry: { state: 'RUNNING', enabled: true } });
+    expect(calls()).toEqual(expect.arrayContaining(['a:factory:2', 'a:start:2']));
+    expect([...registry.commands().keys()]).toEqual(['a-cmd']);
+    await expect(
+      registry.operations.execute('a.items.mine', OWNER, {}, 'dashboard'),
+    ).resolves.toEqual({ ok: true, data: 2 });
+    expect(await ping()).toEqual(['a:event:2']);
+    expect(config.isEnabled('a', false)).toBe(true);
+    await registry.stop();
+    expect(calls()).toContain('a:stop:2');
+  });
+
+  it('enables a module that was disabled at startup with a fresh instance', async () => {
+    toggleModule('a', { enabledByDefault: false });
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('VALIDATED');
+
+    const outcome = await registry.setEnabled('a', true);
+
+    expect(outcome).toMatchObject({ kind: 'changed', entry: { state: 'RUNNING', enabled: true } });
+    expect(calls().filter((call) => call.includes(':start:'))).toEqual(['a:start:2']);
+    expect([...registry.commands().keys()]).toEqual(['a-cmd']);
+    await registry.stop();
+  });
+
+  it('refuses to enable a module whose dependency is not running', async () => {
+    toggleModule('a', { enabledByDefault: false });
+    toggleModule('b', { dependencies: ['a'] });
+    const registry = await started();
+    expect(stateOf(registry, 'b')).toBe('FAILED');
+
+    await expect(registry.setEnabled('b', true)).resolves.toEqual({
+      kind: 'dependencies',
+      ids: ['a'],
+    });
+    expect(stateOf(registry, 'b')).toBe('FAILED');
+
+    await registry.setEnabled('a', true);
+    await expect(registry.setEnabled('b', true)).resolves.toMatchObject({
+      kind: 'changed',
+      entry: { state: 'RUNNING' },
+    });
+    await registry.stop();
+  });
+
+  it('leaves a module whose start() throws FAILED, and a later attempt runs it', async () => {
+    toggleModule('a', { enabledByDefault: false });
+    toggleModule('c');
+    const registry = await started();
+    failStart('a', true);
+
+    const failed = await registry.setEnabled('a', true);
+
+    expect(failed).toMatchObject({ kind: 'failed', entry: { state: 'FAILED', failedAt: 'start' } });
+    expect(failed).not.toHaveProperty('entry.error');
+    expect(stateOf(registry, 'c')).toBe('RUNNING');
+    expect([...registry.commands().keys()]).toEqual(['c-cmd']);
+    expect(calls()).toContain('a:dispose:2');
+
+    failStart('a', false);
+    const retried = await registry.setEnabled('a', true);
+
+    expect(retried).toMatchObject({ kind: 'changed', entry: { state: 'RUNNING' } });
+    expect(calls()).toContain('a:start:3');
+    expect([...registry.commands().keys()].sort()).toEqual(['a-cmd', 'c-cmd']);
+    await registry.stop();
+  });
+
+  it('disables a FAILED module by storing the flag only', async () => {
+    toggleModule('a');
+    failStart('a', true);
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+    const before = calls().length;
+
+    await expect(registry.setEnabled('a', false)).resolves.toMatchObject({
+      kind: 'changed',
+      entry: { state: 'FAILED', enabled: false },
+    });
+    expect(calls().slice(before)).toEqual([]);
+    expect(config.isEnabled('a', true)).toBe(false);
+    await expect(registry.setEnabled('a', false)).resolves.toMatchObject({ kind: 'unchanged' });
+    await registry.stop();
+  });
+
+  it('publishes the unchanged state when disabling a module that is not running', async () => {
+    toggleModule('a');
+    failStart('a', true);
+    toggleModule('d', { enabledByDefault: false });
+    toggleModule('b', { dependencies: ['d'] });
+    const registry = await started();
+    await bus.idle();
+    const states: unknown[] = [];
+    bus.subscribeFromCore('core.module.state.changed', (event) => {
+      states.push(event.payload);
+    });
+
+    await registry.setEnabled('a', false);
+    await registry.setEnabled('b', false);
+    await registry.setEnabled('a', false);
+    await bus.idle();
+
+    expect(states).toEqual([
+      { moduleId: 'a', state: 'FAILED' },
+      { moduleId: 'b', state: 'FAILED' },
+    ]);
+    await registry.stop();
+  });
+
+  it('keeps config.get() unavailable in register() on the retry of a FAILED module', async () => {
+    writeModule('a', {
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+export const configSchema = { safeParse: (value) => ({ success: true, data: { greeting: 'hi', ...value } }) };
+let instances = 0;
+export default () => {
+  instances += 1;
+  const instance = instances;
+  return {
+    async register(ctx) {
+      try {
+        ctx.config.get();
+        calls.push('a:get:' + instance + ':ok');
+      } catch (error) {
+        calls.push('a:get:' + instance + ':' + error.message);
+      }
+    },
+    async initialize() {},
+    async start() {
+      if (instance === 1) throw new Error('first start failed');
+    },
+    async stop() {},
+    async dispose() {},
+  };
+};
+`,
+    });
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+
+    await expect(registry.setEnabled('a', true)).resolves.toMatchObject({ kind: 'changed' });
+
+    const unavailable = 'Settings of module "a" are only available from initialize()';
+    expect(calls()).toEqual([`a:get:1:${unavailable}`, `a:get:2:${unavailable}`]);
+    await registry.stop();
+  });
+
+  it('answers unchanged when nothing would change', async () => {
+    toggleModule('a');
+    const registry = await started();
+    await expect(registry.setEnabled('a', true)).resolves.toMatchObject({
+      kind: 'unchanged',
+      entry: { state: 'RUNNING' },
+    });
+    await registry.setEnabled('a', false);
+    const before = calls().length;
+    await expect(registry.setEnabled('a', false)).resolves.toMatchObject({
+      kind: 'unchanged',
+      entry: { state: 'DISPOSED', enabled: false },
+    });
+    expect(calls().slice(before)).toEqual([]);
+    await registry.stop();
+  });
+
+  it('runs concurrent calls one at a time, each seeing the state left by the last', async () => {
+    toggleModule('a');
+    const registry = await started();
+
+    const outcomes = await Promise.all([
+      registry.setEnabled('a', false),
+      registry.setEnabled('a', true),
+      registry.setEnabled('a', true),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual(['changed', 'changed', 'unchanged']);
+    expect(stateOf(registry, 'a')).toBe('RUNNING');
+    expect(calls().filter((call) => call.includes(':start:'))).toEqual(['a:start:1', 'a:start:2']);
+    await registry.stop();
+  });
+
+  it('answers stopping once stop() has begun, also for calls already queued', async () => {
+    toggleModule('a');
+    const registry = await started();
+    const queued = registry.setEnabled('a', false);
+    const stopping = registry.stop();
+    await expect(queued).resolves.toEqual({ kind: 'stopping' });
+    await stopping;
+    await expect(registry.setEnabled('a', true)).resolves.toEqual({ kind: 'stopping' });
+    expect(stateOf(registry, 'a')).toBe('DISPOSED');
+    expect(config.isEnabled('a', true)).toBe(true);
+  });
+
+  it('refuses setEnabled before start()', async () => {
+    toggleModule('a');
+    const registry = createRegistry();
+    await registry.load();
+    await expect(registry.setEnabled('a', false)).rejects.toThrow(RegistryStateError);
+  });
+
+  it('publishes core.module.state.changed on each transition', async () => {
+    toggleModule('a');
+    const registry = await started();
+    await bus.idle();
+    const states: unknown[] = [];
+    bus.subscribeFromCore('core.module.state.changed', (event) => {
+      states.push(event.payload);
+    });
+
+    await registry.setEnabled('a', false);
+    await registry.setEnabled('a', true);
+    await bus.idle();
+
+    expect(states).toEqual(
+      ['STOPPED', 'DISPOSED', 'VALIDATED', 'REGISTERED', 'INITIALIZED', 'RUNNING'].map((state) => ({
+        moduleId: 'a',
+        state,
+      })),
+    );
+    await registry.stop();
+  });
+
+  it('keeps an old instance context inactive after the module is enabled again', async () => {
+    const key = `${callsKey}_a_context`;
+    writeModule('a', {
+      manifest: {
+        capabilities: ['guild.message'],
+        events: { subscribes: [EVENT], publishes: [STALE_EVENT] },
+      },
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+export default () => ({
+  async register(ctx) {
+    globalThis[${JSON.stringify(key)}] ??= ctx;
+    ctx.operations.register({
+      name: 'a.items.mine',
+      permission: null,
+      input: { safeParse: (value) => ({ success: true, data: value }) },
+      handler: async () => { calls.push('a:handler'); return { ok: true, data: null }; },
+    });
+  },
+  async initialize() {},
+  async start() {},
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+    const registry = await started();
+    const first = (globalThis as unknown as Record<string, ModuleContext>)[key] as ModuleContext;
+    await registry.setEnabled('a', false);
+    await registry.setEnabled('a', true);
+    expect(stateOf(registry, 'a')).toBe('RUNNING');
+
+    expect(() => first.storage.run('SELECT 1')).toThrow(/not active/);
+    expect(() => {
+      first.config.set({ greeting: 'stale' });
+    }).toThrow('Module "a" is not active');
+    await expect(first.guild.sendMessage('111111111111111111', 'oi')).resolves.toMatchObject({
+      ok: false,
+    });
+    let delivered = false;
+    first.events.subscribe(EVENT, () => {
+      delivered = true;
+    });
+    bus.publishFromCore(EVENT, {});
+    await bus.idle();
+    expect(delivered).toBe(false);
+
+    const published: unknown[] = [];
+    bus.subscribeFromCore(STALE_EVENT, (event) => {
+      published.push(event.payload);
+    });
+    first.events.publish(STALE_EVENT, { stale: true });
+    await bus.idle();
+    expect(published).toEqual([]);
+    expect(logger.calls).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        msg: 'event publish ignored: module is not active',
+      }),
+    );
+
+    expect(() => {
+      first.commands.register({ name: 'stale', description: 'Stale', handle: async () => {} });
+    }).toThrow(CommandRegistrationError);
+    expect(() => {
+      first.operations.register({
+        name: 'a.items.mine',
+        permission: null,
+        input: { safeParse: (value: unknown) => ({ success: true, data: value }) },
+        handler: () => Promise.resolve({ ok: true, data: 'stale' }),
+      } as never);
+    }).toThrow(InvalidOperationError);
+    expect(registry.commands().has('stale')).toBe(false);
+    expect(registry.operations.names()).toEqual(['a.items.mine']);
+    await expect(first.operations.execute('a.items.mine', OWNER, {})).resolves.toEqual({
+      ok: false,
+      error: { code: 'unavailable', message: 'Módulo indisponível.' },
+    });
+    expect(calls()).not.toContain('a:handler');
+    await registry.stop();
+  });
+
+  it('keeps the context of a FAILED core.admin instance away from admin, also after a retry', async () => {
+    const key = `${callsKey}_boss_context`;
+    writeModule('boss', {
+      manifest: { capabilities: ['core.admin'] },
+      rawSource: `
+export default () => ({
+  async register(ctx) { globalThis[${JSON.stringify(key)}] ??= ctx; },
+  async initialize() {},
+  async start() {
+    if (globalThis[${JSON.stringify(failKey('boss'))}] === true) throw new Error('boss start failed');
+  },
+  async stop() {},
+  async dispose() {},
+});
+`,
+    });
+    failStart('boss', true);
+    const registry = createRegistry(1000, fakeAdmin);
+    await registry.load();
+    await registry.start();
+    expect(stateOf(registry, 'boss')).toBe('FAILED');
+    const first = (globalThis as unknown as Record<string, ModuleContext>)[key] as ModuleContext;
+    const inactive = 'Module "boss" is not active';
+    expect(() => first.admin.developers.list()).toThrow(inactive);
+    await expect(first.admin.modules.setEnabled(OWNER, 'a', false)).rejects.toThrow(inactive);
+
+    failStart('boss', false);
+    await expect(registry.setEnabled('boss', true)).resolves.toMatchObject({ kind: 'changed' });
+    expect(() => first.admin.developers.list()).toThrow(inactive);
+    await expect(first.admin.modules.setEnabled(OWNER, 'a', false)).rejects.toThrow(inactive);
+    await registry.stop();
+  });
+
+  it('refuses to enable a module outside the dependency order', async () => {
+    fs.mkdirSync(path.join(modulesDir, 'broken'));
+    fs.writeFileSync(path.join(modulesDir, 'broken', 'manifest.json'), '{"id":"broken"}');
+    toggleModule('a', { dependencies: ['broken'] });
+    const registry = await started();
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+    await expect(registry.setEnabled('a', true)).resolves.toEqual({
+      kind: 'dependencies',
+      ids: ['broken'],
+    });
+    expect(stateOf(registry, 'a')).toBe('FAILED');
+    expect(calls().filter((call) => call.startsWith('a:'))).toEqual([]);
+    await registry.stop();
+  });
+
+  /** A module whose start() and stop() wait for the gates set on globalThis, when present. */
+  const gatedModule = (id: string): { open: (step: 'start' | 'stop') => void } => {
+    const gate = (step: string): string => `${callsKey}_${id}_${step}Gate`;
+    const holder = globalThis as unknown as Record<string, { promise: Promise<void> } | undefined>;
+    const opens = new Map<string, () => void>();
+    for (const step of ['start', 'stop']) {
+      let open = (): void => undefined;
+      const promise = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      holder[gate(step)] = { promise };
+      opens.set(step, open);
+    }
+    const name = JSON.stringify(id);
+    writeModule(id, {
+      rawSource: `
+const calls = (globalThis[${JSON.stringify(callsKey)}] ??= []);
+export default () => ({
+  async register() {},
+  async initialize() {},
+  async start() { calls.push(${name} + ':start'); await globalThis[${JSON.stringify(gate('start'))}]?.promise; },
+  async stop() { calls.push(${name} + ':stop'); await globalThis[${JSON.stringify(gate('stop'))}]?.promise; },
+  async dispose() { calls.push(${name} + ':dispose'); },
+});
+`,
+    });
+    return {
+      open: (step) => {
+        opens.get(step)?.();
+      },
+    };
+  };
+
+  it('makes a setEnabled issued during start() wait for the startup to finish', async () => {
+    const gate = gatedModule('g');
+    toggleModule('a');
+    const registry = createRegistry(1000);
+    await registry.load();
+    const starting = registry.start();
+    let settled = false;
+    const toggle = registry.setEnabled('a', false).then((outcome) => {
+      settled = true;
+      return outcome;
+    });
+    await vi.waitFor(() => {
+      expect(calls()).toContain('g:start');
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+
+    gate.open('start');
+    await starting;
+    await expect(toggle).resolves.toMatchObject({ kind: 'changed', entry: { state: 'DISPOSED' } });
+    expect(stateOf(registry, 'g')).toBe('RUNNING');
+    gate.open('stop');
+    await registry.stop();
+  });
+
+  it('lets a toggle in flight finish when stop() begins, and answers stopping to the queued one', async () => {
+    const gate = gatedModule('g');
+    gate.open('start');
+    toggleModule('a');
+    const registry = await started();
+
+    const inFlight = registry.setEnabled('g', false);
+    await vi.waitFor(() => {
+      expect(calls()).toContain('g:stop');
+    });
+    const queued = registry.setEnabled('a', false);
+    const stopping = registry.stop();
+    gate.open('stop');
+
+    await expect(inFlight).resolves.toMatchObject({
+      kind: 'changed',
+      entry: { state: 'DISPOSED' },
+    });
+    await expect(queued).resolves.toEqual({ kind: 'stopping' });
+    await stopping;
+    expect(stateOf(registry, 'a')).toBe('DISPOSED');
+    expect(config.isEnabled('g', true)).toBe(false);
+    expect(config.isEnabled('a', true)).toBe(true);
   });
 });
 

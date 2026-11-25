@@ -37,8 +37,8 @@ describe('canTransition', () => {
     expect(canTransition('RUNNING', 'DISPOSED')).toBe(false);
   });
 
-  it.each(['FAILED', 'DISPOSED'] as const)('treats %s as terminal', (from) => {
-    for (const to of ALL) expect(canTransition(from, to)).toBe(false);
+  it.each(['FAILED', 'DISPOSED'] as const)('lets %s go back only to VALIDATED', (from) => {
+    for (const to of ALL) expect(canTransition(from, to)).toBe(to === 'VALIDATED');
   });
 });
 

@@ -116,11 +116,13 @@ export class PermissionService {
       .run(permission, roleId, new Date().toISOString());
   }
 
-  revoke(permission: string, roleId: string): void {
+  /** Whether a grant was actually removed. */
+  revoke(permission: string, roleId: string): boolean {
     assertSnowflake(roleId);
-    this.#db
+    const result = this.#db
       .prepare('DELETE FROM permission_grants WHERE permission = ? AND role_id = ?')
       .run(permission, roleId);
+    return result.changes > 0;
   }
 
   check(actor: Actor, permission: string): boolean {

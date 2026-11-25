@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
+import type { AdminService, ModuleEntry } from '../../shared/contracts/admin.ts';
 import type { Actor, CommandDefinition } from '../../shared/contracts/commands.ts';
 import type { EventContext, EventHandler } from '../../shared/contracts/events.ts';
 import type { GuildActions } from '../../shared/contracts/guild.ts';
@@ -17,10 +18,15 @@ import type { ModuleConfigStore } from '../configuration/module-config.ts';
 import type { EventBus, ModuleEvents } from '../event-bus/event-bus.ts';
 import { createModuleGuild } from '../guild/module-guild.ts';
 import { withTimeout } from '../infrastructure/timeout.ts';
-import { InvalidOperationError, OperationRegistry } from '../operations/operation-registry.ts';
+import {
+  InvalidOperationError,
+  OperationRegistry,
+  UNAVAILABLE,
+} from '../operations/operation-registry.ts';
 import type { PermissionService } from '../permissions/permission-service.ts';
 import { applyModuleMigrations } from '../storage/module-migrations.ts';
 import { createModuleStorage } from '../storage/module-storage.ts';
+import { createModuleAdmin } from './module-admin.ts';
 import { resolveOrder } from './dependencies.ts';
 import { discoverModules } from './discovery.ts';
 import { loadModule } from './entrypoint.ts';
@@ -43,6 +49,16 @@ const ACTIVE_STATES: ReadonlySet<ModuleState> = new Set([
   'RUNNING',
 ]);
 
+/** The result of {@link ModuleRegistry.setEnabled}. */
+export type SetEnabledOutcome =
+  | { kind: 'changed' | 'unchanged'; entry: ModuleEntry }
+  | { kind: 'unknown' }
+  | { kind: 'protected' }
+  | { kind: 'dependents'; ids: string[] }
+  | { kind: 'dependencies'; ids: string[] }
+  | { kind: 'failed'; entry: ModuleEntry }
+  | { kind: 'stopping' };
+
 export class RegistryStateError extends Error {
   constructor(message: string) {
     super(message);
@@ -60,6 +76,8 @@ export interface ModuleRegistryDeps {
   readonly db: DatabaseSync;
   /** The Discord port; each module receives it gated by its manifest capabilities. */
   readonly guild: GuildActions;
+  /** The Core administration service, handed only to modules with `core.admin`. */
+  readonly admin?: AdminService;
   readonly coreApiVersion?: string;
   readonly stepTimeoutMs?: number;
 }
@@ -68,6 +86,8 @@ interface ModuleRecord {
   readonly manifest: ModuleManifest;
   readonly directory: string;
   instance?: SunFlowerModule;
+  /** Builds a new instance; set once the entrypoint was imported. */
+  factory?: () => SunFlowerModule;
   configSchema?: z.ZodType<unknown>;
   events?: ModuleEvents;
   settings?: { readonly value: unknown };
@@ -102,6 +122,8 @@ export class ModuleRegistry {
   #phase: Phase = 'new';
   #starting: Promise<void> | undefined;
   #stopping: Promise<void> | undefined;
+  /** setEnabled() calls run one at a time on this chain, which never rejects. */
+  #toggles: Promise<unknown> = Promise.resolve();
   /** The operations of the modules; an operation runs only while its module is RUNNING. */
   readonly operations: OperationRegistry;
 
@@ -139,6 +161,25 @@ export class ModuleRegistry {
     return result;
   }
 
+  /** The modules with a valid manifest: dependency order first, then the failed ones outside it. */
+  entries(): ModuleEntry[] {
+    const outside = [...this.#records.keys()].filter((id) => !this.#order.includes(id));
+    return [...this.#order, ...outside].map((id) => this.#entry(id));
+  }
+
+  /**
+   * Enables or disables a module at runtime and stores the choice. Calls run one at a time, in
+   * order; once stop() has begun every call, queued or new, answers `stopping`.
+   */
+  setEnabled(moduleId: string, enabled: boolean): Promise<SetEnabledOutcome> {
+    if (this.#stopping === undefined && this.#phase !== 'starting' && this.#phase !== 'started') {
+      return Promise.reject(new RegistryStateError('setEnabled() called before start()'));
+    }
+    const run = this.#toggles.then(() => this.#toggle(moduleId, enabled));
+    this.#toggles = run.catch(() => undefined);
+    return run;
+  }
+
   async load(): Promise<void> {
     if (this.#phase !== 'new') throw new RegistryStateError('load() can only be called once');
     this.#phase = 'loading';
@@ -174,19 +215,24 @@ export class ModuleRegistry {
     for (const id of order) {
       const record = this.#record(id);
       try {
-        const loaded = await withTimeout(
-          () => loadModule(record.directory, record.manifest.entrypoint),
-          this.#stepTimeoutMs,
-          `module "${id}" import`,
-        );
-        record.instance = loaded.instance;
-        if (loaded.configSchema !== undefined) record.configSchema = loaded.configSchema;
+        await this.#import(record);
       } catch (error) {
         this.#fail(id, 'import', describe(error));
       }
     }
     this.#order = order;
     this.#phase = 'loaded';
+  }
+
+  async #import(record: ModuleRecord): Promise<void> {
+    const loaded = await withTimeout(
+      () => loadModule(record.directory, record.manifest.entrypoint),
+      this.#stepTimeoutMs,
+      `module "${record.manifest.id}" import`,
+    );
+    record.instance = loaded.instance;
+    record.factory = loaded.factory;
+    if (loaded.configSchema !== undefined) record.configSchema = loaded.configSchema;
   }
 
   async start(): Promise<void> {
@@ -212,6 +258,8 @@ export class ModuleRegistry {
         this.#deps.logger.error({ error: describe(error) }, 'module start aborted');
       }
     }
+    // A setEnabled() already running finishes first; the queued ones answer `stopping`.
+    await this.#toggles;
     if (this.#phase !== 'started' && this.#phase !== 'starting') {
       if (this.#phase === 'new' || this.#phase === 'loaded') this.#phase = 'stopped';
       return;
@@ -219,30 +267,143 @@ export class ModuleRegistry {
     this.#phase = 'stopping';
     for (const id of [...this.#order].reverse()) {
       if (this.#statuses.get(id)?.state !== 'RUNNING') continue;
-      const record = this.#record(id);
-      const instance = record.instance as SunFlowerModule;
-      record.events?.unsubscribeAll();
-      try {
-        await this.#step(id, 'stop', () => instance.stop());
-        this.#transition(id, 'STOPPED');
-      } catch (error) {
-        this.#fail(id, 'stop', describe(error));
-      }
-      this.#dropCommands(record);
-      try {
-        await this.#step(id, 'dispose', () => instance.dispose());
-        if (this.#statuses.get(id)?.state === 'STOPPED') this.#transition(id, 'DISPOSED');
-      } catch (error) {
-        if (this.#statuses.get(id)?.state === 'FAILED') {
-          this.#logDisposeFailure(id, error);
-        } else {
-          this.#fail(id, 'dispose', describe(error));
-        }
-      }
-      // stop() and dispose() may still subscribe while the module is active; drop those too.
-      record.events?.unsubscribeAll();
+      await this.#stopModule(this.#record(id));
     }
     this.#phase = 'stopped';
+  }
+
+  /** stop, STOPPED, commands and operations dropped, dispose, DISPOSED; FAILED on any error. */
+  async #stopModule(record: ModuleRecord): Promise<void> {
+    const { id } = record.manifest;
+    const instance = record.instance as SunFlowerModule;
+    record.events?.unsubscribeAll();
+    try {
+      await this.#step(id, 'stop', () => instance.stop());
+      this.#transition(id, 'STOPPED');
+    } catch (error) {
+      this.#fail(id, 'stop', describe(error));
+    }
+    this.#dropCommands(record);
+    try {
+      await this.#step(id, 'dispose', () => instance.dispose());
+      if (this.#statuses.get(id)?.state === 'STOPPED') this.#transition(id, 'DISPOSED');
+    } catch (error) {
+      if (this.#statuses.get(id)?.state === 'FAILED') {
+        this.#logDisposeFailure(id, error);
+      } else {
+        this.#fail(id, 'dispose', describe(error));
+      }
+    }
+    // stop() and dispose() may still subscribe while the module is active; drop those too.
+    record.events?.unsubscribeAll();
+  }
+
+  async #toggle(id: string, enabled: boolean): Promise<SetEnabledOutcome> {
+    if (this.#stopping !== undefined) return { kind: 'stopping' };
+    if (this.#phase === 'starting') {
+      try {
+        await this.#starting;
+      } catch {
+        // start() reports its own failure, and stop() follows it.
+      }
+      if (this.#stopping !== undefined) return { kind: 'stopping' };
+    }
+    const record = this.#records.get(id);
+    if (record === undefined) return { kind: 'unknown' };
+    return enabled ? this.#enable(record) : this.#disable(record);
+  }
+
+  async #disable(record: ModuleRecord): Promise<SetEnabledOutcome> {
+    const { id } = record.manifest;
+    if (record.manifest.capabilities.includes('core.admin')) return { kind: 'protected' };
+    const wasRunning = this.#stateOf(id) === 'RUNNING';
+    if (wasRunning) {
+      const running = this.#dependents(id).filter((other) => this.#stateOf(other) === 'RUNNING');
+      if (running.length > 0) return { kind: 'dependents', ids: running };
+      await this.#stopModule(record);
+      // Release what the old instance held; enabling again builds everything anew.
+      delete record.instance;
+      delete record.events;
+      delete record.settings;
+    } else if (!this.#storedEnabled(record)) {
+      return { kind: 'unchanged', entry: this.#entry(id) };
+    }
+    // A FAILED or never-started module was already disposed or never built: only the stored
+    // flag changes.
+    this.#deps.config.setEnabled(id, false);
+    this.#disabled.add(id);
+    this.#deps.logger.info({ module: id }, 'module disabled');
+    // No transition published anything: tell the listeners the flag moved, with the same state.
+    if (!wasRunning) {
+      this.#publishCore('core.module.state.changed', { moduleId: id, state: this.#stateOf(id) });
+    }
+    return { kind: 'changed', entry: this.#entry(id) };
+  }
+
+  async #enable(record: ModuleRecord): Promise<SetEnabledOutcome> {
+    const { id } = record.manifest;
+    const state = this.#stateOf(id);
+    if (state === 'RUNNING') return { kind: 'unchanged', entry: this.#entry(id) };
+    const inactive = [...new Set(record.manifest.dependencies)].filter(
+      (dependency) => this.#stateOf(dependency) !== 'RUNNING',
+    );
+    // A module outside the dependency order (missing, invalid or circular dependency) can never
+    // run: commands() and stop() only walk the order.
+    if (inactive.length > 0 || !this.#order.includes(id)) {
+      return { kind: 'dependencies', ids: inactive };
+    }
+    if (state === 'FAILED' || state === 'DISPOSED') this.#transition(id, 'VALIDATED');
+    // As on a first start, settings exist only from initialize() on.
+    delete record.settings;
+    this.#deps.config.setEnabled(id, true);
+    this.#disabled.delete(id);
+    try {
+      // Always a fresh instance: one left unused at startup is discarded too.
+      if (record.factory === undefined) await this.#import(record);
+      else record.instance = record.factory();
+    } catch (error) {
+      this.#fail(id, 'import', describe(error));
+      return { kind: 'failed', entry: this.#entry(id) };
+    }
+    await this.#startModule(record);
+    if (this.#stateOf(id) !== 'RUNNING') return { kind: 'failed', entry: this.#entry(id) };
+    this.#deps.logger.info({ module: id }, 'module enabled');
+    return { kind: 'changed', entry: this.#entry(id) };
+  }
+
+  #stateOf(id: string): ModuleState | undefined {
+    return this.#statuses.get(id)?.state;
+  }
+
+  #storedEnabled(record: ModuleRecord): boolean {
+    return this.#deps.config.isEnabled(record.manifest.id, record.manifest.enabledByDefault);
+  }
+
+  /** The modules whose manifest depends on `id`, whatever their state. */
+  #dependents(id: string): string[] {
+    return [...this.#records.values()]
+      .filter((other) => other.manifest.dependencies.includes(id))
+      .map((other) => other.manifest.id);
+  }
+
+  /** The internal error message stays in the Core (and the log): it may hold file paths. */
+  #entry(id: string): ModuleEntry {
+    const { manifest } = this.#record(id);
+    const status = this.#statuses.get(id) as ModuleStatus;
+    return {
+      id,
+      name: manifest.name,
+      description: manifest.description,
+      version: manifest.version,
+      state: status.state,
+      enabled: this.#storedEnabled(this.#record(id)),
+      canDisable: !manifest.capabilities.includes('core.admin'),
+      dependencies: [...manifest.dependencies],
+      dependents: this.#dependents(id),
+      ...(status.state === 'FAILED' && status.failedAt !== undefined
+        ? { failedAt: status.failedAt }
+        : {}),
+    };
   }
 
   async #startAll(): Promise<void> {
@@ -276,6 +437,9 @@ export class ModuleRegistry {
   async #startModule(record: ModuleRecord): Promise<void> {
     const { id } = record.manifest;
     const instance = record.instance as SunFlowerModule;
+    // A new attempt starts clean: an earlier rejection must not fail it.
+    delete record.rejectedCommand;
+    delete record.rejectedOperation;
     const events = this.#deps.events.forModule(record.manifest);
     record.events = events;
     const context = this.#createContext(record, events);
@@ -329,7 +493,10 @@ export class ModuleRegistry {
     const { id } = record.manifest;
     const settingsUnavailable = (): Error =>
       new Error(`Settings of module "${id}" are only available from initialize()`);
-    const isActive = (): boolean => this.#isActive(id);
+    // A context belongs to one instance: once the module is enabled again with a new instance,
+    // the old context stays inactive even though the module is RUNNING.
+    const isCurrent = (): boolean => record.events === events;
+    const isActive = (): boolean => isCurrent() && this.#isActive(id);
     const assertActive = (): void => {
       if (!isActive()) throw new Error(`Module "${id}" is not active`);
     };
@@ -339,10 +506,14 @@ export class ModuleRegistry {
       logger: this.#deps.logger.child({ module: id }),
       events: Object.freeze({
         publish: (type: string, payload: unknown, context?: EventContext) => {
-          if (this.#eventsAllowed(id, 'publish', type)) events.publish(type, payload, context);
+          if (this.#eventsAllowed(id, 'publish', type, isActive())) {
+            events.publish(type, payload, context);
+          }
         },
         subscribe: (type: string, handler: EventHandler) => {
-          if (this.#eventsAllowed(id, 'subscribe', type)) events.subscribe(type, handler);
+          if (this.#eventsAllowed(id, 'subscribe', type, isActive())) {
+            events.subscribe(type, handler);
+          }
         },
       }),
       permissions: this.#deps.permissions.forModule(record.manifest),
@@ -375,6 +546,7 @@ export class ModuleRegistry {
         isActive,
         logger: this.#deps.logger,
       }),
+      admin: createModuleAdmin({ manifest: record.manifest, service: this.#deps.admin, isActive }),
       // Reads stay allowed; writes from a FAILED or STOPPED module are refused.
       storage: Object.freeze({
         run: (sql: string, params?: readonly SqlValue[]) => {
@@ -391,15 +563,28 @@ export class ModuleRegistry {
       }),
       commands: Object.freeze({
         register: (command: CommandDefinition) => {
+          if (!isCurrent()) {
+            throw new CommandRegistrationError(
+              `Module "${id}" can only register commands in register()`,
+            );
+          }
           this.#registerCommand(record, command);
         },
       }),
       operations: Object.freeze({
         register: <I, O>(definition: OperationDefinition<I, O>) => {
+          if (!isCurrent()) {
+            throw new InvalidOperationError(
+              `Module "${id}" can only register operations in register()`,
+            );
+          }
           this.#registerOperation(record, definition);
         },
+        // An old instance never runs operations, not even those of the instance that replaced it.
         execute: (name: string, actor: Actor, input: unknown) =>
-          this.operations.executeOwn(id, name, actor, input),
+          isCurrent()
+            ? this.operations.executeOwn(id, name, actor, input)
+            : Promise.resolve(UNAVAILABLE),
       }),
     });
   }
@@ -457,8 +642,13 @@ export class ModuleRegistry {
   }
 
   /** Calls from failed or stopped modules are ignored, never thrown into abandoned work. */
-  #eventsAllowed(id: string, action: 'publish' | 'subscribe', type: string): boolean {
-    if (this.#isActive(id)) return true;
+  #eventsAllowed(
+    id: string,
+    action: 'publish' | 'subscribe',
+    type: string,
+    active: boolean,
+  ): boolean {
+    if (active) return true;
     const state = this.#statuses.get(id)?.state;
     this.#deps.logger.warn(
       { module: id, state, event: type },

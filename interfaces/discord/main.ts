@@ -1,11 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { Events, type Client, type Guild, type Interaction, type Message } from 'discord.js';
 
-import { startCore, type CoreHandle } from '../../core/application/core.ts';
+import { startCore, type CoreHandle, type StartCoreOptions } from '../../core/application/core.ts';
 import { installShutdownHandlers } from '../../core/application/shutdown.ts';
 import {
   EnvironmentError,
   loadEnvironment,
+  type LogLevel,
   type Source,
 } from '../../core/configuration/environment.ts';
 import {
@@ -13,6 +14,7 @@ import {
   type PanelEnvironment,
 } from '../../core/configuration/panel-environment.ts';
 import { createLogger } from '../../core/infrastructure/logger.ts';
+import { RecentLogs } from '../../core/infrastructure/recent-logs.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { createDiscordOAuth } from '../dashboard/oauth.ts';
 import { startDashboard, type DashboardHandle } from '../dashboard/server.ts';
@@ -47,16 +49,61 @@ function errorSummary(error: unknown): { name: string; code?: string | number } 
     : { name: error.name };
 }
 
-/** Connects the Core to the Discord client. Nothing here logs the token or any Discord ID. */
-function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): void {
-  // Command syncs run one at a time, in the order the events arrive.
-  let queue = Promise.resolve();
-  const enqueue = (task: () => Promise<void>): void => {
-    queue = queue.then(task).catch((error: unknown) => {
-      logger.error({ error: errorMessage(error) }, 'discord guild sync failed');
-    });
-  };
+export interface CoalescedSync {
+  /** Asks for a sync: at most one waits behind the one running, which every request shares. */
+  request(): void;
+  /** Resolves once the running and the queued sync have settled. */
+  idle(): Promise<void>;
+}
 
+/**
+ * Runs `task` one at a time. A request made while a sync is already queued is folded into it,
+ * since that sync reads the latest state when it starts. A failure goes to `onError` only.
+ */
+export function createCoalescedSync(
+  task: () => Promise<void>,
+  onError: (error: unknown) => void,
+): CoalescedSync {
+  let queue = Promise.resolve();
+  let pending = false;
+  return {
+    request: () => {
+      if (pending) return;
+      pending = true;
+      queue = queue
+        .then(() => {
+          pending = false;
+          return task();
+        })
+        .catch(onError);
+    },
+    idle: () => queue,
+  };
+}
+
+/** Module states after which the set of commands may have changed. */
+const RESYNC_STATES: ReadonlySet<unknown> = new Set(['RUNNING', 'DISPOSED', 'FAILED']);
+
+/**
+ * Calls `resync` whenever a module becomes RUNNING, DISPOSED or FAILED, so the Discord commands
+ * follow modules enabled or disabled at runtime. Returns the function that cancels it.
+ */
+export function resyncOnModuleChanges(
+  core: Pick<CoreHandle, 'subscribe'>,
+  resync: () => void,
+): () => void {
+  return core.subscribe('core.module.state.changed', (event) => {
+    const { payload } = event;
+    if (typeof payload !== 'object' || payload === null) return;
+    if (RESYNC_STATES.has((payload as { state?: unknown }).state)) resync();
+  });
+}
+
+/**
+ * Connects the Core to the Discord client. Nothing here logs the token or any Discord ID.
+ * Returns the function that cancels the Core subscriptions made here.
+ */
+function wireClient(client: Client, core: CoreHandle, guildId: string, logger: Logger): () => void {
   const sync = async (): Promise<void> => {
     const guild = client.guilds.cache.get(guildId);
     const application = client.application;
@@ -75,6 +122,10 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
     );
     logger.info({ commands: commands.length }, 'discord commands synced');
   };
+  // Command syncs run one at a time; a burst of requests collapses into one queued sync.
+  const syncs = createCoalescedSync(sync, (error) => {
+    logger.error({ error: errorMessage(error) }, 'discord guild sync failed');
+  });
 
   // The bot stays in other guilds and ignores them (decision 0010); it only syncs its own guild.
   client.once(Events.ClientReady, () => {
@@ -83,13 +134,18 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
       logger.error('the bot is not in the configured guild; waiting to be added');
       return;
     }
-    enqueue(sync);
+    syncs.request();
   });
 
   publishConnectionChanges(client, core);
 
   client.on(Events.GuildCreate, (guild: Guild) => {
-    if (guild.id === guildId) enqueue(sync);
+    if (guild.id === guildId) syncs.request();
+  });
+
+  // Modules enabled or disabled at runtime change the commands; sync() skips while not ready.
+  const stopResync = resyncOnModuleChanges(core, () => {
+    syncs.request();
   });
 
   const messageDeps = {
@@ -132,6 +188,8 @@ function wireClient(client: Client, core: CoreHandle, guildId: string, logger: L
         logger.error({ error: errorMessage(error) }, 'command dispatch failed');
       });
   });
+
+  return stopResync;
 }
 
 export interface StartPanelOptions {
@@ -179,6 +237,23 @@ export async function startPanel(options: StartPanelOptions): Promise<DashboardH
   }
 }
 
+export interface LoggedCore {
+  readonly logger: Logger;
+  /** Starts the Core with this logger and the memory of logs it writes to. */
+  startCore(options: Omit<StartCoreOptions, 'logger' | 'recentLogs'>): Promise<CoreHandle>;
+}
+
+/** One RecentLogs both receives the logger's entries and answers the Core's `admin.logs.recent`. */
+export function createLoggedCore(level: LogLevel, destination?: NodeJS.WritableStream): LoggedCore {
+  const recentLogs = new RecentLogs();
+  const logger = createLogger({
+    level,
+    ...(destination === undefined ? {} : { destination }),
+    recent: recentLogs,
+  });
+  return { logger, startCore: (options) => startCore({ ...options, logger, recentLogs }) };
+}
+
 /** Starts the bot: environment, logger, Core, panel, shutdown handlers, Discord client and login. */
 export async function main(): Promise<void> {
   let environment;
@@ -191,14 +266,14 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const logger = createLogger({ level: environment.logLevel });
+  const logged = createLoggedCore(environment.logLevel);
+  const { logger } = logged;
   const client = createDiscordClient();
   let core: CoreHandle;
   try {
-    core = await startCore({
+    core = await logged.startCore({
       dbPath: environment.dbPath,
       modulesDir: MODULES_DIR,
-      logger,
       guild: createGuildActions(createDiscordGateway(client, environment.guildId)),
     });
   } catch (error) {
@@ -214,10 +289,12 @@ export async function main(): Promise<void> {
   }
 
   let dashboard: DashboardHandle | null = null;
+  let unwire = (): void => undefined;
   const shutdown = async (): Promise<void> => {
     // Stop feeding events, close the panel, let the modules drain while REST still works, then
     // disconnect.
     client.removeAllListeners();
+    unwire();
     try {
       if (dashboard !== null) {
         try {
@@ -232,7 +309,7 @@ export async function main(): Promise<void> {
     }
   };
   const shutdownHandle = installShutdownHandlers(process, shutdown, logger);
-  wireClient(client, core, environment.guildId, logger);
+  unwire = wireClient(client, core, environment.guildId, logger);
   dashboard = await startPanel({
     source: process.env,
     client,

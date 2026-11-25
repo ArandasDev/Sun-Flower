@@ -167,3 +167,80 @@ describe('SessionStore corrupt rows', () => {
     expect(count()).toBe(0);
   });
 });
+
+describe('SessionStore listing and revocation', () => {
+  it('lists only live sessions, newest first', () => {
+    const first = store.create(user).record;
+    clock += 1000;
+    const second = store.create(other).record;
+    clock += 1000;
+    const idle = store.create(user).record;
+    db.prepare('UPDATE panel_sessions SET last_seen_at = ? WHERE id_hash = ?').run(
+      new Date(clock - IDLE_EXPIRY_MS - 1).toISOString(),
+      idle.idHash,
+    );
+    expect(store.list().map((r) => r.idHash)).toEqual([second.idHash, first.idHash]);
+    clock += ABSOLUTE_EXPIRY_MS;
+    expect(store.list()).toEqual([]);
+  });
+
+  it('refOf is stable, 16 hex characters and not the hash', () => {
+    const { record } = store.create(user);
+    const ref = store.refOf(record.idHash);
+    expect(ref).toBe(store.refOf(record.idHash));
+    expect(ref).toMatch(/^[0-9a-f]{16}$/);
+    expect(record.idHash.startsWith(ref)).toBe(false);
+    expect(ref).not.toBe(store.refOf(store.create(user).record.idHash));
+  });
+
+  it('revokeByRef deletes only that session and notifies listeners', () => {
+    const a = store.create(user).record;
+    const b = store.create(user).record;
+    const seen: (readonly string[])[] = [];
+    store.onRevoked((hashes) => seen.push(hashes));
+    expect(store.revokeByRef(store.refOf(a.idHash))).toBe(true);
+    expect(store.list().map((r) => r.idHash)).toEqual([b.idHash]);
+    expect(seen).toEqual([[a.idHash]]);
+    expect(store.revokeByRef(store.refOf(a.idHash))).toBe(false);
+    expect(store.revokeByRef('0000000000000000')).toBe(false);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('revokeForUser deletes all of the user sessions and notifies once', () => {
+    const a = store.create(user).record;
+    const b = store.create(user).record;
+    store.create(other);
+    const seen: (readonly string[])[] = [];
+    store.onRevoked((hashes) => seen.push(hashes));
+    expect(store.revokeForUser(user)).toBe(2);
+    expect(count()).toBe(1);
+    expect(seen).toHaveLength(1);
+    expect([...(seen[0] ?? [])].sort()).toEqual([a.idHash, b.idHash].sort());
+    expect(store.revokeForUser(user)).toBe(0);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('a throwing listener does not stop the others or the revocation', () => {
+    const { record } = store.create(user);
+    const seen: (readonly string[])[] = [];
+    store.onRevoked(() => {
+      throw new Error('boom');
+    });
+    store.onRevoked((hashes) => seen.push(hashes));
+    expect(store.revokeByRef(store.refOf(record.idHash))).toBe(true);
+    expect(count()).toBe(0);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('the unsubscribe function removes the listener; deleteForUser does not notify', () => {
+    store.create(user);
+    const seen: (readonly string[])[] = [];
+    const off = store.onRevoked((hashes) => seen.push(hashes));
+    expect(store.deleteForUser(user)).toBe(1);
+    expect(seen).toHaveLength(0);
+    store.create(user);
+    off();
+    store.revokeForUser(user);
+    expect(seen).toHaveLength(0);
+  });
+});
