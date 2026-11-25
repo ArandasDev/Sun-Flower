@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Menu } from './components/Menu.tsx';
 import { ReconnectBanner } from './components/ReconnectBanner.tsx';
 import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
+import { Cases } from './routes/Cases.tsx';
 import { Login } from './routes/Login.tsx';
 import { Overview } from './routes/Overview.tsx';
 import { Profile } from './routes/Profile.tsx';
@@ -29,6 +30,7 @@ function LiveShell({ clock }: { clock: LiveClock }) {
             <Routes location={location}>
               <Route index element={<Profile />} />
               <Route path="visao-geral" element={<Overview />} />
+              <Route path="casos" element={<Cases />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.main>

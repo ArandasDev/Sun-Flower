@@ -7,6 +7,7 @@ export function Menu() {
   const me = useCurrentMe();
   const logout = useLogout();
   const canSeeOverview = me.level === 'developer' || me.level === 'owner';
+  const canSeeCases = me.permissions.includes('moderation.cases.read');
   return (
     <header className="rail">
       <div className="brand">
@@ -18,6 +19,7 @@ export function Menu() {
           Meu perfil
         </NavLink>
         {canSeeOverview ? <NavLink to="/visao-geral">Visão geral</NavLink> : null}
+        {canSeeCases ? <NavLink to="/casos">Casos</NavLink> : null}
       </nav>
       <PresenceList />
       <button type="button" className="button button-quiet" onClick={() => logout.mutate()}>

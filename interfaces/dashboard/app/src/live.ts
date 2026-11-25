@@ -51,7 +51,9 @@ export function useLive(): Live {
 
 /** The screen id the server knows for a route. */
 export function screenFor(pathname: string): string {
-  return pathname.startsWith('/visao-geral') ? 'overview' : 'profile';
+  if (pathname.startsWith('/visao-geral')) return 'overview';
+  if (pathname.startsWith('/casos')) return 'cases';
+  return 'profile';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -189,6 +191,17 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
         case 'config.changed':
           if (isRecord(data) && typeof data['moduleId'] === 'string') {
             void client.invalidateQueries({ queryKey: ['config', data['moduleId']] });
+          }
+          break;
+        case 'case.created':
+          if (isRecord(data) && typeof data['caseId'] === 'number') {
+            void client.invalidateQueries({ queryKey: ['cases'] });
+          }
+          break;
+        case 'case.updated':
+          if (isRecord(data) && typeof data['caseId'] === 'number') {
+            void client.invalidateQueries({ queryKey: ['cases'] });
+            void client.invalidateQueries({ queryKey: ['case', data['caseId']] });
           }
           break;
         case 'presence': {
