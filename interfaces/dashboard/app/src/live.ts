@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { ApiError, apiFetch } from './api.ts';
@@ -12,6 +12,11 @@ export const PRESENCE_MIN_INTERVAL_MS = 1_100;
 export const CLOSE_SESSION_ENDED = 4401;
 /** A connection counts as healthy after this long open; only then is the backoff reset. */
 export const STABLE_AFTER_MS = 5_000;
+/**
+ * A live event refetches each query at most once per this window. Every read is a POST and
+ * spends the session's change budget, so a raid of new cases must not use it up.
+ */
+export const REFETCH_MIN_INTERVAL_MS = 5_000;
 
 const OPEN = 1;
 
@@ -57,6 +62,61 @@ export function screenFor(pathname: string): string {
   if (pathname.startsWith('/dominios')) return 'domains';
   if (pathname.startsWith('/moderacao')) return 'moderation-config';
   return 'profile';
+}
+
+export interface Coalescer {
+  /** Runs `run` now, or once when the window of `key` ends; a later call replaces `run`. */
+  request(key: string, run: () => void): void;
+  /** Drops what is waiting. */
+  stop(): void;
+}
+
+/** Runs each key at most once per `windowMs`, and always runs the last request (trailing). */
+export function makeCoalescer(clock: LiveClock, windowMs = REFETCH_MIN_INTERVAL_MS): Coalescer {
+  const lastRun = new Map<string, number>();
+  const waiting = new Map<string, { timer: unknown; run: () => void }>();
+  const runNow = (key: string, run: () => void): void => {
+    lastRun.set(key, clock.now());
+    run();
+  };
+  return {
+    request(key, run) {
+      const pending = waiting.get(key);
+      if (pending !== undefined) {
+        pending.run = run;
+        return;
+      }
+      const wait = (lastRun.get(key) ?? Number.NEGATIVE_INFINITY) + windowMs - clock.now();
+      if (wait <= 0) {
+        runNow(key, run);
+        return;
+      }
+      const entry = { timer: undefined as unknown, run };
+      entry.timer = clock.setTimeout(() => {
+        waiting.delete(key);
+        runNow(key, entry.run);
+      }, wait);
+      waiting.set(key, entry);
+    },
+    stop() {
+      for (const entry of waiting.values()) clock.clearTimeout(entry.timer);
+      waiting.clear();
+    },
+  };
+}
+
+/** Keeps only the first page of every cached cases list, so a refetch asks for one page. */
+function keepFirstCasesPage(client: QueryClient): void {
+  client.setQueriesData({ queryKey: ['cases'] }, (data: unknown): unknown => {
+    if (!isRecord(data)) return data;
+    const pages: unknown = data['pages'];
+    const pageParams: unknown = data['pageParams'];
+    if (!Array.isArray(pages) || !Array.isArray(pageParams) || pages.length <= 1) return data;
+    return {
+      pages: (pages as unknown[]).slice(0, 1),
+      pageParams: (pageParams as unknown[]).slice(0, 1),
+    };
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -132,6 +192,14 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
     let stableTimer: unknown;
     let lastSentAt = Number.NEGATIVE_INFINITY;
     let lastSentScreen: string | null = null;
+    const coalescer = makeCoalescer(clock);
+    // Set by case.created: the next cases refetch first drops the pages after the first one.
+    let newCase = false;
+    const refreshCases = (): void => {
+      if (newCase) keepFirstCasesPage(client);
+      newCase = false;
+      void client.invalidateQueries({ queryKey: ['cases'] });
+    };
 
     // Sends the latest screen, never more than once per PRESENCE_MIN_INTERVAL_MS.
     const flush = (): void => {
@@ -171,6 +239,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
 
     const endSession = (ws: WebSocket): void => {
       stopped = true;
+      coalescer.stop();
       stopSending();
       stopStableTimer();
       detach(ws);
@@ -198,13 +267,17 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
           break;
         case 'case.created':
           if (isRecord(data) && typeof data['caseId'] === 'number') {
-            void client.invalidateQueries({ queryKey: ['cases'] });
+            newCase = true;
+            coalescer.request('cases', refreshCases);
           }
           break;
         case 'case.updated':
           if (isRecord(data) && typeof data['caseId'] === 'number') {
-            void client.invalidateQueries({ queryKey: ['cases'] });
-            void client.invalidateQueries({ queryKey: ['case', data['caseId']] });
+            const caseId = data['caseId'];
+            coalescer.request('cases', refreshCases);
+            coalescer.request(`case:${String(caseId)}`, () => {
+              void client.invalidateQueries({ queryKey: ['case', caseId] });
+            });
           }
           break;
         case 'presence': {
@@ -277,6 +350,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
     return () => {
       stopped = true;
       reportRef.current = () => undefined;
+      coalescer.stop();
       stopSending();
       stopStableTimer();
       if (retryTimer !== undefined) clock.clearTimeout(retryTimer);
