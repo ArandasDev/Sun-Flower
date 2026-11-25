@@ -53,6 +53,9 @@ export function useLive(): Live {
 export function screenFor(pathname: string): string {
   if (pathname.startsWith('/visao-geral')) return 'overview';
   if (pathname.startsWith('/casos')) return 'cases';
+  if (pathname.startsWith('/acoes')) return 'actions';
+  if (pathname.startsWith('/dominios')) return 'domains';
+  if (pathname.startsWith('/moderacao')) return 'moderation-config';
   return 'profile';
 }
 

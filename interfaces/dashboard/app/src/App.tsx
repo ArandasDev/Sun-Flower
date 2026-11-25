@@ -3,8 +3,11 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { Menu } from './components/Menu.tsx';
 import { ReconnectBanner } from './components/ReconnectBanner.tsx';
 import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
+import { Actions } from './routes/Actions.tsx';
 import { Cases } from './routes/Cases.tsx';
+import { Domains } from './routes/Domains.tsx';
 import { Login } from './routes/Login.tsx';
+import { ModerationConfig } from './routes/ModerationConfig.tsx';
 import { Overview } from './routes/Overview.tsx';
 import { Profile } from './routes/Profile.tsx';
 import { RequireSession } from './session.tsx';
@@ -31,6 +34,9 @@ function LiveShell({ clock }: { clock: LiveClock }) {
               <Route index element={<Profile />} />
               <Route path="visao-geral" element={<Overview />} />
               <Route path="casos" element={<Cases />} />
+              <Route path="acoes" element={<Actions />} />
+              <Route path="dominios" element={<Domains />} />
+              <Route path="moderacao" element={<ModerationConfig />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.main>

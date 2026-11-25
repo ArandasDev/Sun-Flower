@@ -15,6 +15,9 @@ const SCREENS: Record<string, string> = {
   profile: 'Meu perfil',
   overview: 'Visão geral',
   cases: 'Casos',
+  actions: 'Ações',
+  domains: 'Domínios',
+  'moderation-config': 'Moderação',
 };
 
 export const NO_PERMISSION_TEXT = 'Sem permissão.';
