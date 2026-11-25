@@ -3,6 +3,7 @@ import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
 import { createLogger } from './logger.ts';
+import { RecentLogs } from './recent-logs.ts';
 
 function sink(lines: string[]): Writable {
   return new Writable({
@@ -81,6 +82,19 @@ describe('createLogger', () => {
       l.child({ token: 'fake' }).info('x');
     });
     expect(entry).toMatchObject({ token: '[REDACTED]' });
+  });
+
+  it('feeds recent at info while the destination keeps its own level', () => {
+    const lines: string[] = [];
+    const recent = new RecentLogs();
+    const logger = createLogger({ level: 'error', destination: sink(lines), recent });
+    logger.info('only recent');
+    logger.error('both');
+    expect(lines).toHaveLength(1);
+    expect(recent.recent({ limit: 10, minLevel: 'info' }).map((e) => e.message)).toEqual([
+      'both',
+      'only recent',
+    ]);
   });
 
   it('respects the level', () => {

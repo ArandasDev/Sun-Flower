@@ -13,6 +13,7 @@ import {
   type PanelEnvironment,
 } from '../../core/configuration/panel-environment.ts';
 import { createLogger } from '../../core/infrastructure/logger.ts';
+import { RecentLogs } from '../../core/infrastructure/recent-logs.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { createDiscordOAuth } from '../dashboard/oauth.ts';
 import { startDashboard, type DashboardHandle } from '../dashboard/server.ts';
@@ -247,7 +248,8 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const logger = createLogger({ level: environment.logLevel });
+  const recentLogs = new RecentLogs();
+  const logger = createLogger({ level: environment.logLevel, recent: recentLogs });
   const client = createDiscordClient();
   let core: CoreHandle;
   try {

@@ -156,6 +156,12 @@ describe('PermissionService', () => {
     expect(perms.check({ userId: dev, roleIds: [], isOwner: false }, 'ping.cmd.use')).toBe(true);
   });
 
+  it('revoke reports whether a grant was removed', () => {
+    perms.grant('ping.cmd.use', role, declared);
+    expect(perms.revoke('ping.cmd.use', role)).toBe(true);
+    expect(perms.revoke('ping.cmd.use', role)).toBe(false);
+  });
+
   it('revokes a grant', () => {
     perms.grant('ping.cmd.use', role, declared);
     perms.revoke('ping.cmd.use', role);
