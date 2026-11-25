@@ -359,6 +359,14 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   });
   liveHubs.set(app, live);
   await live.register(app);
+  // Sessions ended through the admin service: close their live connections at once.
+  const stopListeningToRevocations = deps.core.sessions.onRevoked((idHashes) => {
+    for (const idHash of idHashes) live.revokeSession(idHash);
+  });
+  app.addHook('onClose', (_instance, done) => {
+    stopListeningToRevocations();
+    done();
+  });
   app.websocketServer.on('connection', (_socket: unknown, request: IncomingMessage) => {
     upgrades.markUpgraded(request);
   });

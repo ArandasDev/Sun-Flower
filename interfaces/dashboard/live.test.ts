@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 
 import type { CoreHandle } from '../../core/application/core.ts';
@@ -832,6 +832,39 @@ describe('session end', { timeout: 20_000 }, () => {
     const closed = await withTimeout(owner.closed, 'close');
     expect(closed.code).toBe(4401);
     expect(closed.messages).toEqual([{ type: 'session.ended', data: null }]);
+  });
+});
+
+describe('sessions revoked through the admin service', { timeout: 20_000 }, () => {
+  it('closes the live connection of a revoked session and leaves the others open', async () => {
+    const a = sessions.create(STAFF);
+    const b = sessions.create(STAFF);
+    const clientA = await connect(a.token);
+    const clientB = await connect(b.token);
+    expect(sessions.revokeByRef(sessions.refOf(a.record.idHash))).toBe(true);
+    const closed = await withTimeout(clientA.closed, 'close');
+    expect(closed.code).toBe(4401);
+    expect(closed.messages.at(-1)).toEqual({ type: 'session.ended', data: null });
+    await barrier(clientB);
+    expect(clientB.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('closes every connection of a user whose sessions were all revoked', async () => {
+    const clientA = await connect(sessions.create(STAFF).token);
+    const clientB = await connect(sessions.create(DEV).token);
+    expect(sessions.revokeForUser(STAFF)).toBe(1);
+    expect((await withTimeout(clientA.closed, 'close')).code).toBe(4401);
+    await barrier(clientB);
+    expect(clientB.ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('stops listening once the dashboard is closed', async () => {
+    const { record } = sessions.create(STAFF);
+    const spy = vi.spyOn(hub, 'revokeSession');
+    await app.close();
+    closed = true;
+    expect(sessions.revokeByRef(sessions.refOf(record.idHash))).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
