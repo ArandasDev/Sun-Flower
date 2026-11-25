@@ -124,9 +124,10 @@ describe('RecentLogs', () => {
       line(30, 'x', {
         long: 'a 1234567890123456789012345 b',
         exact: '12345678901234567890',
-        asNumber: 123456789012345678,
+        // 19 and 17 digits, exact as doubles.
+        asNumber: 2 ** 60,
         small: 1234567890123456,
-        negative: -12345678901234567,
+        negative: -(2 ** 56),
       }),
     );
     expect(recent.recent({ limit: 1, minLevel: 'info' })[0]?.fields).toEqual({
