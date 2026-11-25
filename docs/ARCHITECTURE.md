@@ -183,7 +183,7 @@ O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, 
 
 **Administração.** O serviço `admin` do Core cobre desenvolvedores, permissões de cargos, ligar e desligar módulos, logs recentes e sessões do painel. Ele é liberado pela capacidade `core.admin`, que só o módulo `administration` possui (contrato em [MODULES.md](MODULES.md) e [decisão 0023](decisions/0023-administration-module.md)); o painel o usa pelas operações `administration.*`, como qualquer outra.
 
-- Ligar e desligar acontece com o bot em execução, e os comandos são ressincronizados no Discord. O Core recusa desligar módulos com `core.admin` e dependências de módulos ativos.
+- Ligar e desligar acontece com o bot em execução, e os comandos são ressincronizados no Discord. O Core recusa desligar um módulo com `core.admin` ou do qual outro módulo ativo depende, e recusa ligar um módulo com uma dependência desligada.
 - Os logs recentes ficam só em memória (500 entradas), com IDs mascarados, e se perdem ao reiniciar.
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
 

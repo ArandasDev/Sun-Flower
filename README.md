@@ -225,10 +225,10 @@ Cada evento ao vivo de caso atualiza a lista e o detalhe no máximo uma vez a ca
 | Permissões      | `/permissoes`      | Associa e remove permissões de módulo de cada cargo do servidor.                                                           |
 | Desenvolvedores | `/desenvolvedores` | Lista, adiciona e remove desenvolvedores do bot. Remover pede confirmação.                                                 |
 | Módulos         | `/modulos`         | Liga e desliga módulos com o bot em execução, e os comandos são ressincronizados no Discord. Desligar pede confirmação.    |
-| Logs            | `/logs`            | Os 500 registros mais recentes (nível `info` ou acima), com IDs mascarados, e o botão `Atualizar`.                         |
+| Logs            | `/logs`            | Os 200 registros mais recentes (de 500 guardados), de nível `info` ou acima, com IDs mascarados, e o botão `Atualizar`.    |
 | Sessões         | `/sessoes`         | Lista as sessões do painel e encerra uma delas ou todas as de uma conta, com confirmação. A conexão ao vivo fecha na hora. |
 
-As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica. Ao encerrar uma sessão, a conexão ao vivo dela fecha na hora, e a conta volta para o login. O `npm run staff` continua funcionando como acesso de emergência: se o painel ficar inacessível, ou se ninguém tiver mais permissão para administrá-lo, use os comandos da seção [Desenvolvimento](#desenvolvimento).
+As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco; só a reconexão ao vivo recarrega a tela aberta. Ao encerrar uma sessão, a conexão ao vivo dela fecha na hora, e aquele navegador volta para o login. O `npm run staff` continua funcionando como acesso de emergência: se o painel ficar inacessível, ou se ninguém tiver mais permissão para administrá-lo, use os comandos da seção [Desenvolvimento](#desenvolvimento).
 
 **Limites conhecidos da etapa 3:**
 
@@ -236,7 +236,9 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 - Cargos e usuários são digitados como IDs, sem seletor do Discord.
 - A memória de logs se perde quando o bot reinicia.
 - As leituras das telas de administração contam no limite de 30 por minuto das alterações; separá-las é uma decisão pendente com a pessoa mantenedora.
-- O layout ainda não foi conferido em um navegador real.
+- Com várias abas em Módulos enquanto módulos mudam, as leituras podem chegar ao limite de 30 por minuto das alterações, e as telas passam a receber erro de excesso de requisições. Separar as leituras desse limite é uma decisão pendente.
+- Cada leitura das telas de administração também entra no log em memória, e pode empurrar registros mais antigos para fora das 500 guardadas.
+- As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a política de segurança (CSP) real. O teste manual no servidor real continua pendente.
 
 **Teste manual da etapa 3** (pessoa mantenedora), atrás de um proxy HTTPS e com contas de teste:
 

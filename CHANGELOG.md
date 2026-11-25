@@ -48,9 +48,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Módulos (`/modulos`), para ligar e desligar com o bot em execução, com confirmação para desligar.
   - Logs (`/logs`), com os registros recentes de IDs mascarados e o botão `Atualizar`.
   - Sessões (`/sessoes`), para encerrar uma sessão ou todas as de uma conta, com confirmação.
-  - As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica.
+  - As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco.
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
-- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e o layout ainda não foi conferido em um navegador real.
+- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real; o teste manual no servidor real continua pendente.
 
 ### Changed
 
