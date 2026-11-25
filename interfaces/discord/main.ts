@@ -258,6 +258,7 @@ export async function main(): Promise<void> {
       modulesDir: MODULES_DIR,
       logger,
       guild: createGuildActions(createDiscordGateway(client, environment.guildId)),
+      recentLogs,
     });
   } catch (error) {
     logger.fatal({ error: errorMessage(error) }, 'core failed to start');

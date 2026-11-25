@@ -12,7 +12,7 @@ export interface ModuleAdminOptions {
 /** Lists every AdminService method: adding one to the contract fails the typecheck until listed. */
 type Surface = { [G in keyof AdminService]: { [M in keyof AdminService[G]]: true } };
 
-const SURFACE: Surface = {
+export const SURFACE: Surface = {
   developers: { list: true, add: true, remove: true },
   grants: { list: true, grant: true, revoke: true },
   modules: { list: true, setEnabled: true },

@@ -60,6 +60,7 @@ export interface AdminService {
   };
   readonly modules: {
     list(): ModuleEntry[];
+    /** Do not call from a module's own lifecycle methods: it waits for that step's timeout. */
     setEnabled(
       actor: Actor,
       moduleId: string,

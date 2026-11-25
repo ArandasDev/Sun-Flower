@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startCore } from '../../core/application/core.ts';
+import { RecentLogs } from '../../core/infrastructure/recent-logs.ts';
 import { dispatchCommand, type RawInteraction } from '../../interfaces/discord/commands.ts';
 import { createRecordingLogger } from '../helpers/recording-logger.ts';
 
@@ -81,6 +82,44 @@ afterEach(() => {
 });
 
 describe('startCore', () => {
+  it('gives a module with core.admin the admin service', async () => {
+    writeModule(
+      'panel',
+      {
+        ...manifest('panel'),
+        apiVersion: '1.4.0',
+        capabilities: ['core.admin'],
+        permissions: ['core.logs.read'],
+      },
+      `
+export default () => {
+  let context;
+  return {
+  async register(ctx) { context = ctx; },
+  async initialize() {
+    globalThis.__adminSeen = context.admin.modules.list().map((m) => m.id);
+  },
+  async start() {},
+  async stop() {},
+  async dispose() {},
+  };
+};
+`,
+    );
+    writeModule('good', manifest('good'));
+    const core = await startCore({
+      dbPath: ':memory:',
+      modulesDir,
+      logger,
+      stepTimeoutMs: 1000,
+      recentLogs: new RecentLogs(),
+    });
+    expect(core.status().get('panel')?.state).toBe('RUNNING');
+    const seen = (globalThis as { __adminSeen?: string[] }).__adminSeen;
+    expect([...(seen ?? [])].sort()).toEqual(['good', 'panel']);
+    await core.stop();
+  });
+
   it('boots the core, isolates broken modules and shuts down cleanly', async () => {
     writeModule('good', manifest('good'));
     // Invalid manifest: the version is not SemVer.
