@@ -632,3 +632,10 @@ a {
   opacity: 0.6;
   cursor: default;
 }
+
+@media (width >= 64rem) {
+  .detail {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+}

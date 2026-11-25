@@ -9,6 +9,7 @@ import {
   caseStatusLabel,
   NO_PERMISSION_TEXT,
 } from '../labels.ts';
+import { isSnowflake } from '../ids.ts';
 import { useOperationPages } from '../operations.ts';
 
 interface CasesPage {
@@ -18,7 +19,6 @@ interface CasesPage {
 
 const STATUSES = ['open', 'actioned', 'reverted', 'dismissed'] as const;
 const RULES = ['flood', 'repeat', 'mentions'] as const;
-const ID_PATTERN = /^\d{17,20}$/;
 
 function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
   return allowed.find((item) => item === value);
@@ -29,11 +29,11 @@ export function Cases() {
   const status = pick(params.get('situacao'), STATUSES);
   const rule = pick(params.get('regra'), RULES);
   const rawTarget = params.get('alvo');
-  const target = rawTarget !== null && ID_PATTERN.test(rawTarget) ? rawTarget : undefined;
+  const target = rawTarget !== null && isSnowflake(rawTarget) ? rawTarget : undefined;
   const rawSelected = Number(params.get('caso'));
   const selected = Number.isInteger(rawSelected) && rawSelected > 0 ? rawSelected : null;
   const [targetText, setTargetText] = useState(target ?? '');
-  const targetInvalid = targetText !== '' && !ID_PATTERN.test(targetText);
+  const targetInvalid = targetText !== '' && !isSnowflake(targetText);
 
   const filters = {
     ...(status === undefined ? {} : { status }),
@@ -54,16 +54,6 @@ export function Cases() {
       { replace: true },
     );
   };
-
-  if (query.isError) {
-    const forbidden = query.error instanceof ApiError && query.error.status === 403;
-    return (
-      <section>
-        <h1>Casos</h1>
-        <p role="alert">{forbidden ? NO_PERMISSION_TEXT : query.error.message}</p>
-      </section>
-    );
-  }
 
   const rows = query.data?.pages.flatMap((page) => page.cases) ?? [];
 
@@ -121,15 +111,22 @@ export function Cases() {
                 const text = event.target.value.trim();
                 setTargetText(text);
                 if (text === '') setParam('alvo', null);
-                else if (ID_PATTERN.test(text)) setParam('alvo', text);
+                else if (isSnowflake(text)) setParam('alvo', text);
               }}
             />
           </label>
           {targetInvalid ? <p className="field-hint">Use de 17 a 20 dígitos.</p> : null}
         </form>
 
+        {query.isError ? (
+          <p role="alert">
+            {query.error instanceof ApiError && query.error.status === 403
+              ? NO_PERMISSION_TEXT
+              : query.error.message}
+          </p>
+        ) : null}
         {query.isPending ? <p className="muted">Carregando…</p> : null}
-        {!query.isPending && rows.length === 0 ? (
+        {!query.isPending && !query.isError && rows.length === 0 ? (
           <p className="muted">Nenhum caso encontrado.</p>
         ) : null}
         {rows.length === 0 ? null : (

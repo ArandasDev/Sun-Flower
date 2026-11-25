@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]';
 
@@ -11,6 +11,8 @@ interface ConfirmDialogProps {
   pending?: boolean;
   /** Text of a failed attempt, shown inside the dialog. */
   error?: string | null;
+  /** Where focus goes on close when the ref holds an element; otherwise back to the opener. */
+  returnFocusRef?: RefObject<HTMLElement | null>;
   children?: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function ConfirmDialog({
   onCancel,
   pending = false,
   error = null,
+  returnFocusRef,
   children,
 }: ConfirmDialogProps) {
   const titleId = useId();
@@ -42,34 +45,56 @@ export function ConfirmDialog({
     const previous = document.activeElement;
     cancelRef.current?.focus();
     return () => {
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      // A caller whose opener is about to disappear names where focus goes instead.
+      const target = returnFocusRef?.current ?? previous;
+      if (target instanceof HTMLElement && target.isConnected) target.focus();
+    };
+  }, [returnFocusRef]);
+
+  // A confirm button that turns disabled drops focus; after a failed attempt, bring it back.
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if ((wasPending.current && !pending) || (!pending && error !== null)) {
+      cancelRef.current?.focus();
+    }
+    wasPending.current = pending;
+  }, [pending, error]);
+
+  // On the document, so the keys keep working even when focus is on the page body.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        if (!pendingRef.current) cancelCallback.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [];
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (first === undefined || last === undefined) return;
+      const active = document.activeElement;
+      const inside = active instanceof Node && panelRef.current?.contains(active) === true;
+      if (!inside) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, []);
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      if (!pendingRef.current) cancelCallback.current();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const items = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [];
-    const first = items[0];
-    const last = items[items.length - 1];
-    if (first === undefined || last === undefined) return;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   return (
     <div
       className="dialog-backdrop"
-      onKeyDown={onKeyDown}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !pending) onCancel();
       }}

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api.ts';
 import {
   NO_PERMISSION_TEXT,
@@ -74,6 +74,14 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
   const [pending, setPending] = useState<Pending>(null);
   const [allowDomains, setAllowDomains] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // Set only after a success: the opener is about to disappear, so focus goes to the heading.
+  const successFocusRef = useRef<HTMLElement | null>(null);
+
+  // Opening a case moves focus here: on a phone this scrolls the detail into view.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
 
   const refresh = (): void => {
     void client.invalidateQueries({ queryKey: ['cases'] });
@@ -92,6 +100,7 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
             ? 'Caso revertido. As mensagens apagadas não voltam.'
             : 'Caso revertido.',
         );
+        successFocusRef.current = headingRef.current;
         close();
         refresh();
       },
@@ -100,6 +109,7 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
   const dismiss = useOperationMutation<CaseFull, { id: number }>('moderation.cases.dismiss', {
     onSuccess: () => {
       setNotice('Caso descartado.');
+      successFocusRef.current = headingRef.current;
       close();
       refresh();
     },
@@ -107,7 +117,9 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
 
   const header = (
     <div className="detail-head">
-      <h2>Caso {id}</h2>
+      <h2 ref={headingRef} tabIndex={-1}>
+        Caso {id}
+      </h2>
       <button type="button" className="button button-quiet" onClick={onClose}>
         Fechar
       </button>
@@ -131,7 +143,9 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
     );
   }
   const record = query.data;
-  const open = record.status === 'open' || record.status === 'actioned';
+  // Mirrors the server: a case is reverted from open or actioned, dismissed only from open.
+  const canRevert = record.status === 'open' || record.status === 'actioned';
+  const canDismiss = record.status === 'open';
   const active = pending === 'revert' ? revert : dismiss;
 
   return (
@@ -185,36 +199,41 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
           {notice}
         </p>
       )}
-      {canAct && open ? (
+      {canAct && (canRevert || canDismiss) ? (
         <div className="detail-actions">
-          <button
-            type="button"
-            className="button"
-            onClick={() => {
-              setNotice(null);
-              revert.reset();
-              setPending('revert');
-            }}
-          >
-            Reverter
-          </button>
-          <button
-            type="button"
-            className="button button-quiet"
-            onClick={() => {
-              setNotice(null);
-              dismiss.reset();
-              setPending('dismiss');
-            }}
-          >
-            Descartar
-          </button>
+          {canRevert ? (
+            <button
+              type="button"
+              className="button"
+              onClick={() => {
+                setNotice(null);
+                revert.reset();
+                setPending('revert');
+              }}
+            >
+              Reverter
+            </button>
+          ) : null}
+          {canDismiss ? (
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={() => {
+                setNotice(null);
+                dismiss.reset();
+                setPending('dismiss');
+              }}
+            >
+              Descartar
+            </button>
+          ) : null}
         </div>
       ) : null}
       {pending === null ? null : (
         <ConfirmDialog
           title={pending === 'revert' ? `Reverter o caso ${id}?` : `Descartar o caso ${id}?`}
           confirmLabel={pending === 'revert' ? 'Reverter' : 'Descartar'}
+          returnFocusRef={successFocusRef}
           pending={active.isPending}
           error={active.isError ? errorText(active.error) : null}
           onCancel={close}
