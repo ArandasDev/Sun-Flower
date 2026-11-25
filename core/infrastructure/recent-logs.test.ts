@@ -118,6 +118,40 @@ describe('RecentLogs', () => {
     expect(recent.recent({ limit: 1, minLevel: 'info' })[0]?.message).toBe('n [id] end');
   });
 
+  it('masks ids in field values, including runs longer than 20 digits and numbers', () => {
+    const recent = new RecentLogs();
+    recent.write(
+      line(30, 'x', {
+        long: 'a 1234567890123456789012345 b',
+        exact: '12345678901234567890',
+        asNumber: 123456789012345678,
+        small: 1234567890123456,
+        negative: -12345678901234567,
+      }),
+    );
+    expect(recent.recent({ limit: 1, minLevel: 'info' })[0]?.fields).toEqual({
+      long: 'a [id] b',
+      exact: '[id]',
+      asNumber: '[id]',
+      small: 1234567890123456,
+      negative: '[id]',
+    });
+  });
+
+  it('masks ids in field keys, also runs longer than 20 digits', () => {
+    const recent = new RecentLogs();
+    recent.write(
+      line(30, 'x', {
+        '123456789012345678': true,
+        'user-1234567890123456789012345-seen': 1,
+        '1234567890123456': 'kept',
+      }),
+    );
+    const fields = recent.recent({ limit: 1, minLevel: 'info' })[0]?.fields ?? {};
+    expect(fields).toEqual({ '[id]': true, 'user-[id]-seen': 1, '1234567890123456': 'kept' });
+    expect(JSON.stringify(fields)).not.toMatch(/\d{17,}/);
+  });
+
   it('takes module from the top-level field', () => {
     const { logger, recent } = realLogger();
     logger.child({ module: 'ping' }).warn('hi');

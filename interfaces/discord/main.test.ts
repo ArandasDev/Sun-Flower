@@ -1,14 +1,23 @@
 import { EventEmitter } from 'node:events';
+import fs from 'node:fs';
 import { createServer, type AddressInfo, type Server } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { Writable } from 'node:stream';
 import type { Client } from 'discord.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoreHandle } from '../../core/application/core.ts';
+import { createFakeGuild } from '../../tests/helpers/fake-guild.ts';
 import { createRecordingLogger } from '../../tests/helpers/recording-logger.ts';
+import type { LogEntry } from '../../shared/contracts/admin.ts';
+import type { Actor } from '../../shared/contracts/commands.ts';
 import type { EventHandler, SunFlowerEvent } from '../../shared/contracts/events.ts';
 import {
   createCoalescedSync,
+  createLoggedCore,
   DASHBOARD_STATIC_DIR,
+  MODULES_DIR,
   resyncOnModuleChanges,
   startPanel,
 } from './main.ts';
@@ -193,5 +202,56 @@ describe('resyncOnModuleChanges', () => {
     expect(resyncs).toBe(3);
     unsubscribe();
     expect(unsubscribed).toBe(1);
+  });
+});
+
+describe('createLoggedCore', () => {
+  it('gives the Core the same memory of logs the logger writes to', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sunflower-main-'));
+    const sink = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback();
+      },
+    });
+    const logged = createLoggedCore('warn', sink);
+    const started = await logged.startCore({
+      dbPath: path.join(dir, 'test.db'),
+      modulesDir: MODULES_DIR,
+      guild: createFakeGuild(),
+    });
+    try {
+      const developer: Actor = { userId: '333333333333333333', roleIds: [], isOwner: false };
+      started.permissions.addDeveloper(developer.userId);
+      logged.logger.info({ marker: 'wired' }, 'wiring check');
+      await started.operations.execute(
+        'administration.developers.add',
+        developer,
+        { userId: '444444444444444444' },
+        'dashboard',
+      );
+      const result = await started.operations.execute(
+        'administration.logs.recent',
+        developer,
+        { limit: 500 },
+        'dashboard',
+      );
+      const entries = (result as { data: { entries: LogEntry[] } }).data.entries;
+      expect(entries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ message: 'wiring check', fields: { marker: 'wired' } }),
+          expect.objectContaining({
+            message: 'admin change',
+            fields: expect.objectContaining({
+              action: 'developers.add',
+              actor: '…3333',
+              target: '…4444',
+            }) as unknown,
+          }),
+        ]),
+      );
+    } finally {
+      await started.stop();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

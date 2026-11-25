@@ -10,7 +10,10 @@ const RANK: Readonly<Record<LogLevelName, number>> = { info: 30, warn: 40, error
 /** Keys that are dropped from `fields` because they have their own place in the entry. */
 const RESERVED = new Set(['pid', 'hostname', 'service', 'level', 'time', 'msg', 'module']);
 const MAX_TEXT = 300;
+/** Any run of 17 digits or more, so also runs longer than an ID's 20. */
 const ID_RUN = /\d{17,}/g;
+/** The smallest number with 17 digits. */
+const MIN_ID_NUMBER = 1e16;
 
 function clean(text: string): string {
   return text.replace(ID_RUN, '[id]').slice(0, MAX_TEXT);
@@ -61,10 +64,15 @@ export class RecentLogs {
     if (level === undefined) return;
 
     const fields: Record<string, string | number | boolean | null> = {};
-    for (const [key, value] of Object.entries(record)) {
-      if (RESERVED.has(key)) continue;
+    for (const [rawKey, value] of Object.entries(record)) {
+      if (RESERVED.has(rawKey)) continue;
+      // A key may hold an ID too, as in `{ [userId]: true }`.
+      const key = clean(rawKey);
       if (typeof value === 'string') fields[key] = clean(value);
-      else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+      else if (typeof value === 'number') {
+        // JSON keeps an ID written as a number: 17 or more digits never pass through.
+        fields[key] = Math.abs(value) >= MIN_ID_NUMBER ? '[id]' : value;
+      } else if (typeof value === 'boolean' || value === null) {
         fields[key] = value;
       } else if (typeof value === 'object') fields[key] = '[objeto]';
     }

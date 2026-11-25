@@ -1,11 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { Events, type Client, type Guild, type Interaction, type Message } from 'discord.js';
 
-import { startCore, type CoreHandle } from '../../core/application/core.ts';
+import { startCore, type CoreHandle, type StartCoreOptions } from '../../core/application/core.ts';
 import { installShutdownHandlers } from '../../core/application/shutdown.ts';
 import {
   EnvironmentError,
   loadEnvironment,
+  type LogLevel,
   type Source,
 } from '../../core/configuration/environment.ts';
 import {
@@ -236,6 +237,23 @@ export async function startPanel(options: StartPanelOptions): Promise<DashboardH
   }
 }
 
+export interface LoggedCore {
+  readonly logger: Logger;
+  /** Starts the Core with this logger and the memory of logs it writes to. */
+  startCore(options: Omit<StartCoreOptions, 'logger' | 'recentLogs'>): Promise<CoreHandle>;
+}
+
+/** One RecentLogs both receives the logger's entries and answers the Core's `admin.logs.recent`. */
+export function createLoggedCore(level: LogLevel, destination?: NodeJS.WritableStream): LoggedCore {
+  const recentLogs = new RecentLogs();
+  const logger = createLogger({
+    level,
+    ...(destination === undefined ? {} : { destination }),
+    recent: recentLogs,
+  });
+  return { logger, startCore: (options) => startCore({ ...options, logger, recentLogs }) };
+}
+
 /** Starts the bot: environment, logger, Core, panel, shutdown handlers, Discord client and login. */
 export async function main(): Promise<void> {
   let environment;
@@ -248,17 +266,15 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const recentLogs = new RecentLogs();
-  const logger = createLogger({ level: environment.logLevel, recent: recentLogs });
+  const logged = createLoggedCore(environment.logLevel);
+  const { logger } = logged;
   const client = createDiscordClient();
   let core: CoreHandle;
   try {
-    core = await startCore({
+    core = await logged.startCore({
       dbPath: environment.dbPath,
       modulesDir: MODULES_DIR,
-      logger,
       guild: createGuildActions(createDiscordGateway(client, environment.guildId)),
-      recentLogs,
     });
   } catch (error) {
     logger.fatal({ error: errorMessage(error) }, 'core failed to start');
