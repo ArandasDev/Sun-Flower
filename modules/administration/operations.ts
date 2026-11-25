@@ -16,7 +16,7 @@ const SNOWFLAKE_MAX = 18446744073709551615n;
 const snowflake = z
   .string()
   .regex(/^[1-9]\d{16,19}$/)
-  .refine((id) => BigInt(id) <= SNOWFLAKE_MAX);
+  .refine((id) => /^\d+$/.test(id) && BigInt(id) <= SNOWFLAKE_MAX);
 
 const LOG_LEVELS = ['info', 'warn', 'error', 'fatal'] as const satisfies readonly LogLevelName[];
 

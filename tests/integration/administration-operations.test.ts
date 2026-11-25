@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startCore, type CoreHandle } from '../../core/application/core.ts';
 import type { Actor } from '../../shared/contracts/commands.ts';
 import { createFakeGuild } from '../helpers/fake-guild.ts';
-import { createRecordingLogger } from '../helpers/recording-logger.ts';
+import { createRecordingLogger, type RecordingLogger } from '../helpers/recording-logger.ts';
 
 const MODULES_DIR = fileURLToPath(new URL('../../modules/', import.meta.url));
 const MEMBER: Actor = { userId: '111111111111111111', roleIds: [], isOwner: false };
@@ -38,13 +38,15 @@ const ALL_OPERATIONS: [string, unknown][] = [
 
 let dir: string;
 let core: CoreHandle;
+let logger: RecordingLogger;
 
 beforeEach(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sunflower-admin-'));
+  logger = createRecordingLogger();
   core = await startCore({
     dbPath: path.join(dir, 'test.db'),
     modulesDir: MODULES_DIR,
-    logger: createRecordingLogger(),
+    logger,
     guild: createFakeGuild(),
   });
   core.permissions.addDeveloper(DEVELOPER.userId);
@@ -139,6 +141,14 @@ describe('administration operations through the Core', () => {
     expect(on).toMatchObject({ ok: true, data: { changed: true } });
     expect(core.commands().has('mod')).toBe(true);
     expect(await run('moderation.cases.list', DEVELOPER, {})).toMatchObject({ ok: true });
+  });
+
+  it('answers invalid for a non-numeric user ID and logs no error', async () => {
+    expect(await run('administration.developers.add', DEVELOPER, { userId: 'abc' })).toEqual({
+      ok: false,
+      error: { code: 'invalid', message: 'Entrada inválida: userId.' },
+    });
+    expect(logger.entries.filter((e) => e.level === 'error' || e.level === 'fatal')).toEqual([]);
   });
 
   it('refuses to disable the administration module', async () => {

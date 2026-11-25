@@ -182,4 +182,23 @@ describe('administration operations', () => {
     ).toBe(false);
     expect(accepts('administration.modules.set-enabled', { moduleId: 'ping' })).toBe(false);
   });
+
+  it('rejects non-numeric ids without throwing', () => {
+    const { accepts } = setup();
+    for (const bad of ['abc', '12x', '1e18']) {
+      for (const name of [
+        'administration.developers.add',
+        'administration.developers.remove',
+        'administration.sessions.revoke-all',
+      ]) {
+        expect(() => accepts(name, { userId: bad }), `${name} ${bad}`).not.toThrow();
+        expect(accepts(name, { userId: bad }), `${name} ${bad}`).toBe(false);
+      }
+      for (const name of ['administration.grants.grant', 'administration.grants.revoke']) {
+        const input = { permission: 'a.b.c', roleId: bad };
+        expect(() => accepts(name, input), `${name} ${bad}`).not.toThrow();
+        expect(accepts(name, input), `${name} ${bad}`).toBe(false);
+      }
+    }
+  });
 });
