@@ -198,15 +198,17 @@ npm run build --prefix interfaces/dashboard/app
 | Ações      | `/acoes`     | Aviso, timeout, expulsão e banimento. Expulsão e banimento pedem confirmação.                                                                                                               |
 | Domínios   | `/dominios`  | Listas de domínios bloqueados e permitidos.                                                                                                                                                 |
 | Moderação  | `/moderacao` | Configuração da moderação, com um botão de salvar por seção.                                                                                                                                |
-| Meus casos | Meu perfil   | Os casos da própria pessoa, visíveis a todos.                                                                                                                                               |
+| Meus casos | `/`          | Os casos da própria pessoa, em "Meu perfil", visíveis a todos.                                                                                                                              |
 
-Cada seção da configuração é salva com a versão que a pessoa viu (`expectedVersion`). Se outra pessoa salvou antes, o painel recusa a gravação, mostra o texto do conflito com o botão `Recarregar` e avisa quando outra pessoa altera a configuração enquanto a tela está aberta.
+Cada seção da configuração é salva com a versão que a pessoa viu (`expectedVersion`). Se outra pessoa salvou antes, o painel recusa a gravação, mostra o texto do conflito com o botão `Recarregar`. Quando outra pessoa altera a configuração com a tela aberta, o painel mostra o mesmo aviso se houver alterações não salvas; sem alterações, carrega a nova versão sem aviso.
+
+Cada evento ao vivo de caso atualiza a lista e o detalhe no máximo uma vez a cada 5 s, e o último evento sempre é aplicado. Um caso novo recarrega só a primeira página da lista; as páginas extras carregadas com `Carregar mais` se fecham. Assim, uma onda de casos não esgota o limite de requisições da sessão.
 
 **Limites conhecidos da etapa 2:**
 
-- O painel não limpa o canal de alertas: um campo vazio mantém o canal atual. Para limpá-lo, use `/mod config alert-channel`.
-- Os termos de isca (`baitTerms`) não podem ser editados no painel; continuam sendo geridos com `/mod`.
-- O layout ainda não foi conferido em um navegador de verdade (só nos testes automatizados).
+- Ainda não é possível limpar o canal de alertas, nem no painel nem no `/mod`. No painel, um campo vazio mantém o canal atual.
+- Ainda não é possível editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`. Eles mantêm o valor padrão ou o valor gravado.
+- O layout foi conferido em um navegador na revisão, em 1024 px e em 375 px de largura. O teste manual abaixo continua pendente.
 
 **Teste manual da etapa 2** (pessoa mantenedora), atrás de um proxy HTTPS e com um usuário de teste:
 

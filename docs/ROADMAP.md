@@ -139,7 +139,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 **Etapas:** spec [2026-11-24-fase-3-painel.md](specs/2026-11-24-fase-3-painel.md).
 
 1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil. **Implementada** (PRs H, I e J); o teste manual do [README](../README.md#painel) está pendente.
-2. Moderação pelo painel: casos, ações manuais, domínios e configuração, com atualização ao vivo e "Meus casos" para todos. **Implementada** (PR L); o teste manual do [README](../README.md#painel) está pendente. Limites: o painel não limpa o canal de alertas, não edita os termos de isca (`baitTerms`, ainda geridos com `/mod`) e o layout não foi conferido em um navegador de verdade.
+2. Moderação pelo painel: casos, ações manuais, domínios e configuração, com atualização ao vivo e "Meus casos" para todos. **Implementada** (PRs K e L); o teste manual do [README](../README.md#painel) está pendente. Limites: ainda não é possível limpar o canal de alertas nem editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`.
 3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões.
 
 **Critérios de conclusão:**

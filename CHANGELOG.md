@@ -31,9 +31,11 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Casos (`/casos`): filtros mantidos no endereço, `Carregar mais`, detalhe lateral e Reverter e Descartar com confirmação.
   - Ações (`/acoes`): aviso, timeout, expulsão e banimento, com confirmação para expulsão e banimento.
   - Domínios (`/dominios`).
-  - Moderação (`/moderacao`): um botão de salvar por seção, com `expectedVersion`, texto de conflito com `Recarregar` e aviso quando outra pessoa altera a configuração.
+  - Moderação (`/moderacao`): um botão de salvar por seção, ativo só com alterações não salvas, com `expectedVersion` e texto de conflito com `Recarregar`, mostrado também quando outra pessoa altera a configuração durante uma edição.
   - "Meus casos" em "Meu perfil", visível a todos.
-- Teste manual da etapa 2 e limites conhecidos no README: o painel não limpa o canal de alertas (campo vazio mantém o atual), não edita os `baitTerms` (ainda geridos com `/mod`) e o layout ainda não foi conferido em um navegador de verdade.
+- Eventos ao vivo de caso atualizam cada consulta no máximo uma vez a cada 5 s, sempre aplicando o último; um caso novo recarrega só a primeira página da lista.
+- Uma resposta 401 de qualquer operação do painel leva ao login, como já acontecia com as consultas.
+- Teste manual da etapa 2 e limites conhecidos no README: ainda não é possível limpar o canal de alertas (no painel, campo vazio mantém o atual) nem editar os `baitTerms`, nem no painel nem no `/mod`.
 
 ### Changed
 
