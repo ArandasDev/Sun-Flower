@@ -25,6 +25,15 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Core 1.3.0: operações de módulo (`ctx.operations`), com checagem de módulo, permissão e entrada antes do handler, erros tipados e log sem dados.
 - O módulo `moderation` expõe operações de configuração, domínios, casos e ações manuais (`moderation.config.*`, `moderation.domains.*`, `moderation.cases.*`, `moderation.actions.*`), e o `/mod` passou a usá-las, com as respostas inalteradas.
 - Evento `moderation.case.dismissed`, publicado quando um caso é descartado.
+- Rota `POST /api/operations/:name` do painel, que executa operações de módulo com sessão e CSRF, valida o nome e usa o ator da sessão, com `source` `dashboard`; erros no formato padrão (403, 404, 409, 422, 500 e 503).
+- Eventos ao vivo `case.created` e `case.updated`, enviados só a quem tem `moderation.cases.read`, com a permissão checada a cada envio.
+- Telas de moderação do painel, cada uma visível só a quem tem a permissão:
+  - Casos (`/casos`): filtros mantidos no endereço, `Carregar mais`, detalhe lateral e Reverter e Descartar com confirmação.
+  - Ações (`/acoes`): aviso, timeout, expulsão e banimento, com confirmação para expulsão e banimento.
+  - Domínios (`/dominios`).
+  - Moderação (`/moderacao`): um botão de salvar por seção, com `expectedVersion`, texto de conflito com `Recarregar` e aviso quando outra pessoa altera a configuração.
+  - "Meus casos" em "Meu perfil", visível a todos.
+- Teste manual da etapa 2 e limites conhecidos no README: o painel não limpa o canal de alertas (campo vazio mantém o atual), não edita os `baitTerms` (ainda geridos com `/mod`) e o layout ainda não foi conferido em um navegador de verdade.
 
 ### Changed
 
