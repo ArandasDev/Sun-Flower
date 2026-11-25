@@ -471,6 +471,8 @@ describe('screenFor', () => {
     ['/dominios', 'domains'],
     ['/moderacao', 'moderation-config'],
     ['/casos', 'cases'],
+    ['/permissoes', 'grants'],
+    ['/desenvolvedores', 'developers'],
   ])('maps %s to %s', (path, screen) => {
     expect(screenFor(path)).toBe(screen);
   });

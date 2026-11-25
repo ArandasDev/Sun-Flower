@@ -61,6 +61,8 @@ export function screenFor(pathname: string): string {
   if (pathname.startsWith('/acoes')) return 'actions';
   if (pathname.startsWith('/dominios')) return 'domains';
   if (pathname.startsWith('/moderacao')) return 'moderation-config';
+  if (pathname.startsWith('/permissoes')) return 'grants';
+  if (pathname.startsWith('/desenvolvedores')) return 'developers';
   return 'profile';
 }
 

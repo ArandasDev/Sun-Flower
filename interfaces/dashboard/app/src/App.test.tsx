@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { statusRefetchInterval } from './routes/Overview.tsx';
-import { me, renderApp, stubFetch } from './test-utils.tsx';
+import { me, okBody, renderApp, setupOperations, stubFetch } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -230,5 +230,19 @@ describe('overview', () => {
     );
     renderApp('/visao-geral');
     await waitFor(() => expect(screen.getByText('Sem permissão.')).toBeInTheDocument());
+  });
+});
+
+describe('menu: administration items', () => {
+  it('shows each item only with its permission', async () => {
+    setupOperations(['administration.grants.manage'], () => okBody({ cases: [] }), '/');
+    expect(await screen.findByRole('link', { name: 'Permissões' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Desenvolvedores' })).toBeNull();
+  });
+
+  it('shows the developers item with core.developers.manage only', async () => {
+    setupOperations(['core.developers.manage'], () => okBody({ cases: [] }), '/');
+    expect(await screen.findByRole('link', { name: 'Desenvolvedores' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Permissões' })).toBeNull();
   });
 });

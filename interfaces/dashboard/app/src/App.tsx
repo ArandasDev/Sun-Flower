@@ -5,7 +5,9 @@ import { ReconnectBanner } from './components/ReconnectBanner.tsx';
 import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
 import { Actions } from './routes/Actions.tsx';
 import { Cases } from './routes/Cases.tsx';
+import { Developers } from './routes/Developers.tsx';
 import { Domains } from './routes/Domains.tsx';
+import { Grants } from './routes/Grants.tsx';
 import { Login } from './routes/Login.tsx';
 import { ModerationConfig } from './routes/ModerationConfig.tsx';
 import { Overview } from './routes/Overview.tsx';
@@ -37,6 +39,8 @@ function LiveShell({ clock }: { clock: LiveClock }) {
               <Route path="acoes" element={<Actions />} />
               <Route path="dominios" element={<Domains />} />
               <Route path="moderacao" element={<ModerationConfig />} />
+              <Route path="permissoes" element={<Grants />} />
+              <Route path="desenvolvedores" element={<Developers />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.main>

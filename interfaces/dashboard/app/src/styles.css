@@ -812,6 +812,34 @@ a {
   white-space: nowrap;
 }
 
+/* Permissions and developers */
+
+.grant-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.grant-groups h2 {
+  margin-top: 0;
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+.inline-form select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sky);
+  color: var(--stem);
+  font: inherit;
+}
+
+.self-mark {
+  color: var(--leaf);
+}
+
 /* Moderation settings */
 
 .config-section {
