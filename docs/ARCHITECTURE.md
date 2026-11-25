@@ -173,6 +173,14 @@ O painel deverá consumir as interfaces disponibilizadas pela aplicação centra
 
 O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, no mesmo processo do bot, atrás de um proxy HTTPS e com atualização em tempo real por WebSocket. Veja as decisões [0017](decisions/0017-access-levels.md), [0018](decisions/0018-panel-authentication.md), [0019](decisions/0019-panel-stack.md), [0020](decisions/0020-panel-realtime.md) e [0021](decisions/0021-panel-hosting.md) e a [spec da Fase 3](specs/2026-11-24-fase-3-painel.md).
 
+**Operações.** O painel não chama os módulos: ele executa operações nomeadas pelo Core, as mesmas que o Discord usa (contrato completo em [MODULES.md §5.3](MODULES.md#53-operações) e [decisão 0022](decisions/0022-module-operations.md)).
+
+- Cada módulo registra as suas no `register()`, com `ctx.operations.register`. O módulo executa as próprias com `ctx.operations.execute`; as interfaces usam `CoreHandle.operations.execute(name, actor, input, source)`.
+- O Core checa, nesta ordem: operação inexistente (`not_found`), módulo inativo (`unavailable`), permissão (`forbidden`) e entrada (`invalid`). Só então roda o handler.
+- Cada chamada registra `{ module, operation, source, result }`, sem entrada, IDs nem texto.
+- A rota `POST /api/operations/:name` exige sessão e CSRF e valida o nome (`^[a-z][a-z0-9.-]{2,100}$`; fora disso, 404). O corpo precisa ser um objeto JSON (sem corpo vale `{}`). O ator vem sempre da sessão, nunca do corpo, e a `source` enviada ao Core é `dashboard`. Responde `200 { data }` ou `{ error: { code, message } }` com 403, 404, 409, 422, 500 ou 503.
+- O canal ao vivo envia `case.created` e `case.updated` (`{ caseId }`) só a quem tem `moderation.cases.read`, e a permissão é checada a cada envio.
+
 ## 4. Princípios de Modularização
 
 A modularização é um dos fundamentos mais importantes do Sun Flower.

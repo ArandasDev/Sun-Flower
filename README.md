@@ -118,7 +118,7 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 
 ## Painel
 
-O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel.
+O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel. Na etapa 2 ele ganha a moderação: casos, ações manuais, domínios e configuração, cada tela visível só a quem tem a permissão correspondente, e "Meus casos" em "Meu perfil", visível a todos.
 
 **Variáveis** (todas no `.env`): o painel liga quando `PANEL_PUBLIC_URL` está definida, e então `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` e `SESSION_SECRET` passam a ser obrigatórias; `PANEL_PORT` (padrão `3000`) e `PANEL_TRUST_PROXY` são opcionais:
 
@@ -189,6 +189,34 @@ npm run build --prefix interfaces/dashboard/app
 4. Duas abas da mesma pessoa aparecem como uma só na presença.
 5. Desconectar a rede mostra `Reconectando…`, e a conexão volta sozinha quando a rede volta.
 6. O logout em uma aba leva a outra para o login.
+
+**Telas de moderação (etapa 2).** As operações passam pelo mesmo caminho dos comandos `/mod`, com as mesmas permissões, e o painel mostra cada tela só a quem pode usá-la:
+
+| Tela       | Endereço     | O que faz                                                                                                                                                                                   |
+| ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Casos      | `/casos`     | Lista os casos com filtros mantidos no endereço, `Carregar mais` e um detalhe lateral. Reverter e Descartar pedem confirmação. Um caso novo ou alterado aparece na hora para quem pode ver. |
+| Ações      | `/acoes`     | Aviso, timeout, expulsão e banimento. Expulsão e banimento pedem confirmação.                                                                                                               |
+| Domínios   | `/dominios`  | Listas de domínios bloqueados e permitidos.                                                                                                                                                 |
+| Moderação  | `/moderacao` | Configuração da moderação, com um botão de salvar por seção.                                                                                                                                |
+| Meus casos | `/`          | Os casos da própria pessoa, em "Meu perfil", visíveis a todos.                                                                                                                              |
+
+Cada seção da configuração é salva com a versão que a pessoa viu (`expectedVersion`). Se outra pessoa salvou antes, o painel recusa a gravação, mostra o texto do conflito com o botão `Recarregar`. Quando outra pessoa altera a configuração com a tela aberta, o painel mostra o mesmo aviso se houver alterações não salvas; sem alterações, carrega a nova versão sem aviso.
+
+Cada evento ao vivo de caso atualiza a lista e o detalhe no máximo uma vez a cada 5 s, e o último evento sempre é aplicado. Um caso novo recarrega só a primeira página da lista; as páginas extras carregadas com `Carregar mais` se fecham. Assim, uma onda de casos não esgota o limite de requisições da sessão.
+
+**Limites conhecidos da etapa 2:**
+
+- Ainda não é possível limpar o canal de alertas, nem no painel nem no `/mod`. No painel, um campo vazio mantém o canal atual.
+- Ainda não é possível editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`. Eles mantêm o valor padrão ou o valor gravado.
+- O layout foi conferido em um navegador na revisão, em 1024 px e em 375 px de largura. O teste manual abaixo continua pendente.
+
+**Teste manual da etapa 2** (pessoa mantenedora), atrás de um proxy HTTPS e com um usuário de teste:
+
+1. Uma conta da equipe, com `/casos` aberta, vê um caso novo aparecer na hora.
+2. Ela reverte o caso, com confirmação.
+3. Duas abas salvam a mesma seção em `/moderacao`, e a segunda recebe o conflito com `Recarregar`.
+4. O dono, sem cargo, bane o usuário de teste em `/acoes`.
+5. Um membro comum vê só "Meus casos" em "Meu perfil".
 
 ## Documentação
 

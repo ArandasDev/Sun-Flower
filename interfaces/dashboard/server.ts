@@ -15,6 +15,7 @@ import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
 import { apiError } from './errors.ts';
 import { LIVE_PATH, LiveHub, type LiveClock } from './live.ts';
+import { registerOperationsRoute } from './operations-route.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
 import { CHANGING_METHODS, createSessionAuth, type SessionAuth } from './session.ts';
 import { registerStatusRoute, statusSnapshot } from './status-route.ts';
@@ -232,6 +233,8 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     logger: false,
     trustProxy: env.trustProxy.length > 0 ? env.trustProxy : false,
     bodyLimit: BODY_LIMIT,
+    // Above the 101 characters an operation name may have, so the route answers 404 to a bad one.
+    routerOptions: { maxParamLength: 256 },
     requestTimeout: REQUEST_TIMEOUT_MS,
     // Node's default of 60 s would otherwise cap the headers phase above the request timeout.
     http: { headersTimeout: REQUEST_TIMEOUT_MS },
@@ -375,6 +378,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     },
   });
   registerStatusRoute(app, { core: deps.core, status: deps.status, auth, now });
+  registerOperationsRoute(app, { core: deps.core, auth });
 
   await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
 

@@ -58,3 +58,38 @@ export function renderApp(path: string, clock?: LiveClock) {
   );
   return { ...view, client };
 }
+
+export interface OperationCall {
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export const okBody = (data: unknown): FakeResponse => ({ status: 200, body: { data } });
+
+export const errorBody = (status: number, code: string, message: string): FakeResponse => ({
+  status,
+  body: { error: { code, message } },
+});
+
+/** Renders `path` as a staff member holding `permissions`; `operation` answers each module operation. */
+export function setupOperations(
+  permissions: string[],
+  operation: (call: OperationCall) => FakeResponse,
+  path: string,
+  clock?: LiveClock,
+) {
+  const calls: OperationCall[] = [];
+  stubFetch((url, init) => {
+    if (url === '/api/me') return me('staff', { permissions });
+    if (url.startsWith('/api/operations/')) {
+      const call = {
+        name: url.slice('/api/operations/'.length),
+        input: JSON.parse(init?.body as string) as Record<string, unknown>,
+      };
+      calls.push(call);
+      return operation(call);
+    }
+    return errorBody(404, 'not_found', 'x');
+  });
+  return { ...renderApp(path, clock), calls };
+}

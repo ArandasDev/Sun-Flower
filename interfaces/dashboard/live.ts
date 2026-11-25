@@ -47,6 +47,15 @@ const configChanged = z.object({
   version: z.number().int().nonnegative(),
 });
 
+const caseEvent = z.object({ caseId: z.number().int().positive() });
+
+/** Case events and the live message each one becomes; the first is a new case, the others changes. */
+const CASE_EVENTS: readonly (readonly [string, 'case.created' | 'case.updated'])[] = [
+  ['moderation.case.created', 'case.created'],
+  ['moderation.case.reverted', 'case.updated'],
+  ['moderation.case.dismissed', 'case.updated'],
+];
+
 /** Time and timers; tests replace them with a clock they advance by hand. */
 export interface LiveClock {
   now(): number;
@@ -169,6 +178,13 @@ export class LiveHub {
         this.#onConfigChanged(event);
       }),
     );
+    for (const [eventType, messageType] of CASE_EVENTS) {
+      this.#unsubscribe.push(
+        this.#core.subscribe(eventType, (event) => {
+          this.#onCaseEvent(event, messageType);
+        }),
+      );
+    }
     this.#revalidateTimer = this.#clock.setInterval(() => {
       this.#enqueue(() => this.#revalidate());
     }, REVALIDATE_INTERVAL_MS);
@@ -392,6 +408,18 @@ export class LiveHub {
         this.#core.permissions
           .effective(actor, this.#core.declaredPermissions())
           .some((permission) => permission.startsWith(prefix)),
+      ),
+    );
+  }
+
+  /** Tells whoever may read cases right now that one appeared or changed; never what it holds. */
+  #onCaseEvent(event: SunFlowerEvent, type: 'case.created' | 'case.updated'): void {
+    const parsed = caseEvent.safeParse(event.payload);
+    if (!parsed.success) return;
+    const { caseId } = parsed.data;
+    this.#enqueue(() =>
+      this.#deliver(type, { caseId }, (actor) =>
+        this.#core.permissions.check(actor, 'moderation.cases.read'),
       ),
     );
   }
