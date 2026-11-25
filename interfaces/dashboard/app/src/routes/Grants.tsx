@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { isSnowflake } from '../ids.ts';
 import { errorText } from '../labels.ts';
@@ -33,6 +33,7 @@ function groupByPermission(grants: GrantEntry[]): [string, GrantEntry[]][] {
 
 export function Grants() {
   const client = useQueryClient();
+  const selectRef = useRef<HTMLSelectElement>(null);
   const [permission, setPermission] = useState('');
   const [roleId, setRoleId] = useState('');
   const query = useOperationQuery<GrantList>(['admin', 'grants'], 'administration.grants.list', {});
@@ -46,7 +47,10 @@ export function Grants() {
     },
   });
   const revoke = useOperationMutation<unknown, GrantInput>('administration.grants.revoke', {
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      selectRef.current?.focus();
+    },
   });
   const error = grant.error ?? revoke.error ?? (query.isError ? query.error : null);
   const grantable = query.data?.grantable ?? [];
@@ -66,12 +70,16 @@ export function Grants() {
         className="inline-form panel"
         onSubmit={(event) => {
           event.preventDefault();
-          if (valid && selected !== '') grant.mutate({ permission: selected, roleId: trimmed });
+          if (valid && selected !== '') {
+            revoke.reset();
+            grant.mutate({ permission: selected, roleId: trimmed });
+          }
         }}
       >
         <label>
           Permissão
           <select
+            ref={selectRef}
             value={selected}
             onChange={(event) => {
               setPermission(event.target.value);
@@ -129,6 +137,7 @@ export function Grants() {
                     className="button button-quiet"
                     disabled={revoke.isPending}
                     onClick={() => {
+                      grant.reset();
                       revoke.mutate({ permission: entry.permission, roleId: entry.roleId });
                     }}
                   >

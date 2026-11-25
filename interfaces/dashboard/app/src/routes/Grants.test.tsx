@@ -106,3 +106,32 @@ describe('grants screen', () => {
     expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
   });
 });
+
+describe('grants screen: latest error and focus', () => {
+  it('shows only the error of the latest mutation', async () => {
+    setup((call) => {
+      if (call.name === 'administration.grants.grant') {
+        return errorBody(422, 'invalid', 'Permissão inválida.');
+      }
+      if (call.name === 'administration.grants.revoke') {
+        return errorBody(500, 'failed', 'Falha ao remover.');
+      }
+      return undefined;
+    });
+    const group = await screen.findByRole('region', { name: 'moderation.cases.read' });
+    await userEvent.type(screen.getByLabelText('ID do cargo'), ROLE_B);
+    await userEvent.click(screen.getByRole('button', { name: 'Associar' }));
+    expect(await screen.findByText('Permissão inválida.')).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Remover' }));
+    expect(await screen.findByText('Falha ao remover.')).toBeInTheDocument();
+    expect(screen.queryByText('Permissão inválida.')).toBeNull();
+  });
+
+  it('moves focus to the permission select after a revoke', async () => {
+    setup();
+    const group = await screen.findByRole('region', { name: 'moderation.cases.read' });
+    await userEvent.click(within(group).getByRole('button', { name: 'Remover' }));
+    await screen.findByText('Nenhuma permissão associada a cargos.');
+    expect(screen.getByLabelText('Permissão')).toHaveFocus();
+  });
+});

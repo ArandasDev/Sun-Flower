@@ -104,3 +104,20 @@ describe('developers screen', () => {
     expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
   });
 });
+
+describe('developers screen: latest error', () => {
+  it('clears a failed add when a removal starts', async () => {
+    setup((call) =>
+      call.name === 'administration.developers.add'
+        ? errorBody(422, 'invalid', 'Pessoa inválida.')
+        : undefined,
+    );
+    await screen.findByText(OTHER);
+    await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    expect(await screen.findByText('Pessoa inválida.')).toBeInTheDocument();
+    const row = screen.getByText(OTHER).closest('li') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
+    expect(screen.queryByText('Pessoa inválida.')).toBeNull();
+  });
+});

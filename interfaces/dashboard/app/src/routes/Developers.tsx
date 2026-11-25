@@ -93,6 +93,7 @@ export function Developers() {
                 type="button"
                 className="button button-quiet"
                 onClick={() => {
+                  add.reset();
                   remove.reset();
                   setRemoving(entry.userId);
                 }}
