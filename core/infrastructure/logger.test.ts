@@ -77,6 +77,25 @@ describe('createLogger', () => {
     expect(JSON.stringify(entry)).not.toMatch(/zero|one|two/);
   });
 
+  it('redacts more secret key names at depth 0 to 2 and keeps code', () => {
+    const keys = ['accessToken', 'refreshToken', 'clientSecret', 'cookie', 'csrfToken', 'secret'];
+    for (const key of keys) {
+      const entry = logOnce((l) => {
+        l.info({ [key]: 'zero', a: { [key]: 'one' }, b: { c: { [key]: 'two' } } }, 'x');
+      });
+      expect(entry).toMatchObject({
+        [key]: '[REDACTED]',
+        a: { [key]: '[REDACTED]' },
+        b: { c: { [key]: '[REDACTED]' } },
+      });
+      expect(JSON.stringify(entry)).not.toMatch(/zero|one|two/);
+    }
+    const entry = logOnce((l) => {
+      l.info({ code: 'E_FAKE', a: { code: 'E_NESTED' } }, 'x');
+    });
+    expect(entry).toMatchObject({ code: 'E_FAKE', a: { code: 'E_NESTED' } });
+  });
+
   it('redacts tokens in child bindings', () => {
     const entry = logOnce((l) => {
       l.child({ token: 'fake' }).info('x');

@@ -8,7 +8,6 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ### Added
 
-- Limites do painel ([0024](docs/decisions/0024-panel-session-limits.md)): no máximo 5 sessões por pessoa (a sexta apaga a menos usada e fecha a conexão ao vivo dela), 10 conexões ao vivo por pessoa e 500 no total.
 - Registros de decisão 0017 a 0023 (níveis de acesso com dono automático e desenvolvedores com todas as permissões, login do painel com Discord OAuth2 e sessões, Fastify, React e Vite, tempo real por WebSocket filtrado por permissão, hospedagem atrás de um proxy HTTPS, operações de módulo e módulo `administration`) e spec da Fase 3 (painel administrativo).
 - Níveis de acesso (desenvolvedor, dono, equipe e membro) no serviço de permissões.
 - Sessões do painel guardadas pelo sha256 do token (migração 0003).
@@ -52,6 +51,22 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco.
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
 - Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real; o teste manual no servidor real continua pendente.
+
+### Segurança
+
+Correções da revisão ofensiva da Fase 3 (PR O). O registro está em [docs/security](docs/security/2026-11-25-revisao-ofensiva-fase-3.md).
+
+- Limites do painel ([0024](docs/decisions/0024-panel-session-limits.md)): no máximo 5 sessões por pessoa (a sexta apaga a menos usada e fecha a conexão ao vivo dela), 10 conexões ao vivo por pessoa e 500 no total.
+- O limite de login e o limite sem sessão do painel passam a contar cada bloco IPv6 `/64` como um cliente, e um IPv6 que representa um IPv4 conta como o IPv4.
+- Um upgrade ao vivo de uma sessão revogada durante o handshake é fechado.
+- A mescla de configurações é em profundidade: uma alteração parcial de objeto aninhado não zera mais os campos vizinhos.
+- Mais caracteres parecidos são reconhecidos no sinal de imitação, e uma regra nova sinaliza rótulo não ASCII a distância 1 ou menos de um domínio conhecido.
+- `moderation.domains.allow` e a reversão de caso com "permitir domínios" recusam sufixos públicos e domínios que imitam um conhecido.
+- Motivos com caracteres de controle de direção são recusados.
+- O motivo das ações de moderação não vai mais para os logs, que trazem só `hasReason`.
+- A redação dos logs cobre também `accessToken`, `refreshToken`, `clientSecret`, `cookie`, `csrfToken` e `secret`, e os campos dos logs recentes não têm protótipo.
+- `.gitignore` cobre `.superpowers/`, `.env.*` (menos `.env.example`) e arquivos de banco `*.db`, `*.db-wal` e `*.db-shm`.
+- README: nota sobre manter `data/` fora de pastas sincronizadas e com permissão restrita.
 
 ### Changed
 

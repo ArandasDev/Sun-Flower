@@ -4,12 +4,12 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 
 ## Estado atual
 
-| Fase atual                         | Situação                                                                                                                                   |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                |
-| **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                          |
-| **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente. |
-| **Fase 3 — Painel administrativo** | Em andamento: etapas 1 (base segura), 2 (moderação) e 3 (administração) implementadas, testes manuais e revisão ofensiva pendentes.        |
+| Fase atual                         | Situação                                                                                                                                                         |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                                      |
+| **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                                                |
+| **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente.                       |
+| **Fase 3 — Painel administrativo** | Em andamento: etapas 1 (base segura), 2 (moderação) e 3 (administração) implementadas, revisão ofensiva concluída (correções no PR O), testes manuais pendentes. |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -140,14 +140,14 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil. **Implementada** (PRs H, I e J); o teste manual do [README](../README.md#painel) está pendente.
 2. Moderação pelo painel: casos, ações manuais, domínios e configuração, com atualização ao vivo e "Meus casos" para todos. **Implementada** (PRs K e L); o teste manual do [README](../README.md#painel) está pendente. Limites: ainda não é possível limpar o canal de alertas nem editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`.
-3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões. **Implementada** (PRs M e N); o teste manual do [README](../README.md#painel) e a revisão ofensiva (spec §11.4), antes da `v0.3.0`, estão pendentes. Limites: um módulo dependente que falhou com a dependência desligada fica `FAILED` até ser ligado; cargos e usuários são digitados como ID; os logs em memória se perdem ao reiniciar; as leituras das telas contam no limite de alterações, e separá-las depende da pessoa mantenedora.
+3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões. **Implementada** (PRs M e N); o teste manual do [README](../README.md#painel) antes da `v0.3.0`, está pendente. A revisão ofensiva (spec §11.4) foi concluída, com as correções no PR O e o registro em [docs/security](security/2026-11-25-revisao-ofensiva-fase-3.md); falta só conferir com o suporte do GitHub as cópias em cache do ID vazado antes. Limites: um módulo dependente que falhou com a dependência desligada fica `FAILED` até ser ligado; cargos e usuários são digitados como ID; os logs em memória se perdem ao reiniciar; as leituras das telas contam no limite de alterações, e separá-las depende da pessoa mantenedora.
 
 **Critérios de conclusão:**
 
 - [ ] Toda operação da API verifica permissão no backend.
 - [ ] Quem não é membro do servidor, inclusive um desenvolvedor, não acessa o painel, e um membro sem permissões vê só o próprio perfil.
 - [ ] Uma alteração de configuração pelo painel tem efeito sem reiniciar a aplicação.
-- [ ] **Revisão ofensiva:** três subagentes independentes atacam o projeto como invasores, um focado em autenticação e permissões, um na API e em injeção, e um em vazamento de informações e segredos. Todas as falhas encontradas são corrigidas ou registradas como aceitas pela pessoa mantenedora antes da release.
+- [x] **Revisão ofensiva:** três subagentes independentes atacam o projeto como invasores, um focado em autenticação e permissões, um na API e em injeção, e um em vazamento de informações e segredos. Todas as falhas encontradas são corrigidas ou registradas como aceitas pela pessoa mantenedora antes da release.
 
 **Release:** `v0.3.0`.
 

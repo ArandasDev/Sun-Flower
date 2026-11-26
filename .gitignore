@@ -5,3 +5,9 @@ coverage/
 *.log
 data/
 interfaces/dashboard/app/dist/
+.env.*
+!.env.example
+.superpowers/
+*.db
+*.db-wal
+*.db-shm

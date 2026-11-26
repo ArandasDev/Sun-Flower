@@ -49,6 +49,9 @@ Substitua `<seu ID de usuário>` pelo seu próprio ID, sem os sinais `<` e `>`.
 
 Os IDs do Discord (usuários e servidor) ficam somente no banco local (`SUNFLOWER_DB_PATH`, padrão `data/sun-flower.db`) e no `.env`. Nenhum dos dois é versionado, e nenhum ID real deve entrar no repositório.
 
+> [!NOTE]
+> A pasta `data/` guarda o banco de dados. Não a deixe dentro de uma pasta sincronizada (OneDrive, Dropbox) e deixe-a legível só pelo usuário do bot, por exemplo com `chmod 700 data` no Linux.
+
 **Execução:**
 
 > [!NOTE]

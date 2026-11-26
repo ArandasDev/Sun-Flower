@@ -153,6 +153,15 @@ describe('RecentLogs', () => {
     expect(JSON.stringify(fields)).not.toMatch(/\d{17,}/);
   });
 
+  it('does not let a __proto__ key change the prototype of fields', () => {
+    const recent = new RecentLogs();
+    recent.write('{"level":30,"time":1700000000000,"msg":"x","__proto__":null,"ok":1}');
+    const fields = recent.recent({ limit: 1, minLevel: 'info' })[0]?.fields ?? {};
+    expect(Object.getPrototypeOf(fields)).toBeNull();
+    expect(Object.hasOwn(fields, '__proto__')).toBe(true);
+    expect(fields.ok).toBe(1);
+  });
+
   it('takes module from the top-level field', () => {
     const { logger, recent } = realLogger();
     logger.child({ module: 'ping' }).warn('hi');
