@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Actor } from '../../../shared/contracts/commands.ts';
 import type { ModuleContext } from '../../../shared/contracts/module.ts';
 import type { OperationDefinition } from '../../../shared/contracts/operations.ts';
+import { mergeSettings } from '../../../shared/utilities/merge-settings.ts';
 import { configSchema } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
 import { registerConfigOperations } from './config.ts';
@@ -24,7 +25,7 @@ function config(): ModuleContext['config'] {
         error.name = 'ConfigVersionConflictError';
         throw error;
       }
-      const merged = { ...stored, ...partial };
+      const merged = mergeSettings(stored, partial);
       const result = configSchema.safeParse(merged);
       if (!result.success) {
         const paths = [...new Set(result.error.issues.map((issue) => issue.path.join('.')))];
@@ -91,6 +92,27 @@ describe('moderation.config.update', () => {
     });
     expect(result).toMatchObject({ ok: true, data: { version: 1 } });
     expect(stored).toEqual({ thresholds: { confirmed: 90, suspicious: 30 } });
+  });
+
+  it('keeps the sibling spam settings when only spam.flood.limit changes', async () => {
+    stored = {
+      spam: {
+        escalation: { steps: [{ kind: 'kick' }] },
+        ignoredChannelIds: ['333333333333333333'],
+        flood: { limit: 5, seconds: 9 },
+      },
+    };
+    const before = configSchema.parse(stored).spam;
+    const result = await run('moderation.config.update', {
+      expectedVersion: 0,
+      changes: { spam: { flood: { limit: 7 } } },
+    });
+    expect(result).toMatchObject({ ok: true, data: { version: 1 } });
+    const after = config().get<ModerationConfig>().spam;
+    expect(after.flood).toEqual({ ...before.flood, limit: 7 });
+    expect(after.escalation).toEqual(before.escalation);
+    expect(after.ignoredChannelIds).toEqual(['333333333333333333']);
+    expect(after.repeat).toEqual(before.repeat);
   });
 
   it('writes nothing and keeps the version when there are no changes', async () => {

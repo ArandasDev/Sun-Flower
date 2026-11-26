@@ -94,6 +94,19 @@ describe('ModuleConfigStore.updateSettings', () => {
     expect(rawSettings()).toEqual({ level: 3 });
   });
 
+  it('merges nested objects and keeps their siblings', () => {
+    const nested = z.object({
+      spam: z
+        .object({ a: z.number().default(1), b: z.number().default(2) })
+        .default({ a: 1, b: 2 }),
+    });
+    store.setSettings('ping', { spam: { a: 5, b: 6 } });
+    expect(store.updateSettings('ping', nested, { spam: { a: 9 } })).toEqual({
+      spam: { a: 9, b: 6 },
+    });
+    expect(rawSettings()).toEqual({ spam: { a: 9, b: 6 } });
+  });
+
   it('rejects an invalid merge without writing', () => {
     store.setSettings('ping', { greeting: 'yo' });
     expect(() => store.updateSettings('ping', schema, { greeting: 424242 })).toThrow(
@@ -112,7 +125,7 @@ describe('ModuleConfigStore.updateSettings', () => {
     expect(rawSettings()).toBeUndefined();
   });
 
-  it('replaces a nested object as a whole', () => {
+  it('merges a nested object into the stored one', () => {
     const nested = z.object({
       thresholds: z.object({
         confirmed: z.number().optional(),
@@ -123,8 +136,8 @@ describe('ModuleConfigStore.updateSettings', () => {
     store.setSettings('ping', { thresholds: { confirmed: 80, extra: 7 } });
     expect(
       store.updateSettings('ping', nested, { thresholds: { confirmed: 90, suspicious: 40 } }),
-    ).toEqual({ thresholds: { confirmed: 90, suspicious: 40 } });
-    expect(rawSettings()).toEqual({ thresholds: { confirmed: 90, suspicious: 40 } });
+    ).toEqual({ thresholds: { confirmed: 90, suspicious: 40, extra: 7 } });
+    expect(rawSettings()).toEqual({ thresholds: { confirmed: 90, suspicious: 40, extra: 7 } });
   });
 
   it('treats non-object stored settings as empty and keeps enabled', () => {
