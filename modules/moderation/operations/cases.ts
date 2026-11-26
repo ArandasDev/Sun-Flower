@@ -11,11 +11,13 @@ import {
   CASE_NOT_OPEN,
   CASE_NOT_REVERTIBLE,
   DISCORD_REFUSED,
+  DOMAIN_PUBLIC_SUFFIX,
   LOOKALIKE_NOT_ALLOWED,
 } from '../commands/replies.ts';
 import { SPAM_RULES, snowflake } from '../config.ts';
 import { isLookalike } from '../detection/lookalike.ts';
 import type { DomainStore } from '../domains.ts';
+import { isPublicSuffix } from './domains.ts';
 
 const READ_PERMISSION = 'moderation.cases.read';
 const REVERT_PERMISSION = 'moderation.cases.revert';
@@ -166,6 +168,9 @@ export function registerCaseOperations(
       }
       const allowDomains = input.allowDomains === true;
       // Validate before any Discord call so a refusal leaves everything untouched.
+      if (allowDomains && record.domains.some((domain) => isPublicSuffix(domain))) {
+        return fail('invalid', DOMAIN_PUBLIC_SUFFIX);
+      }
       if (allowDomains && record.domains.some((domain) => isLookalike(domain))) {
         return fail('invalid', LOOKALIKE_NOT_ALLOWED);
       }

@@ -74,7 +74,7 @@ export function registerDomainOperations(
         const domain = normalizeDomain(input.domain);
         if (domain === undefined) return Promise.resolve(fail('invalid', INVALID_DOMAIN));
         if (list === 'allow') {
-          if (PUBLIC_SUFFIXES.has(domain)) {
+          if (isPublicSuffix(domain)) {
             return Promise.resolve(fail('invalid', DOMAIN_PUBLIC_SUFFIX));
           }
           if (isLookalike(domain)) return Promise.resolve(fail('invalid', DOMAIN_LOOKALIKE));
@@ -98,4 +98,8 @@ export function registerDomainOperations(
       return Promise.resolve(ok({ domain }));
     },
   });
+}
+
+export function isPublicSuffix(domain: string): boolean {
+  return PUBLIC_SUFFIXES.has(domain);
 }

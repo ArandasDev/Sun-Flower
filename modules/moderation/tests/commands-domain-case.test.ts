@@ -129,6 +129,17 @@ describe('/mod domain', () => {
     expect(t.deps.domains.isBlocked('exemplo.com')).toBe(false);
   });
 
+  it('allow refuses a public suffix and a lookalike with their own texts', async () => {
+    const t = setup();
+    expect(await run(t, 'domain', 'allow', { domain: 'github.io' })).toBe(
+      'Este domínio é um sufixo público e não pode ser permitido.',
+    );
+    expect(await run(t, 'domain', 'allow', { domain: 'steɑm-gift.com' })).toBe(
+      'Este domínio imita um domínio conhecido e não pode ser permitido.',
+    );
+    expect(t.deps.domains.isAllowed('github.io')).toBe(false);
+  });
+
   it('rejects invalid or missing domains', async () => {
     const t = setup();
     expect(await run(t, 'domain', 'allow', { domain: 'nao-e-dominio' })).toBe('Domínio inválido.');

@@ -275,6 +275,21 @@ describe('moderation.cases.revert', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
+  it('refuses allowDomains for a public suffix before any Discord call', async () => {
+    const id = seed('timeout', { domains: ['golpe.example', 'github.io'] });
+    const result = await run('moderation.cases.revert', { id, allowDomains: true });
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'invalid',
+        message: 'Este domínio é um sufixo público e não pode ser permitido.',
+      },
+    });
+    expect(guild.calls).toHaveLength(0);
+    expect(cases.get(id)?.status).toBe('actioned');
+    expect(domains.isAllowed('golpe.example')).toBe(false);
+  });
+
   it('allows the domains when asked', async () => {
     const id = seed('none', { domains: ['golpe.example'] });
     await run('moderation.cases.revert', { id, allowDomains: true });

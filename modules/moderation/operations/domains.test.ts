@@ -84,6 +84,13 @@ describe('allow-list refusals', () => {
     },
   );
 
+  it('still accepts a subdomain of a public suffix on allow', async () => {
+    expect(await run('moderation.domains.allow', { domain: 'x.github.io' })).toMatchObject({
+      ok: true,
+      data: { domain: 'x.github.io', list: 'allow' },
+    });
+  });
+
   it('refuses a lookalike on allow', async () => {
     expect(await run('moderation.domains.allow', { domain: 'steɑm-gift.com' })).toEqual({
       ok: false,
