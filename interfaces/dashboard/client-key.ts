@@ -33,6 +33,11 @@ export function clientKey(ip: string): string {
   if (!isIPv6(bare)) return ip;
   const groups = groupsOf(bare);
   if (groups.length !== 8 || groups.some((group) => Number.isNaN(group))) return ip;
+  // The hex form of an IPv4-mapped address (`::ffff:c000:201`) counts as the IPv4 too.
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    const [high = 0, low = 0] = groups.slice(6);
+    return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+  }
   return groups
     .slice(0, 4)
     .map((group) => group.toString(16))

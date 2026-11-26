@@ -19,6 +19,8 @@ describe('clientKey', () => {
 
   it('counts an IPv4-mapped IPv6 address as the IPv4', () => {
     expect(clientKey('::ffff:192.0.2.1')).toBe('192.0.2.1');
+    expect(clientKey('::ffff:c000:201')).toBe('192.0.2.1');
+    expect(clientKey('0:0:0:0:0:FFFF:C000:0201')).toBe('192.0.2.1');
   });
 
   it('expands a leading and a trailing ::', () => {
