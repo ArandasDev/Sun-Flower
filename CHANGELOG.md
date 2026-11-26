@@ -17,27 +17,27 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - menu da conta com a escolha de tema e o botão Sair;
   - login, sem acesso, carregando e erro como um cartão centralizado.
 
-### Removed
-
-- O CSS escrito à mão do painel (`styles.css`) e a camada legada: nenhuma tela depende mais dele.
-
 ### Changed
 
 - O item de menu `/moderacao` do painel passa a se chamar "Configuração", dentro do grupo Moderação.
 - Painel, novo visual (parte 2 de 2), telas em componentes do shadcn/ui:
   - confirmações como `AlertDialog` e detalhe do caso em um `Sheet` lateral;
-  - módulos ligados e desligados com um `Switch` (desligar continua pedindo confirmação);
+  - módulos ligados e desligados com um `Switch` cujo nome acessível é o nome do módulo (desligar continua pedindo confirmação);
   - tabela de Logs com o nível num `Badge` e quebra de valores longos, sem cortá-los;
   - `Skeleton` enquanto as listas carregam.
 - Os toasts do painel usarão o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
 
-### Security
+### Removed
 
-- O `index.html` do painel é entregue com um nonce de estilo novo a cada requisição (`<meta name="csp-nonce">` e `style-src 'self' 'nonce-…'`, só nessa resposta), com `Cache-Control: no-store`. `/` e `/index.html` não são mais servidos direto pelo plugin de arquivos estáticos. A CSP não usa `'unsafe-inline'`.
+- O CSS escrito à mão do painel (`styles.css`) e a camada legada: nenhuma tela depende mais dele.
 
 ### Fixed
 
 - Documentação da `v0.3.0` (ROADMAP, README e CHANGELOG): o teste manual do painel no servidor real não foi feito antes da release, ao contrário do que ela dizia. Os critérios do painel voltam a ficar abertos até esse teste.
+
+### Security
+
+- O `index.html` do painel é entregue com um nonce de estilo novo a cada requisição (`<meta name="csp-nonce">` e `style-src 'self' 'nonce-…'`, só nessa resposta), com `Cache-Control: no-store`. `/` e `/index.html` não são mais servidos direto pelo plugin de arquivos estáticos. A CSP não usa `'unsafe-inline'`.
 
 ## [0.3.0] - 2026-11-26
 

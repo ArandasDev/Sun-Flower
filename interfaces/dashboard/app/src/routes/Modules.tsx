@@ -108,7 +108,9 @@ export function Modules() {
                       <strong className="font-semibold">{entry.name}</strong>
                       <span className="text-muted-foreground"> versão {entry.version}</span>
                     </span>
-                    <Badge variant={situationVariant(entry)}>{situation(entry)}</Badge>
+                    <Badge variant={situationVariant(entry)} className="whitespace-normal">
+                      {situation(entry)}
+                    </Badge>
                     {entry.description === '' ? null : (
                       <span className="text-muted-foreground">{entry.description}</span>
                     )}
@@ -125,7 +127,7 @@ export function Modules() {
                     entry.canDisable ? (
                       <Switch
                         checked
-                        aria-label="Desligar"
+                        aria-label={entry.name}
                         disabled={toggle.isPending}
                         onCheckedChange={() => {
                           toggle.reset();
@@ -136,7 +138,7 @@ export function Modules() {
                   ) : (
                     <Switch
                       checked={false}
-                      aria-label="Ligar"
+                      aria-label={entry.name}
                       disabled={toggle.isPending}
                       onCheckedChange={() => {
                         toggle.reset();

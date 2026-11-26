@@ -44,6 +44,13 @@ describe('logs screen', () => {
     expect(logCalls(calls)[0]?.input).toEqual({ limit: 200, minLevel: 'info' });
   });
 
+  it('lets a long unbroken message wrap anywhere instead of widening the table', async () => {
+    const long = 'x'.repeat(300);
+    setup([{ time: TIME, level: 'info', message: long, fields: { id: long } }]);
+    const cell = (await screen.findByText(long)).closest('td') as HTMLElement;
+    expect(cell).toHaveClass('wrap-anywhere', 'whitespace-pre-wrap');
+  });
+
   it('sends minLevel when the filter changes', async () => {
     const { calls } = setup([{ time: TIME, level: 'error', message: 'boom', fields: {} }]);
     await screen.findByText('boom');

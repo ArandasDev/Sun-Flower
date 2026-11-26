@@ -115,7 +115,7 @@ export function Logs() {
       ) : null}
       {entries.length === 0 ? null : (
         <Card>
-          <CardContent className="overflow-x-auto">
+          <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -133,13 +133,13 @@ export function Logs() {
                     <TableCell>
                       <Badge variant={levelVariant(entry.level)}>{levelLabel(entry.level)}</Badge>
                     </TableCell>
-                    <TableCell className="break-words whitespace-normal">
+                    <TableCell className="wrap-anywhere whitespace-normal">
                       {entry.module ?? '—'}
                     </TableCell>
-                    <TableCell className="break-words whitespace-pre-wrap">
+                    <TableCell className="wrap-anywhere whitespace-pre-wrap">
                       {entry.message}
                     </TableCell>
-                    <TableCell className="font-mono text-xs break-words whitespace-pre-wrap">
+                    <TableCell className="font-mono text-xs wrap-anywhere whitespace-pre-wrap">
                       {fieldsText(entry.fields)}
                     </TableCell>
                   </TableRow>

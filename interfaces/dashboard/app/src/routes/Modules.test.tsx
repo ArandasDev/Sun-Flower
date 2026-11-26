@@ -66,7 +66,7 @@ describe('modules screen', () => {
   it('asks for confirmation before switching off, then sends the module and false', async () => {
     const { calls } = setup([entry({})]);
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Desligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(calls.some((call) => call.name === 'administration.modules.set-enabled')).toBe(false);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Desligar' }));
@@ -80,7 +80,7 @@ describe('modules screen', () => {
   it('switches on without confirmation', async () => {
     const { calls } = setup([entry({ enabled: false, state: 'STOPPED' })]);
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Ligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     await waitFor(() =>
       expect(
         calls.find((call) => call.name === 'administration.modules.set-enabled')?.input,
@@ -98,9 +98,9 @@ describe('modules screen', () => {
   it('shows a running module as a checked switch and a stopped one as unchecked', async () => {
     setup([entry({}), entry({ id: 'ping', name: 'Ping', enabled: false, state: 'STOPPED' })]);
     const running = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    expect(within(running).getByRole('switch', { name: 'Desligar' })).toBeChecked();
+    expect(within(running).getByRole('switch', { name: 'Moderação' })).toBeChecked();
     const stopped = screen.getByText('Ping').closest('li') as HTMLElement;
-    expect(within(stopped).getByRole('switch', { name: 'Ligar' })).not.toBeChecked();
+    expect(within(stopped).getByRole('switch', { name: 'Ping' })).not.toBeChecked();
   });
 
   it('moves focus to the heading when the Ligar button disappears', async () => {
@@ -118,7 +118,7 @@ describe('modules screen', () => {
       return undefined;
     });
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Ligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     await screen.findByText('Não pode ser desligado.');
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Módulos', level: 1 })).toHaveFocus(),
@@ -134,7 +134,7 @@ describe('modules screen', () => {
         : undefined,
     );
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Desligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Desligar' }));
     expect(await within(dialog).findByText(text)).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('modules screen', () => {
         : undefined,
     );
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Ligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(await screen.findByText(text)).toBeInTheDocument();
     await waitFor(() => expect(listCalls(calls)).toBe(2));
   });
@@ -161,7 +161,7 @@ describe('modules screen', () => {
         : undefined,
     );
     const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
-    await userEvent.click(within(row).getByRole('switch', { name: 'Ligar' }));
+    await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(await screen.findByText(text)).toBeInTheDocument();
   });
 
@@ -171,7 +171,7 @@ describe('modules screen', () => {
     expect(
       within(row).getByText(`Falhou ao iniciar (${formatDate(FAILED_AT)})`),
     ).toBeInTheDocument();
-    expect(within(row).getByRole('switch', { name: 'Ligar' })).toBeInTheDocument();
+    expect(within(row).getByRole('switch', { name: 'Moderação' })).toBeInTheDocument();
   });
 
   it('shows "Em transição" for a module that is enabled but not running yet', async () => {
