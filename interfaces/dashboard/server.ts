@@ -13,6 +13,7 @@ import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
+import { clientKey } from './client-key.ts';
 import { apiError } from './errors.ts';
 import { LIVE_PATH, LiveHub, type LiveClock, type LiveLimits } from './live.ts';
 import { registerOperationsRoute } from './operations-route.ts';
@@ -131,7 +132,7 @@ function isServerRequest(request: FastifyRequest): boolean {
  */
 function rateLimitKey(auth: SessionAuth, request: FastifyRequest): string {
   const record = auth.peek(request);
-  return record !== null ? `s:${record.idHash}` : `i:${request.ip}`;
+  return record !== null ? `s:${record.idHash}` : `i:${clientKey(request.ip)}`;
 }
 
 /**
@@ -283,7 +284,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   const limitLogin = app.createRateLimit({
     max: RATE_MAX_LOGIN,
     timeWindow: RATE_WINDOW_MS,
-    keyGenerator: (request) => `i:${request.ip}`,
+    keyGenerator: (request) => `i:${clientKey(request.ip)}`,
   });
   const limitAll = app.createRateLimit({
     max: RATE_MAX,
