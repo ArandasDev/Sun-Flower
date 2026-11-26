@@ -137,34 +137,13 @@ a {
 
 /* Hints, checkboxes and disabled buttons */
 
-.field-hint {
-  flex-basis: 100%;
-  margin: 0;
-  color: var(--alert);
-  font-size: var(--text-sm);
-}
-
-.check {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-/* Forms shared by domains and settings */
+/* Forms */
 
-.config-section form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  max-width: 40rem;
-}
-
-.field,
 .inline-form label {
   display: flex;
   flex-direction: column;
@@ -173,15 +152,6 @@ a {
   font-size: var(--text-sm);
 }
 
-.field label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.field input,
-.field select,
-.field textarea,
 .inline-form input {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--line);
@@ -191,32 +161,8 @@ a {
   font: inherit;
 }
 
-.field input[aria-invalid='true'],
-.field textarea[aria-invalid='true'],
 .inline-form input[aria-invalid='true'] {
   border-color: var(--alert);
-}
-
-.field-notes {
-  display: flex;
-  flex-direction: column;
-  color: var(--seed);
-  font-size: var(--text-sm);
-}
-
-.field-notes:empty {
-  display: none;
-}
-
-.field-notes .field-hint {
-  flex-basis: auto;
-}
-
-.form-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .form-error {
@@ -225,30 +171,8 @@ a {
   font-weight: 600;
 }
 
-.form-error:empty,
-.conflict:empty {
+.form-error:empty {
   display: none;
-}
-
-.config-fields .check {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--stem);
-  font-size: var(--text-md);
-}
-
-.notice-inline {
-  color: var(--leaf);
-  font-weight: 600;
-}
-
-/* Domains */
-
-.domain-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.5rem;
 }
 
 .inline-form {
@@ -321,66 +245,6 @@ a {
 
 .self-mark {
   color: var(--leaf);
-}
-
-/* Moderation settings */
-
-.config-section {
-  margin-bottom: 1.25rem;
-}
-
-.config-section h2 {
-  margin-top: 0;
-}
-
-.config-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 0.9rem 1.25rem;
-}
-
-.conflict {
-  position: sticky;
-  top: 0.5rem;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  padding: 0.6rem 1rem;
-  border: 1px solid var(--alert);
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-
-.conflict p {
-  margin: 0;
-  color: var(--alert);
-  font-weight: 600;
-}
-
-.steps {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.steps legend {
-  padding: 0;
-  color: var(--seed);
-  font-size: var(--text-sm);
-}
-
-.step-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem;
 }
 
 /* Modules, logs and sessions */
