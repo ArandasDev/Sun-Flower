@@ -6,6 +6,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
 ### Added
 
 - Registros de decisão 0017 a 0023 (níveis de acesso com dono automático e desenvolvedores com todas as permissões, login do painel com Discord OAuth2 e sessões, Fastify, React e Vite, tempo real por WebSocket filtrado por permissão, hospedagem atrás de um proxy HTTPS, operações de módulo e módulo `administration`) e spec da Fase 3 (painel administrativo).
@@ -50,7 +52,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Sessões (`/sessoes`), para encerrar uma sessão ou todas as de uma conta, com confirmação.
   - As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco.
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
-- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real; o teste manual no servidor real continua pendente.
+- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real, e o teste manual das etapas 1 a 3 passou no servidor real.
 
 ### Changed
 
@@ -59,6 +61,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
 - `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
 - A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
+- ROADMAP: Fase 3 concluída, com os testes manuais das etapas 1 a 3 no servidor real e o item C-6 da revisão ofensiva resolvido.
 
 ### Security
 
@@ -152,6 +155,7 @@ Correções da revisão ofensiva da Fase 3 (PR O). O registro está em [docs/sec
 - Permissões em duas camadas: lista de desenvolvedores do bot para as permissões `core.*` e cargos do servidor para as permissões dos módulos; o dono e os administradores do servidor não recebem permissões automáticas.
 - Fase 3 do ROADMAP passa a exigir revisão ofensiva por três subagentes antes da release.
 
-[Unreleased]: https://github.com/ArandasDev/Sun-Flower/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ArandasDev/Sun-Flower/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ArandasDev/Sun-Flower/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ArandasDev/Sun-Flower/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ArandasDev/Sun-Flower/releases/tag/v0.1.0
