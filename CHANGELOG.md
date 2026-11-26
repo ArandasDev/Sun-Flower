@@ -6,6 +6,14 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ## [Unreleased]
 
+### Added
+
+- Decisão [0025](docs/decisions/0025-panel-ui-kit.md) (Tailwind CSS e shadcn/ui no painel, com nonce de estilo na CSP) e spec do novo visual do painel ([2026-11-26-painel-visual-shadcn.md](docs/specs/2026-11-26-painel-visual-shadcn.md)).
+
+### Fixed
+
+- Documentação da `v0.3.0` (ROADMAP, README e CHANGELOG): o teste manual do painel no servidor real não foi feito antes da release, ao contrário do que ela dizia. Os critérios do painel voltam a ficar abertos até esse teste.
+
 ## [0.3.0] - 2026-11-26
 
 ### Added
@@ -52,7 +60,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - Sessões (`/sessoes`), para encerrar uma sessão ou todas as de uma conta, com confirmação.
   - As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco.
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
-- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real, e o teste manual das etapas 1 a 3 passou no servidor real.
+- Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real; o teste manual do painel no servidor real continua pendente.
 
 ### Changed
 
@@ -61,7 +69,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
 - `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
 - A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
-- ROADMAP: Fase 3 concluída, com os testes manuais das etapas 1 a 3 no servidor real e o item C-6 da revisão ofensiva resolvido.
+- ROADMAP: revisão ofensiva da Fase 3 concluída, com o item C-6 resolvido. O teste manual do painel no servidor real ficou pendente.
 
 ### Security
 
