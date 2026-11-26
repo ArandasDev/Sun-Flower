@@ -235,6 +235,7 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 
 **Limites conhecidos da etapa 3:**
 
+- Cada pessoa mantém no máximo 5 sessões do painel: o sexto login encerra a sessão menos usada, e aquele navegador volta para o login. Veja a decisão [0024](docs/decisions/0024-panel-session-limits.md).
 - Um módulo dependente que falhou porque a dependência estava desligada continua em `FAILED` até ser ligado.
 - Cargos e usuários são digitados como IDs, sem seletor do Discord.
 - A memória de logs se perde quando o bot reinicia.

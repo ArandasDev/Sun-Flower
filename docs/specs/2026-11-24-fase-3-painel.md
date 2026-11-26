@@ -135,6 +135,8 @@ interface OperationError {
 
 O login aceita 10 tentativas por minuto por IP. Acima disso, devolve `429`.
 
+> **Atualização (2026-11-25):** ver [0024](../decisions/0024-panel-session-limits.md). Cada pessoa mantém no máximo 5 sessões (a sexta encerra a menos usada), e o IPv6 é contado por bloco `/64`; um IPv6 que representa um IPv4 conta como o IPv4.
+
 ### 5.3. Sessões (`core/sessions/`, migração `0003-panel.sql`)
 
 ```sql
@@ -191,6 +193,7 @@ O formato de erro é sempre `{ "error": { "code", "message" } }`.
 ### 5.6. Tempo real ([0020](../decisions/0020-panel-realtime.md))
 
 - **Abertura da conexão:** o upgrade só acontece com sessão válida e `Origin` igual a `PANEL_PUBLIC_URL`, e cada sessão pode ter no máximo 5 conexões. Fora disso, o servidor responde `401` ou `403` sem abrir o WebSocket.
+- **Atualização (2026-11-25):** ver [0024](../decisions/0024-panel-session-limits.md). Além dos 5 por sessão, valem 10 conexões por pessoa e 500 no total.
 - **Do servidor ao navegador:**
   - mensagens `{ "type", "data" }`;
   - os eventos só avisam e trazem o mínimo (IDs e versões), e os dados completos vêm de uma operação, que checa a permissão de novo;

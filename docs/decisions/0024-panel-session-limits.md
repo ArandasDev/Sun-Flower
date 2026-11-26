@@ -20,6 +20,7 @@ Qualquer pessoa do servidor consegue entrar no painel, mesmo sem permissão algu
 ## Consequências
 
 - Quem entra de novo seis vezes perde a sessão que menos usou, em vez de acumular sessões. Quem trabalha em vários navegadores ao mesmo tempo continua tendo folga.
+- O total de 500 conexões é compartilhado por todos, inclusive por membros sem permissões, e é um teto de segurança, não uma cota: muitas contas de membros podem ocupá-lo e deixar a equipe sem canal ao vivo (as leituras e alterações por HTTP continuam). Uma reserva para quem tem permissões fica como opção futura.
 - O uso de memória do canal ao vivo passa a ter um teto, independentemente de quantas pessoas ou sessões existam.
 - Os limites são constantes no código. Os testes reduzem os de conexão pela configuração do `LiveHub`, para não abrir centenas de sockets.
 - **Pendente:** separar o limite de leituras do limite de alterações. Hoje ambos compartilham o limite por sessão.
