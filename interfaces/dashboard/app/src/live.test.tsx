@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock, FakeWebSocket, lastSocket } from './fake-websocket.ts';
 import { makeCoalescer, screenFor } from './live.ts';
-import { me, renderApp, stubFetch, type FakeResponse } from './test-utils.tsx';
+import { clickSignOut, me, renderApp, stubFetch, type FakeResponse } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -54,9 +54,9 @@ describe('connection', () => {
     expect(lastSocket().url).toBe(`ws://${location.host}/api/live`);
   });
 
-  it('shows no banner while connected, and "Reconectando…" after a drop', async () => {
+  it('shows "Ao vivo" while connected, and "Reconectando…" after a drop', async () => {
     await start('member');
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
     drop();
     expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
   });
@@ -100,7 +100,7 @@ describe('connection', () => {
       clock.advance(5_000);
     });
     await waitFor(() => expect(meCalls()).toBe(before + 1));
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
     drop();
     expect(clock.pendingDelays()).toEqual([1_000]);
   });
@@ -167,7 +167,7 @@ describe('connection', () => {
           await waitFor(() => expect(fetchMock.mock.calls.length).toBe(calls + 1));
           await new Promise((resolve) => setTimeout(resolve, 0));
           expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
-          expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
           expect(screen.queryByText('Tentar de novo')).toBeNull();
           expect(clock.pendingDelays()).toHaveLength(1);
         }
@@ -196,16 +196,16 @@ describe('connection', () => {
         : me('member'),
     );
     const { client } = renderApp('/', clock);
-    await screen.findByRole('button', { name: 'Sair' });
+    await screen.findByRole('button', { name: 'Girassol' });
     failing = true;
     await act(async () => {
       await client.refetchQueries({ queryKey: ['me'] });
     });
-    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
     expect(screen.queryByText('Tentar de novo')).toBeNull();
   });
 
-  it('keeps the status region in the accessibility tree while empty', async () => {
+  it('keeps the status region in the accessibility tree while connected', async () => {
     await start('member');
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
@@ -263,7 +263,7 @@ describe('connection', () => {
     const { client } = renderApp('/', clock);
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
     client.setQueryData(['config', 'moderation'], { a: 1 });
-    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     await screen.findByRole('link', { name: 'Entrar com Discord' });
     expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
   });
@@ -294,7 +294,7 @@ describe('connection', () => {
   it('closes the socket when leaving', async () => {
     await start('member');
     const socket = lastSocket();
-    await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     await screen.findByRole('link', { name: 'Entrar com Discord' });
     expect(socket.readyState).toBe(3);
   });
@@ -338,7 +338,7 @@ describe('messages', () => {
       lastSocket().receive('presence', { users: 'nope' });
       lastSocket().receive('mystery', {});
     });
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
   });
 });
 

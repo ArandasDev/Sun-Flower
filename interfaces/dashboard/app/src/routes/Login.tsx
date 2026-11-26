@@ -3,6 +3,9 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { resetCsrfToken } from '../api.ts';
 import { SeedMark } from '../components/SeedMark.tsx';
+import { Button } from '../components/ui/button.tsx';
+import { Card } from '../components/ui/card.tsx';
+import { cn } from '../lib/utils.ts';
 
 const ERRORS: Record<string, { text: string; tone: 'alert' | 'seed' }> = {
   dev_not_member: {
@@ -28,18 +31,26 @@ export function Login() {
   const code = params.get('error');
   const error = code !== null && Object.hasOwn(ERRORS, code) ? ERRORS[code] : undefined;
   return (
-    <main className="login">
-      <SeedMark size={96} dots={37} />
-      <h1>Sun Flower</h1>
-      <p>Painel do servidor. Entre com a sua conta do Discord.</p>
-      <a className="button button-primary" href="/auth/login">
-        Entrar com Discord
-      </a>
-      {error === undefined ? null : (
-        <p role="alert" className={`login-error login-error-${error.tone}`}>
-          {error.text}
-        </p>
-      )}
+    <main className="flex min-h-svh items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-xl items-center px-6 text-center">
+        <SeedMark size={96} dots={37} />
+        <h1 className="m-0 text-2xl font-bold">Sun Flower</h1>
+        <p className="m-0">Painel do servidor. Entre com a sua conta do Discord.</p>
+        <Button asChild size="lg">
+          <a href="/auth/login">Entrar com Discord</a>
+        </Button>
+        {error === undefined ? null : (
+          <p
+            role="alert"
+            className={cn(
+              'm-0 max-w-[52ch] text-sm',
+              error.tone === 'alert' ? 'text-destructive' : 'text-muted-foreground',
+            )}
+          >
+            {error.text}
+          </p>
+        )}
+      </Card>
     </main>
   );
 }

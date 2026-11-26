@@ -174,7 +174,9 @@ describe('modules screen', () => {
 
   it('shows no button, only a note, for a running module that cannot be switched off', async () => {
     setup([entry({ id: 'administration', name: 'Administração', canDisable: false })]);
-    const row = (await screen.findByText('Administração')).closest('li') as HTMLElement;
+    // "Administração" is also a menu group, so look only at the screen.
+    const main = await screen.findByRole('main');
+    const row = (await within(main).findByText('Administração')).closest('li') as HTMLElement;
     expect(within(row).getByText('Não pode ser desligado.')).toBeInTheDocument();
     expect(within(row).queryByRole('button')).toBeNull();
   });

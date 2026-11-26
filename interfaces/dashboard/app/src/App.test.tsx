@@ -1,8 +1,8 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { statusRefetchInterval } from './routes/Overview.tsx';
-import { me, okBody, renderApp, setupOperations, stubFetch } from './test-utils.tsx';
+import { clickSignOut, me, okBody, renderApp, setupOperations, stubFetch } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -71,7 +71,7 @@ describe('session', () => {
       path === '/api/logout' ? { status: 204 } : me('member'),
     );
     renderApp('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find(([path]) => path === '/api/logout');
     expect(call?.[1]?.method).toBe('POST');
@@ -87,9 +87,9 @@ describe('logout failure', () => {
         : me('member'),
     );
     renderApp('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     expect(await screen.findByText('Não foi possível sair. Tente de novo.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Entrar com Discord' })).toBeNull();
   });
 
@@ -100,7 +100,7 @@ describe('logout failure', () => {
         : me('member'),
     );
     renderApp('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
   });
 });
@@ -161,7 +161,7 @@ describe('profile', () => {
     stubFetch(() => me('member'));
     renderApp('/');
     expect(await screen.findByText('Membro')).toBeInTheDocument();
-    expect(screen.getByText('Girassol')).toBeInTheDocument();
+    expect(within(screen.getByRole('main')).getByText('Girassol')).toBeInTheDocument();
     expect(screen.getByText('111111111111111111')).toBeInTheDocument();
   });
 

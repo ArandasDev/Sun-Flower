@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MotionConfig } from 'motion/react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
@@ -57,6 +58,12 @@ export function renderApp(path: string, clock?: LiveClock) {
     </QueryClientProvider>,
   );
   return { ...view, client };
+}
+
+/** Opens the account menu (named after the signed-in person, "Girassol") and picks "Sair". */
+export async function clickSignOut(): Promise<void> {
+  await userEvent.click(await screen.findByRole('button', { name: 'Girassol' }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Sair' }));
 }
 
 export interface OperationCall {

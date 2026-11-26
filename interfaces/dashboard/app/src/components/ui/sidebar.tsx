@@ -12,8 +12,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Skeleton } from './skeleton.tsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip.tsx';
 
-const SIDEBAR_COOKIE_NAME = 'sidebar_state';
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+/** Where the collapsed state is kept, as `expanded` or `collapsed` (replaces shadcn's cookie). */
+export const SIDEBAR_STORAGE_KEY = 'sunflower-sidebar';
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
@@ -28,6 +28,26 @@ type SidebarContextProps = {
   isMobile: boolean;
   toggleSidebar: () => void;
 };
+
+/** The stored state, or `fallback` when nothing valid is stored or storage is unavailable. */
+function readStoredOpen(fallback: boolean): boolean {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (stored === 'expanded') return true;
+    if (stored === 'collapsed') return false;
+  } catch {
+    // Storage blocked (private browsing, policy): use the default.
+  }
+  return fallback;
+}
+
+function storeOpen(open: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, open ? 'expanded' : 'collapsed');
+  } catch {
+    // Storage blocked: the state lasts for this page only.
+  }
+}
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null);
 
@@ -58,7 +78,7 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen);
+  const [_open, _setOpen] = React.useState(() => readStoredOpen(defaultOpen));
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -69,8 +89,7 @@ function SidebarProvider({
         _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
-      document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+      storeOpen(openState);
     },
     [setOpenProp, open],
   );
@@ -284,9 +303,10 @@ function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
   );
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<'main'>) {
+function SidebarInset({ className, ...props }: React.ComponentProps<'div'>) {
+  // A div, not shadcn's <main>: the page's <main> is inside it.
   return (
-    <main
+    <div
       data-slot="sidebar-inset"
       className={cn(
         'relative flex w-full flex-1 flex-col bg-background',
