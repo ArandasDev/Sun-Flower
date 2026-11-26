@@ -18,9 +18,12 @@ import {
   useSidebar,
 } from './ui/sidebar.tsx';
 
-/** Amber with zinc-950 passes AA; link-coloured text on sidebar-accent would not. */
-const ACTIVE_ITEM =
-  'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground';
+/**
+ * Idle items get the sidebar text colour explicitly, so the old `a { color }` rule never
+ * applies. Active: amber with zinc-950 passes AA; link-coloured text on sidebar-accent would not.
+ */
+const ITEM_COLOURS =
+  'text-sidebar-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground';
 
 /** The grouped menu; collapsed it shows icons with the name as a tip, on phones it is a drawer. */
 export function AppSidebar() {
@@ -50,7 +53,7 @@ export function AppSidebar() {
                         asChild
                         isActive={pathname === item.to}
                         tooltip={item.label}
-                        className={ACTIVE_ITEM}
+                        className={ITEM_COLOURS}
                       >
                         <NavLink
                           to={item.to}

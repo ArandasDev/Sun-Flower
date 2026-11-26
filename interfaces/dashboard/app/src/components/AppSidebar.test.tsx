@@ -111,6 +111,10 @@ describe('sidebar groups', () => {
       'href',
       '/moderacao',
     );
+    // Idle items carry the sidebar text colour, so the old `a { color }` rule never shows.
+    expect(screen.getByRole('link', { name: 'Configuração' })).toHaveClass(
+      'text-sidebar-foreground',
+    );
   });
 });
 
@@ -123,10 +127,11 @@ describe('header', () => {
     expect(within(trail).getByText('Casos')).toHaveAttribute('aria-current', 'page');
   });
 
-  it('shows "Ao vivo", and "Reconectando…" once the connection drops', async () => {
+  it('shows "Conectando…", then "Ao vivo" once open, and "Reconectando…" once it drops', async () => {
     signIn('member');
     renderApp('/');
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    expect(screen.getByRole('status')).toHaveTextContent('Conectando…');
     act(() => {
       lastSocket().open();
     });

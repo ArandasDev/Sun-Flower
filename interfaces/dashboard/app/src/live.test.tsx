@@ -424,7 +424,12 @@ describe('presence list', () => {
     });
     const item = screen.getByLabelText('Ana — Visão geral');
     expect(item).toHaveAttribute('tabindex', '0');
-    expect(item.querySelector('[role="tooltip"]')).toHaveTextContent('Ana — Visão geral');
+    const tip = item.querySelector('[role="tooltip"]');
+    expect(tip).toHaveTextContent('Ana — Visão geral');
+    // Only this seed opens it: the sidebar wrapper is an unnamed `group` too.
+    expect(item).toHaveClass('group/seed');
+    expect(tip).toHaveClass('group-hover/seed:block', 'group-focus-visible/seed:block');
+    expect(tip?.className).not.toMatch(/(^|s)group-(hover|focus-visible):/);
   });
 
   it('says so when nobody else is online', async () => {

@@ -117,12 +117,6 @@ a {
   fill: var(--seed);
 }
 
-.center-note {
-  max-width: 72ch;
-  margin: 4rem auto;
-  padding: 0 1rem;
-}
-
 /* Panels */
 
 .panel {

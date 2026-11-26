@@ -43,12 +43,18 @@ export interface PresenceUser {
 }
 
 export interface Live {
+  /** True while the socket is open. */
+  connected: boolean;
   /** True while the connection is closed and being retried. */
   reconnecting: boolean;
   presence: PresenceUser[];
 }
 
-export const LiveContext = createContext<Live>({ reconnecting: false, presence: [] });
+export const LiveContext = createContext<Live>({
+  connected: false,
+  reconnecting: false,
+  presence: [],
+});
 
 export function useLive(): Live {
   return useContext(LiveContext);
@@ -177,6 +183,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
   const leave = useLeaveSession();
   const { pathname } = useLocation();
   const screen = screenFor(pathname);
+  const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [presence, setPresence] = useState<PresenceUser[]>([]);
   const screenRef = useRef(screen);
@@ -311,6 +318,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       let opened = false;
       ws.onopen = () => {
         opened = true;
+        setConnected(true);
         lastSentAt = Number.NEGATIVE_INFINITY;
         lastSentScreen = null;
         flush();
@@ -331,6 +339,7 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       ws.onclose = (event) => {
         if (stopped || socket !== ws) return;
         socket = null;
+        setConnected(false);
         stopSending();
         stopStableTimer();
         // Never opened: the upgrade may have been refused because the session ended. Probe
@@ -377,5 +386,5 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
     reportRef.current();
   }, [screen]);
 
-  return { reconnecting, presence };
+  return { connected, reconnecting, presence };
 }

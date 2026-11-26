@@ -36,7 +36,7 @@ function Seed({ user, slot, spacing }: { user: PresenceUser; slot: number; spaci
   const label = `${user.name} — ${screenLabel(user.screen)}`;
   return (
     <motion.li
-      className="group absolute top-[calc(50%-14px)] left-[calc(50%-14px)] size-7 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group/seed absolute top-[calc(50%-14px)] left-[calc(50%-14px)] size-7 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       tabIndex={0}
       aria-label={label}
       initial={{ scale: 0, x, y }}
@@ -54,7 +54,7 @@ function Seed({ user, slot, spacing }: { user: PresenceUser; slot: number; spaci
       <span
         role="tooltip"
         aria-hidden="true"
-        className="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 z-50 hidden -translate-x-1/2 rounded-md border bg-popover px-2 py-0.5 text-sm whitespace-nowrap text-popover-foreground group-hover:block group-focus-visible:block"
+        className="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 z-50 hidden -translate-x-1/2 rounded-md border bg-popover px-2 py-0.5 text-sm whitespace-nowrap text-popover-foreground group-hover/seed:block group-focus-visible/seed:block"
       >
         {label}
       </span>
