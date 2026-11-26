@@ -8,6 +8,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ### Added
 
+- Limites do painel ([0024](docs/decisions/0024-panel-session-limits.md)): no máximo 5 sessões por pessoa (a sexta apaga a menos usada e fecha a conexão ao vivo dela), 10 conexões ao vivo por pessoa e 500 no total.
 - Registros de decisão 0017 a 0023 (níveis de acesso com dono automático e desenvolvedores com todas as permissões, login do painel com Discord OAuth2 e sessões, Fastify, React e Vite, tempo real por WebSocket filtrado por permissão, hospedagem atrás de um proxy HTTPS, operações de módulo e módulo `administration`) e spec da Fase 3 (painel administrativo).
 - Níveis de acesso (desenvolvedor, dono, equipe e membro) no serviço de permissões.
 - Sessões do painel guardadas pelo sha256 do token (migração 0003).

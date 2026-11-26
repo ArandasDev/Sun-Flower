@@ -134,7 +134,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - Níveis de acesso: desenvolvedores, dono do servidor, equipe e membros, que veem só o próprio perfil ([0017](decisions/0017-access-levels.md)).
 - Atualizações em tempo real e presença de quem está no painel.
 
-**Decisões:** resolvidas em [0017](decisions/0017-access-levels.md) (níveis de acesso, substituindo parte da 0006), [0018](decisions/0018-panel-authentication.md) (login com Discord OAuth2 e sessões), [0019](decisions/0019-panel-stack.md) (Fastify, React e Vite), [0020](decisions/0020-panel-realtime.md) (WebSocket filtrado por permissão), [0021](decisions/0021-panel-hosting.md) (mesmo processo, atrás de um proxy HTTPS), [0022](decisions/0022-module-operations.md) (operações de módulo) e [0023](decisions/0023-administration-module.md) (módulo `administration`).
+**Decisões:** resolvidas em [0017](decisions/0017-access-levels.md) (níveis de acesso, substituindo parte da 0006), [0018](decisions/0018-panel-authentication.md) (login com Discord OAuth2 e sessões), [0019](decisions/0019-panel-stack.md) (Fastify, React e Vite), [0020](decisions/0020-panel-realtime.md) (WebSocket filtrado por permissão), [0021](decisions/0021-panel-hosting.md) (mesmo processo, atrás de um proxy HTTPS), [0022](decisions/0022-module-operations.md) (operações de módulo) [0023](decisions/0023-administration-module.md) (módulo `administration`) e [0024](decisions/0024-panel-session-limits.md) (limites de sessões e de conexões ao vivo).
 
 **Etapas:** spec [2026-11-24-fase-3-painel.md](specs/2026-11-24-fase-3-painel.md).
 
