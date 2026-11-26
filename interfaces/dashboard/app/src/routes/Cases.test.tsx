@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { formatDate } from '../components/CaseDetail.tsx';
 import { FakeClock, FakeWebSocket, lastSocket } from '../fake-websocket.ts';
 import { me, renderApp, stubFetch, type FakeResponse } from '../test-utils.tsx';
 
@@ -96,6 +97,14 @@ describe('cases list', () => {
     expect(await screen.findByRole('button', { name: /Caso 5/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Caso 4/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Casos' })).toBeInTheDocument();
+  });
+
+  it('keeps the row accessible name, separators included', async () => {
+    setup([READ], standard);
+    const row = await screen.findByRole('button', { name: /Caso 5/ });
+    expect(row).toHaveAccessibleName(
+      `Caso 5${formatDate('2026-11-20T10:00:00.000Z')}, Automático, confirmadoApagar e silenciar, Com ação aplicada${TARGET}`,
+    );
   });
 
   it('hides the Casos menu item without moderation.cases.read', async () => {

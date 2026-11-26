@@ -52,8 +52,10 @@ function MyCases() {
               <span className="text-muted-foreground">
                 {formatDate(row.createdAt)}, {caseKindLabel(row.kind, null)}
               </span>
-              <span className="text-muted-foreground">{caseActionLabel(row.action)}</span>
-              <Badge variant="secondary">{caseStatusLabel(row.status)}</Badge>
+              <span className="text-muted-foreground">
+                {caseActionLabel(row.action)},{' '}
+                <Badge variant="secondary">{caseStatusLabel(row.status)}</Badge>
+              </span>
             </li>
           ))}
         </ul>

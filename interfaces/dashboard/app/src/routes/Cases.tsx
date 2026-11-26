@@ -171,8 +171,10 @@ export function Cases() {
                 <span className="text-muted-foreground">
                   {formatDate(row.createdAt)}, {caseKindLabel(row.kind, row.level)}
                 </span>
-                <span className="text-muted-foreground">{caseActionLabel(row.action)}</span>
-                <Badge variant="secondary">{caseStatusLabel(row.status)}</Badge>
+                <span className="text-muted-foreground">
+                  {caseActionLabel(row.action)},{' '}
+                  <Badge variant="secondary">{caseStatusLabel(row.status)}</Badge>
+                </span>
                 <span className="font-mono text-xs text-muted-foreground">{row.targetUserId}</span>
               </button>
             </li>
