@@ -71,11 +71,10 @@ describe('developers screen', () => {
     expect(screen.getByLabelText('ID da pessoa')).toHaveFocus();
   });
 
-  it('draws the list inside a panel so the rows keep their padding', async () => {
+  it('draws the list inside a card so the rows keep their padding', async () => {
     setup();
     const list = (await screen.findByText(SELF)).closest('ul');
-    expect(list?.parentElement).toHaveClass('panel');
-    expect(list).not.toHaveClass('panel');
+    expect(list?.closest('[data-slot="card"]')).not.toBeNull();
   });
 
   it('blocks an invalid id', async () => {

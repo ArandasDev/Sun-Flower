@@ -13,10 +13,16 @@ export function SeedMark({ size, dots = 9 }: { size: number; dots?: number }) {
     };
   });
   return (
-    <svg className="seed-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="18" className="seed-mark-ring" />
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="18" className="fill-none stroke-primary stroke-2" />
       {points.map((p) => (
-        <circle key={p.n} cx={p.x} cy={p.y} r={dots > 12 ? 1.1 : 2} className="seed-mark-dot" />
+        <circle
+          key={p.n}
+          cx={p.x}
+          cy={p.y}
+          r={dots > 12 ? 1.1 : 2}
+          className="fill-amber-900 dark:fill-amber-300"
+        />
       ))}
     </svg>
   );

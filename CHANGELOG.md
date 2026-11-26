@@ -17,10 +17,18 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - menu da conta com a escolha de tema e o botão Sair;
   - login, sem acesso, carregando e erro como um cartão centralizado.
 
+### Removed
+
+- O CSS escrito à mão do painel (`styles.css`) e a camada legada: nenhuma tela depende mais dele.
+
 ### Changed
 
 - O item de menu `/moderacao` do painel passa a se chamar "Configuração", dentro do grupo Moderação.
-- As telas restantes do painel ainda usam o CSS antigo, em uma camada legada, até a parte 2 do novo visual.
+- Painel, novo visual (parte 2 de 2), telas em componentes do shadcn/ui:
+  - confirmações como `AlertDialog` e detalhe do caso em um `Sheet` lateral;
+  - módulos ligados e desligados com um `Switch` (desligar continua pedindo confirmação);
+  - tabela de Logs com o nível num `Badge` e quebra de valores longos, sem cortá-los;
+  - `Skeleton` enquanto as listas carregam.
 - Os toasts do painel usarão o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
 
 ### Security

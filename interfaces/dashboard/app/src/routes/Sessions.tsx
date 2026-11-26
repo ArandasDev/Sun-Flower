@@ -2,6 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { Button } from '../components/ui/button.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
 import { useCurrentMe } from '../session.tsx';
@@ -57,58 +60,75 @@ export function Sessions() {
   };
 
   return (
-    <section>
-      <h1 ref={headingRef} tabIndex={-1}>
+    <section className="flex flex-col gap-4">
+      <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
         Sessões
       </h1>
-      <p className="muted">
+      <p className="text-sm text-muted-foreground">
         Sessões abertas no painel. Encerrar uma sessão fecha o painel dessa pessoa na hora.
       </p>
-      <p role="alert" className="form-error">
+      <p role="alert" className="text-sm text-destructive empty:hidden">
         {query.isError ? errorText(query.error) : null}
       </p>
-      {query.isPending ? <p className="muted">Carregando…</p> : null}
-      {query.isSuccess && sessions.length === 0 ? (
-        <p className="muted">Nenhuma sessão aberta.</p>
+      {query.isPending ? (
+        <div className="flex flex-col gap-2">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-9 w-full" />
+          ))}
+        </div>
       ) : null}
-      <div className="grant-groups">
+      {query.isSuccess && sessions.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma sessão aberta.</p>
+      ) : null}
+      <div className="flex flex-col gap-4">
         {[...groups.entries()].map(([userId, entries]) => (
-          <section key={userId} className="panel" aria-label={`Sessões de ${userId}`}>
-            <div className="session-head">
-              <h2 className="mono">
-                {userId}
-                {userId === me.id ? <strong className="self-mark"> Você</strong> : null}
-              </h2>
-              <button
+          <Card key={userId} role="region" aria-label={`Sessões de ${userId}`}>
+            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle>
+                <h2 className="font-mono text-base font-semibold break-all">
+                  {userId}
+                  {userId === me.id ? (
+                    <strong className="font-sans font-semibold"> Você</strong>
+                  ) : null}
+                </h2>
+              </CardTitle>
+              <Button
                 type="button"
-                className="button button-quiet"
+                variant="destructive"
+                size="sm"
                 onClick={() => {
                   open({ kind: 'all', userId });
                 }}
               >
                 Encerrar todas desta pessoa
-              </button>
-            </div>
-            <ul className="domain-rows">
-              {entries.map((entry) => (
-                <li key={entry.ref}>
-                  <span>
-                    Criada em {formatDate(entry.createdAt)}
-                    <span className="muted">, último uso {formatDate(entry.lastSeenAt)}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="button button-quiet"
-                    onClick={() => {
-                      open({ kind: 'one', entry });
-                    }}
-                  >
-                    Encerrar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ul className="flex flex-col divide-y rounded-md border">
+                {entries.map((entry) => (
+                  <li key={entry.ref} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="min-w-0 text-sm">
+                      Criada em {formatDate(entry.createdAt)}
+                      <span className="text-muted-foreground">
+                        , último uso {formatDate(entry.lastSeenAt)}
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        open({ kind: 'one', entry });
+                      }}
+                    >
+                      Encerrar
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         ))}
       </div>
       {ending === null ? null : (
@@ -128,13 +148,15 @@ export function Sessions() {
         >
           {ending.kind === 'one' ? (
             <p>
-              Encerrar esta sessão de <span className="mono">{ending.entry.userId}</span>? A pessoa
-              precisa entrar de novo nesse navegador.
+              Encerrar esta sessão de{' '}
+              <span className="font-mono break-all">{ending.entry.userId}</span>? A pessoa precisa
+              entrar de novo nesse navegador.
             </p>
           ) : (
             <p>
-              Encerrar todas as sessões de <span className="mono">{ending.userId}</span>? A pessoa
-              precisa entrar de novo em todos os navegadores.
+              Encerrar todas as sessões de{' '}
+              <span className="font-mono break-all">{ending.userId}</span>? A pessoa precisa entrar
+              de novo em todos os navegadores.
             </p>
           )}
         </ConfirmDialog>

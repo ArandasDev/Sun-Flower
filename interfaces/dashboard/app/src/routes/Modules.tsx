@@ -2,6 +2,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { Badge } from '../components/ui/badge.tsx';
+import { Card, CardContent } from '../components/ui/card.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
+import { Switch } from '../components/ui/switch.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
 
@@ -32,6 +36,10 @@ function situation(entry: ModuleEntry): string {
       : `Falhou ao iniciar (${formatDate(entry.failedAt)})`;
   }
   return 'Em transição';
+}
+
+function situationVariant(entry: ModuleEntry): 'secondary' | 'destructive' {
+  return entry.enabled && entry.state === 'FAILED' ? 'destructive' : 'secondary';
 }
 
 export function Modules() {
@@ -70,71 +78,78 @@ export function Modules() {
     disabling === null && toggle.error !== null ? toggle.error : query.isError ? query.error : null;
 
   return (
-    <section>
-      <h1 ref={headingRef} tabIndex={-1}>
+    <section className="flex flex-col gap-4">
+      <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
         Módulos
       </h1>
-      <p className="muted">
+      <p className="text-sm text-muted-foreground">
         Ligue ou desligue módulos do bot sem reiniciá-lo. A escolha vale também depois de um
         reinício.
       </p>
-      <p role="alert" className="form-error">
+      <p role="alert" className="text-sm text-destructive empty:hidden">
         {pageError === null ? null : errorText(pageError)}
       </p>
-      {query.isPending ? <p className="muted">Carregando…</p> : null}
-      {modules.length === 0 ? null : (
-        <div className="panel">
-          <ul className="domain-rows">
-            {modules.map((entry) => (
-              <li key={entry.id}>
-                <span>
-                  <strong>{entry.name}</strong>
-                  <span className="muted"> versão {entry.version}</span>
-                  <span className="row-line">{situation(entry)}</span>
-                  {entry.description === '' ? null : (
-                    <span className="row-line muted">{entry.description}</span>
-                  )}
-                  {entry.dependencies.length === 0 ? null : (
-                    <span className="row-line muted">
-                      Depende de: {entry.dependencies.join(', ')}
-                    </span>
-                  )}
-                  {entry.canDisable || entry.state !== 'RUNNING' ? null : (
-                    <span className="row-line muted">Não pode ser desligado.</span>
-                  )}
-                </span>
-                {entry.state === 'RUNNING' ? (
-                  entry.canDisable ? (
-                    <button
-                      type="button"
-                      className="button button-quiet"
-                      disabled={toggle.isPending}
-                      onClick={() => {
-                        toggle.reset();
-                        setDisabling(entry);
-                      }}
-                    >
-                      Desligar
-                    </button>
-                  ) : null
-                ) : (
-                  <button
-                    type="button"
-                    className="button button-primary"
-                    disabled={toggle.isPending}
-                    onClick={() => {
-                      toggle.reset();
-                      watchFocus.current = true;
-                      toggle.mutate({ moduleId: entry.id, enabled: true });
-                    }}
-                  >
-                    Ligar
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+      {query.isPending ? (
+        <div className="flex flex-col gap-2">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-9 w-full" />
+          ))}
         </div>
+      ) : null}
+      {modules.length === 0 ? null : (
+        <Card>
+          <CardContent>
+            <ul className="flex flex-col divide-y rounded-md border">
+              {modules.map((entry) => (
+                <li key={entry.id} className="flex items-start justify-between gap-3 px-3 py-3">
+                  <span className="flex min-w-0 flex-col gap-1 text-sm">
+                    <span>
+                      <strong className="font-semibold">{entry.name}</strong>
+                      <span className="text-muted-foreground"> versão {entry.version}</span>
+                    </span>
+                    <Badge variant={situationVariant(entry)}>{situation(entry)}</Badge>
+                    {entry.description === '' ? null : (
+                      <span className="text-muted-foreground">{entry.description}</span>
+                    )}
+                    {entry.dependencies.length === 0 ? null : (
+                      <span className="text-muted-foreground">
+                        Depende de: {entry.dependencies.join(', ')}
+                      </span>
+                    )}
+                    {entry.canDisable || entry.state !== 'RUNNING' ? null : (
+                      <span className="text-muted-foreground">Não pode ser desligado.</span>
+                    )}
+                  </span>
+                  {entry.state === 'RUNNING' ? (
+                    entry.canDisable ? (
+                      <Switch
+                        checked
+                        aria-label="Desligar"
+                        disabled={toggle.isPending}
+                        onCheckedChange={() => {
+                          toggle.reset();
+                          setDisabling(entry);
+                        }}
+                      />
+                    ) : null
+                  ) : (
+                    <Switch
+                      checked={false}
+                      aria-label="Ligar"
+                      disabled={toggle.isPending}
+                      onCheckedChange={() => {
+                        toggle.reset();
+                        watchFocus.current = true;
+                        toggle.mutate({ moduleId: entry.id, enabled: true });
+                      }}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       )}
       {disabling === null ? null : (
         <ConfirmDialog

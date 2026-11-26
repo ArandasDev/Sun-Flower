@@ -1,13 +1,7 @@
-/*
- * The old styles.css sits in its own layer, above Tailwind's base (so the screens not yet
- * restyled keep their look) and below the utilities (so the new components win). It goes
- * away in Task 7.
- */
-@layer theme, base, legacy, components, utilities;
+@layer theme, base, components, utilities;
 
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import './styles.css' layer(legacy);
 
 @custom-variant dark (&:is(.dark *));
 
