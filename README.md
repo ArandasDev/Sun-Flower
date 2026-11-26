@@ -49,6 +49,9 @@ Substitua `<seu ID de usuário>` pelo seu próprio ID, sem os sinais `<` e `>`.
 
 Os IDs do Discord (usuários e servidor) ficam somente no banco local (`SUNFLOWER_DB_PATH`, padrão `data/sun-flower.db`) e no `.env`. Nenhum dos dois é versionado, e nenhum ID real deve entrar no repositório.
 
+> [!NOTE]
+> A pasta `data/` guarda o banco de dados. Não a deixe dentro de uma pasta sincronizada (OneDrive, Dropbox) e deixe-a legível só pelo usuário do bot, por exemplo com `chmod 700 data` no Linux.
+
 **Execução:**
 
 > [!NOTE]
@@ -232,6 +235,7 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 
 **Limites conhecidos da etapa 3:**
 
+- Cada pessoa mantém no máximo 5 sessões do painel: o sexto login encerra a sessão menos usada, e aquele navegador volta para o login. Veja a decisão [0024](docs/decisions/0024-panel-session-limits.md).
 - Um módulo dependente que falhou porque a dependência estava desligada continua em `FAILED` até ser ligado.
 - Cargos e usuários são digitados como IDs, sem seletor do Discord.
 - A memória de logs se perde quando o bot reinicia.

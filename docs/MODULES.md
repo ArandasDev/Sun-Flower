@@ -468,7 +468,7 @@ As configurações de cada módulo têm uma versão, que começa em 0 e sobe a c
 
 Alterações de configuração não deverão exigir reinicialização completa da aplicação, quando puderem ser aplicadas com segurança.
 
-**Alteração em tempo de execução.** `context.config.set(partial)` mescla `partial` às configurações salvas do módulo, valida o resultado pelo `configSchema` e só então persiste; uma configuração inválida é recusada e nada é gravado. `context.config.get()` passa a devolver o novo valor. O módulo sem `configSchema` não pode usar `set`.
+**Alteração em tempo de execução.** `context.config.set(partial)` mescla `partial` em profundidade às configurações salvas do módulo (objetos simples são mesclados e listas são substituídas inteiras), valida o resultado pelo `configSchema` e só então persiste; uma configuração inválida é recusada e nada é gravado. `context.config.get()` passa a devolver o novo valor. O módulo sem `configSchema` não pode usar `set`.
 
 ### Opções de comando
 

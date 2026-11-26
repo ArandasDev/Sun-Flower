@@ -6,6 +6,7 @@ import { MIGRATIONS_DIR, runMigrations } from '../infrastructure/migrations.ts';
 import {
   ABSOLUTE_EXPIRY_MS,
   IDLE_EXPIRY_MS,
+  MAX_SESSIONS_PER_USER,
   SessionStore,
   TOUCH_INTERVAL_MS,
   hashSessionToken,
@@ -242,5 +243,80 @@ describe('SessionStore listing and revocation', () => {
     off();
     store.revokeForUser(user);
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe('SessionStore session limit', () => {
+  it('exports the limit', () => {
+    expect(MAX_SESSIONS_PER_USER).toBe(5);
+  });
+
+  it('the 6th session deletes the first by last use and notifies once', () => {
+    const seen: (readonly string[])[] = [];
+    store.onRevoked((hashes) => seen.push(hashes));
+    const created = [];
+    for (let i = 0; i < 5; i++) {
+      created.push(store.create(user));
+      clock += 1_000;
+    }
+    expect(seen).toHaveLength(0);
+    const sixth = store.create(user);
+    expect(count()).toBe(5);
+    expect(store.peekByHash(created[0]?.record.idHash ?? '')).toBeNull();
+    for (const kept of created.slice(1)) {
+      expect(store.peekByHash(kept.record.idHash)).not.toBeNull();
+    }
+    expect(store.peekByHash(sixth.record.idHash)).not.toBeNull();
+    expect(seen).toEqual([[created[0]?.record.idHash]]);
+  });
+
+  it('evicts the session least recently used, not the oldest created', () => {
+    const first = store.create(user);
+    clock += 1_000;
+    const second = store.create(user);
+    for (let i = 0; i < 3; i++) {
+      clock += 1_000;
+      store.create(user);
+    }
+    clock += TOUCH_INTERVAL_MS;
+    expect(store.resolve(first.token)).not.toBeNull();
+    clock += 1_000;
+    store.create(user);
+    expect(store.peekByHash(first.record.idHash)).not.toBeNull();
+    expect(store.peekByHash(second.record.idHash)).toBeNull();
+  });
+
+  it('breaks a tie in last use by creation time', () => {
+    const first = store.create(user);
+    const rest = [];
+    for (let i = 0; i < 4; i++) {
+      clock += 1_000;
+      rest.push(store.create(user));
+    }
+    db.prepare('UPDATE panel_sessions SET last_seen_at = ?').run(new Date(clock).toISOString());
+    store.create(user);
+    expect(store.peekByHash(first.record.idHash)).toBeNull();
+    for (const kept of rest) expect(store.peekByHash(kept.record.idHash)).not.toBeNull();
+  });
+
+  it('does not count expired sessions and does not notify for them', () => {
+    const seen: (readonly string[])[] = [];
+    store.onRevoked((hashes) => seen.push(hashes));
+    for (let i = 0; i < 4; i++) store.create(user);
+    clock += IDLE_EXPIRY_MS + 1;
+    const live = [];
+    for (let i = 0; i < 4; i++) live.push(store.create(user));
+    expect(seen).toHaveLength(0);
+    expect(count()).toBe(8);
+    store.create(user);
+    for (const kept of live) expect(store.peekByHash(kept.record.idHash)).not.toBeNull();
+    expect(seen).toHaveLength(0);
+  });
+
+  it('does not touch the sessions of another person', () => {
+    for (let i = 0; i < 3; i++) store.create(other);
+    for (let i = 0; i < 6; i++) store.create(user);
+    expect(store.list().filter((record) => record.userId === other)).toHaveLength(3);
+    expect(store.list().filter((record) => record.userId === user)).toHaveLength(5);
   });
 });

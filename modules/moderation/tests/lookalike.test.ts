@@ -54,6 +54,10 @@ describe('isLookalike', () => {
     domainToASCII('díśćord.com'),
     'stearn.com',
     'disco.com', // accepted false positive (distance 2)
+    domainToASCII('steɑm-gift.com'),
+    domainToASCII('ꜱteam-gift.com'),
+    domainToASCII('ѕтеам.ru'),
+    domainToASCII('ѕteam.com'),
   ])('flags %s', (domain) => {
     expect(isLookalike(domain)).toBe(true);
   });
@@ -77,7 +81,13 @@ describe('isLookalike', () => {
     'store.steampowered.com',
     'x.discord.gift',
     '192.168.0.1',
+    'steampowered.com',
+    'discord.gg',
   ])('does not flag %s', (domain) => {
     expect(isLookalike(domain)).toBe(false);
+  });
+
+  it('keeps the current result for the ASCII typo stean-gift.com (the non-ASCII rule does not apply)', () => {
+    expect(isLookalike('stean-gift.com')).toBe(false);
   });
 });

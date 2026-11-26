@@ -171,7 +171,7 @@ O painel deverá funcionar como uma camada de gerenciamento independente da inte
 
 O painel deverá consumir as interfaces disponibilizadas pela aplicação central, sem acessar diretamente as implementações internas dos módulos.
 
-O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, no mesmo processo do bot, atrás de um proxy HTTPS e com atualização em tempo real por WebSocket. Veja as decisões [0017](decisions/0017-access-levels.md), [0018](decisions/0018-panel-authentication.md), [0019](decisions/0019-panel-stack.md), [0020](decisions/0020-panel-realtime.md) e [0021](decisions/0021-panel-hosting.md) e a [spec da Fase 3](specs/2026-11-24-fase-3-painel.md).
+O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, no mesmo processo do bot, atrás de um proxy HTTPS e com atualização em tempo real por WebSocket. Veja as decisões [0017](decisions/0017-access-levels.md), [0018](decisions/0018-panel-authentication.md), [0019](decisions/0019-panel-stack.md), [0020](decisions/0020-panel-realtime.md) e [0021](decisions/0021-panel-hosting.md), os limites de sessões e conexões ([0024](decisions/0024-panel-session-limits.md)) e a [spec da Fase 3](specs/2026-11-24-fase-3-painel.md).
 
 **Operações.** O painel não chama os módulos: ele executa operações nomeadas pelo Core, as mesmas que o Discord usa (contrato completo em [MODULES.md §5.3](MODULES.md#53-operações) e [decisão 0022](decisions/0022-module-operations.md)).
 

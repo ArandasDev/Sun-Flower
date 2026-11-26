@@ -481,6 +481,33 @@ describe('upgrade', () => {
     const other = sessions.create(STAFF);
     await connect(other.token);
   });
+
+  it('refuses the 11th connection of one person across sessions and closes none (Review Focus 2)', async () => {
+    const clients: Client[] = [];
+    for (let i = 0; i < 2; i++) {
+      const { token } = sessions.create(STAFF);
+      for (let j = 0; j < 5; j++) clients.push(await connect(token));
+    }
+    expect(hub.connectionCount(STAFF)).toBe(10);
+    expect(await refusal(sessions.create(STAFF).token)).toBe(403);
+    expect(hub.connectionCount(STAFF)).toBe(10);
+    for (const client of clients) expect(client.ws.readyState).toBe(WebSocket.OPEN);
+    await connect(sessions.create(DEV).token);
+  });
+
+  it('refuses a connection beyond the total limit', async () => {
+    const small = await buildDashboard({ ...deps, liveLimits: { total: 2 } });
+    try {
+      await small.listen({ host: '127.0.0.1', port: 0 });
+      url = `ws://127.0.0.1:${(small.server.address() as AddressInfo).port}/api/live`;
+      await connect(sessions.create(STAFF).token);
+      await connect(sessions.create(DEV).token);
+      expect(await refusal(sessions.create(OWNER).token)).toBe(403);
+    } finally {
+      for (const ws of clients) ws.terminate();
+      await small.close();
+    }
+  });
 });
 
 describe('status', () => {
@@ -865,6 +892,73 @@ describe('sessions revoked through the admin service', { timeout: 20_000 }, () =
     closed = true;
     expect(sessions.revokeByRef(sessions.refOf(record.idHash))).toBe(true);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('session limit per person', { timeout: 20_000 }, () => {
+  it('ends an upgrade whose session was revoked while the handshake was in flight', async () => {
+    const { token, record } = sessions.create(STAFF);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = deps.directory.lookup.bind(deps.directory);
+    vi.spyOn(deps.directory, 'lookup').mockImplementation(async (userId) => {
+      await gate;
+      return original(userId);
+    });
+    const client = connect(token);
+    const opened = client.catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    sessions.revokeByRef(sessions.refOf(record.idHash));
+    release();
+    const ready = await withTimeout(opened, 'open');
+    if (ready === undefined) throw new Error('upgrade was refused');
+    const result = await withTimeout(ready.closed, 'close');
+    expect(result.code).toBe(4401);
+    expect(result.messages.at(-1)).toEqual({ type: 'session.ended', data: null });
+    expect(hub.connectionCount(STAFF)).toBe(0);
+  });
+
+  it('keeps the connection when the session lookup fails once the socket is open', async () => {
+    const { token } = sessions.create(STAFF);
+    // Authentication has finished once the member lookup returns; the next read is the one of #accept.
+    const original = deps.directory.lookup.bind(deps.directory);
+    vi.spyOn(deps.directory, 'lookup').mockImplementation(async (userId) => {
+      const found = await original(userId);
+      vi.spyOn(sessions, 'peekByHash').mockImplementation(() => {
+        throw new Error('db busy');
+      });
+      return found;
+    });
+    const client = await connect(token);
+    await barrier(client);
+    expect(client.ws.readyState).toBe(WebSocket.OPEN);
+    expect(client.messages.some((m) => m.type === 'session.ended')).toBe(false);
+    expect(hub.connectionCount(STAFF)).toBe(1);
+  });
+
+  it('the 6th session ends the live connection of the first and keeps the other five (Review Focus 1)', async () => {
+    const created = [];
+    for (let i = 0; i < 5; i++) {
+      created.push(sessions.create(STAFF));
+      clock.advance(1_000);
+    }
+    const open: Client[] = [];
+    for (const session of created) open.push(await connect(session.token));
+    const sixth = sessions.create(STAFF);
+    const first = open[0];
+    if (first === undefined) throw new Error('no client');
+    const result = await withTimeout(first.closed, 'close');
+    expect(result.code).toBe(4401);
+    expect(result.messages.at(-1)).toEqual({ type: 'session.ended', data: null });
+    for (const client of open.slice(1)) {
+      await barrier(client);
+      expect(client.ws.readyState).toBe(WebSocket.OPEN);
+    }
+    expect(sessions.peek(sixth.token)).not.toBeNull();
+    expect(sessions.peek(created[0]?.token ?? '')).toBeNull();
+    expect(sessions.list().filter((record) => record.userId === STAFF)).toHaveLength(5);
   });
 });
 

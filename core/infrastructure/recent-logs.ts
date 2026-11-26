@@ -63,7 +63,11 @@ export class RecentLogs {
     const level = typeof record.level === 'number' ? LEVELS[record.level] : undefined;
     if (level === undefined) return;
 
-    const fields: Record<string, string | number | boolean | null> = {};
+    // No prototype, so a `__proto__` key in a record is plain data.
+    const fields: Record<string, string | number | boolean | null> = Object.create(null) as Record<
+      string,
+      string | number | boolean | null
+    >;
     for (const [rawKey, value] of Object.entries(record)) {
       if (RESERVED.has(rawKey)) continue;
       // A key may hold an ID too, as in `{ [userId]: true }`.

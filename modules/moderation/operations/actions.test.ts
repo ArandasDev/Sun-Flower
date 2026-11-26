@@ -277,17 +277,30 @@ describe('moderation.actions canonical IDs and strict input', () => {
     expect(await t.run('ban', { userId: '18446744073709551615' })).toMatchObject({ ok: true });
   });
 
-  it.each(['spam\u0000x', 'a\nb', '\u200b', ' \u200b\u200d ', '\u2060'])(
-    'rejects the reason %j',
-    async (reason) => {
-      const t = setup();
-      expect(await t.run('kick', { reason })).toMatchObject({
-        ok: false,
-        error: { code: 'invalid' },
-      });
-      expect(t.guild.calls).toHaveLength(0);
-    },
-  );
+  it.each([
+    'spam\u0000x',
+    'a\nb',
+    '\u200b',
+    ' \u200b\u200d ',
+    '\u2060',
+    'a\u202eb',
+    'a\u2066b',
+    'a\u061cb',
+  ])('rejects the reason %j', async (reason) => {
+    const t = setup();
+    expect(await t.run('kick', { reason })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid' },
+    });
+    expect(t.guild.calls).toHaveLength(0);
+  });
+
+  it('accepts an emoji joined with U+200D', async () => {
+    const t = setup();
+    expect(await t.run('kick', { reason: 'ok \u{1F468}‍\u{1F469}' })).toMatchObject({
+      ok: true,
+    });
+  });
 
   it.each(ACTIONS)('%s rejects unknown keys', async (action) => {
     const t = setup();

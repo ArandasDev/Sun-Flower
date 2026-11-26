@@ -20,6 +20,8 @@ import { canSeeStatus, type StatusSnapshot } from './status-route.ts';
 
 export const LIVE_PATH = '/api/live';
 export const MAX_CONNECTIONS_PER_SESSION = 5;
+export const MAX_CONNECTIONS_PER_USER = 10;
+export const MAX_CONNECTIONS_TOTAL = 500;
 export const MAX_MESSAGE_BYTES = 256;
 export const MESSAGE_INTERVAL_MS = 1_000;
 export const MAX_VIOLATIONS = 10;
@@ -78,6 +80,13 @@ export const systemClock: LiveClock = {
   },
 };
 
+/** Connection limits; tests lower them so they need not open hundreds of sockets. */
+export interface LiveLimits {
+  readonly perSession?: number;
+  readonly perUser?: number;
+  readonly total?: number;
+}
+
 export interface LiveHubDeps {
   readonly core: CoreHandle;
   readonly auth: SessionAuth;
@@ -87,6 +96,7 @@ export interface LiveHubDeps {
   readonly statusSnapshot: () => StatusSnapshot;
   readonly logger: Logger;
   readonly clock?: LiveClock;
+  readonly limits?: LiveLimits;
 }
 
 export interface PresenceEntry {
@@ -149,6 +159,9 @@ export class LiveHub {
   readonly #statusSnapshot: () => StatusSnapshot;
   readonly #logger: Logger;
   readonly #clock: LiveClock;
+  readonly #maxPerSession: number;
+  readonly #maxPerUser: number;
+  readonly #maxTotal: number;
   readonly #connections = new Set<Connection>();
   readonly #presence = new Map<string, PresenceState>();
   readonly #admitted = new WeakMap<FastifyRequest, Authenticated>();
@@ -165,6 +178,9 @@ export class LiveHub {
     this.#statusSnapshot = deps.statusSnapshot;
     this.#logger = deps.logger;
     this.#clock = deps.clock ?? systemClock;
+    this.#maxPerSession = deps.limits?.perSession ?? MAX_CONNECTIONS_PER_SESSION;
+    this.#maxPerUser = deps.limits?.perUser ?? MAX_CONNECTIONS_PER_USER;
+    this.#maxTotal = deps.limits?.total ?? MAX_CONNECTIONS_TOTAL;
 
     const onStatus = (): void => {
       this.#enqueue(() =>
@@ -259,11 +275,18 @@ export class LiveHub {
     const outcome = await this.#auth.authenticate(request);
     if (outcome === 'unauthorized') return unauthorized(reply);
     if (outcome === 'unavailable') return unavailable(reply);
-    if (this.#sessionConnections(outcome.record.idHash) >= MAX_CONNECTIONS_PER_SESSION) {
-      return forbidden(reply);
-    }
+    if (this.#overLimit(outcome.record.idHash, outcome.record.userId)) return forbidden(reply);
     this.#admitted.set(request, outcome);
     return undefined;
+  }
+
+  /** Whether one more connection would pass the limit of the session, of the person or of all. */
+  #overLimit(idHash: string, userId: string): boolean {
+    return (
+      this.#sessionConnections(idHash) >= this.#maxPerSession ||
+      this.connectionCount(userId) >= this.#maxPerUser ||
+      this.#connections.size >= this.#maxTotal
+    );
   }
 
   #sessionConnections(idHash: string): number {
@@ -281,8 +304,21 @@ export class LiveHub {
       return;
     }
     const { record } = admitted;
+    // The session may have been revoked or evicted while the upgrade was in flight. Only a session
+    // that is really gone ends here; a failed lookup is left to the next revalidation, as there.
+    let valid: boolean;
+    try {
+      valid = this.#core.sessions.peekByHash(record.idHash) !== null;
+    } catch {
+      valid = true;
+    }
+    if (!valid) {
+      this.#sendRaw(socket, 'session.ended', null);
+      socket.close(CLOSE_SESSION_ENDED);
+      return;
+    }
     // Upgrades admitted concurrently are counted again once open.
-    if (this.#sessionConnections(record.idHash) >= MAX_CONNECTIONS_PER_SESSION) {
+    if (this.#overLimit(record.idHash, record.userId)) {
       socket.close(CLOSE_LIMITS);
       return;
     }
@@ -576,6 +612,15 @@ export class LiveHub {
     this.#send(connection, 'session.ended', null);
     connection.ended = true;
     connection.socket.close(CLOSE_SESSION_ENDED);
+  }
+
+  #sendRaw(socket: WebSocket, type: string, data: unknown): void {
+    if (socket.readyState !== OPEN) return;
+    try {
+      socket.send(JSON.stringify({ type, data }));
+    } catch (error) {
+      this.#logger.error({ error: errorName(error) }, 'live send failed');
+    }
   }
 
   #send(connection: Connection, type: string, data: unknown): void {

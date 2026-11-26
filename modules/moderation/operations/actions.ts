@@ -45,6 +45,8 @@ const REFUSAL_LABEL: Record<GuildActionError, 'sem permissão' | 'não encontrad
 };
 
 const CONTROL = /\p{Cc}/u;
+/** Bidirectional controls (U+200D, which composes emoji, stays allowed). */
+const BIDI = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;
 const INVISIBLE = /\p{Cf}/gu;
 
 /** 1 to 512 characters, no control characters, and not made only of invisible ones. */
@@ -53,7 +55,7 @@ const reason = z
   .trim()
   .min(1)
   .max(REASON_MAX)
-  .refine((text) => !CONTROL.test(text))
+  .refine((text) => !CONTROL.test(text) && !BIDI.test(text))
   .refine((text) => text.replace(INVISIBLE, '').trim().length > 0);
 /** `channelId` is informational: the channel shown on the case (/mod passes where it ran). */
 const base = { userId: snowflake, reason, channelId: snowflake.optional() };

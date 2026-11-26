@@ -145,23 +145,23 @@ describe('createModuleGuild', () => {
   });
 
   it('truncates the reason to 512 characters', async () => {
-    const { guild, calls, entries } = setup(['guild.moderate']);
+    const { guild, calls } = setup(['guild.moderate']);
     await guild.kick(target, 'a'.repeat(600));
     expect(calls[0]?.args).toEqual([target, 'a'.repeat(512)]);
-    expect(entries[0]?.obj).toMatchObject({ reason: 'a'.repeat(512) });
   });
 
-  it('masks snowflakes in the logged reason but sends the original to the port', async () => {
+  it('keeps the reason out of the log and only says whether there was one', async () => {
     const { guild, calls, entries } = setup(['guild.moderate']);
     const reason = `golpe contra <@${dev}> e 12345678901234567890 (id 1234567890123456)`;
     await guild.ban(target, reason, 0);
     await guild.timeout(target, 60_000, reason);
     await guild.kick(target, reason);
-    const masked = 'golpe contra <@[id]> e [id] (id 1234567890123456)';
     for (const index of [0, 1, 2]) {
       expect(calls[index]?.args).toContain(reason);
-      expect(entries[index]?.obj).toMatchObject({ reason: masked });
+      expect(entries[index]?.obj).toMatchObject({ hasReason: true });
+      expect(entries[index]?.obj).not.toHaveProperty('reason');
     }
+    expect(JSON.stringify(entries)).not.toContain('golpe');
     expect(JSON.stringify(entries)).not.toContain(dev);
   });
 
@@ -172,12 +172,13 @@ describe('createModuleGuild', () => {
     await guild.sendMessage(channel, 'secret content');
     expect(entries[0]).toEqual({
       level: 'info',
-      obj: { module: 'moderation', action: 'timeout', reason: 'spam', result: 'ok' },
+      obj: { module: 'moderation', action: 'timeout', hasReason: true, result: 'ok' },
       msg: 'guild action executed',
     });
     expect(entries[1]?.obj).toEqual({
       module: 'moderation',
       action: 'deleteMessage',
+      hasReason: false,
       result: 'ok',
     });
     const text = JSON.stringify(entries);

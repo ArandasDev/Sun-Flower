@@ -3,6 +3,8 @@ export const CONFIG_UPDATED = 'Configuração atualizada.';
 export const CONFIG_INVALID = (fields: string): string => `Configuração inválida: ${fields}.`;
 export const INVALID_OPTION = (name: string): string => `Opção inválida: ${name}.`;
 export const INVALID_DOMAIN = 'Domínio inválido.';
+export const DOMAIN_PUBLIC_SUFFIX = 'Este domínio é um sufixo público e não pode ser permitido.';
+export const DOMAIN_LOOKALIKE = 'Este domínio imita um domínio conhecido e não pode ser permitido.';
 export const DOMAIN_SET = (list: 'block' | 'allow', domain: string): string =>
   `Domínio ${list === 'block' ? 'bloqueado' : 'permitido'}: \`${domain}\`.`;
 export const DOMAIN_REMOVED = (domain: string): string => `Domínio removido: \`${domain}\`.`;

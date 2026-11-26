@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ModuleContext } from '../../../shared/contracts/module.ts';
 import { fail, ok } from '../../../shared/contracts/operations.ts';
 import type { OperationResult } from '../../../shared/contracts/operations.ts';
+import { mergeSettings } from '../../../shared/utilities/merge-settings.ts';
 import { configSchema } from '../config.ts';
 import type { ModerationConfig } from '../config.ts';
 import { CONFIG_CONFLICT, CONFIG_INVALID } from '../commands/replies.ts';
@@ -50,10 +51,9 @@ export function registerConfigOperations(ctx: Pick<ModuleContext, 'config' | 'op
     input: updateInput,
     handler: (_actor, input: z.output<typeof updateInput>) => {
       // Validate against the schema first: it drops unknown nested keys before they are stored.
-      const parsed = configSchema.safeParse({
-        ...ctx.config.get<ModerationConfig>(),
-        ...input.changes,
-      });
+      const parsed = configSchema.safeParse(
+        mergeSettings(ctx.config.get<ModerationConfig>(), input.changes),
+      );
       if (!parsed.success) {
         const paths = [...new Set(parsed.error.issues.map((issue) => issue.path.join('.')))];
         return Promise.resolve(fail('invalid', CONFIG_INVALID(paths.join(', '))));

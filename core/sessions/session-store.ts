@@ -9,6 +9,8 @@ export const ABSOLUTE_EXPIRY_MS = 604_800_000;
 export const TOUCH_INTERVAL_MS = 60_000;
 /** How often startCore purges expired sessions. */
 export const PURGE_INTERVAL_MS = 3_600_000;
+/** A person keeps at most this many live sessions; a new one evicts the least recently used. */
+export const MAX_SESSIONS_PER_USER = 5;
 
 export interface SessionRecord {
   readonly idHash: string;
@@ -65,12 +67,45 @@ export class SessionStore {
       lastSeenAt: now,
       expiresAt: now + ABSOLUTE_EXPIRY_MS,
     };
+    const evicted = this.#evictForNewSession(userId, now);
     this.#db
       .prepare(
         'INSERT INTO panel_sessions (id_hash, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)',
       )
       .run(record.idHash, userId, iso(now), iso(now), iso(record.expiresAt));
+    if (evicted.length > 0) this.#notify(evicted);
     return { token, record };
+  }
+
+  /**
+   * Deletes the live sessions of the person that would exceed the limit once a new one exists,
+   * least recently used first (ties by creation). Expired sessions do not count; the purge
+   * removes them. Returns the deleted hashes, for the caller to announce after the insert.
+   */
+  #evictForNewSession(userId: string, now: number): string[] {
+    const rows = this.#db
+      .prepare('SELECT * FROM panel_sessions WHERE user_id = ?')
+      .all(userId) as unknown as SessionRow[];
+    const live = rows
+      .map(toRecord)
+      .filter(
+        (record) =>
+          Number.isFinite(record.expiresAt) &&
+          Number.isFinite(record.lastSeenAt) &&
+          now <= record.expiresAt &&
+          now <= record.lastSeenAt + IDLE_EXPIRY_MS,
+      )
+      .sort(
+        (a, b) =>
+          a.lastSeenAt - b.lastSeenAt ||
+          a.createdAt - b.createdAt ||
+          a.idHash.localeCompare(b.idHash),
+      );
+    const excess = live.length - (MAX_SESSIONS_PER_USER - 1);
+    if (excess <= 0) return [];
+    const evicted = live.slice(0, excess).map((record) => record.idHash);
+    for (const idHash of evicted) this.deleteByHash(idHash);
+    return evicted;
   }
 
   /** Returns the session if both expirations still hold, refreshing `last_seen_at` at most once a minute. */
@@ -161,7 +196,7 @@ export class SessionStore {
     return removed;
   }
 
-  /** Listens to revocations made by `revokeByRef` and `revokeForUser`. Returns the unsubscribe function. */
+  /** Listens to revocations made by `revokeByRef` and `revokeForUser`, and to evictions by `create` over the per-person limit. Returns the unsubscribe function. */
   onRevoked(listener: (idHashes: readonly string[]) => void): () => void {
     this.#listeners.add(listener);
     return () => {

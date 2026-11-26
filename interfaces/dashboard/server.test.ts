@@ -545,3 +545,29 @@ describe('failed start-up', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('rate limit keys by client block', () => {
+  it('counts IPv6 addresses of one /64 together on /auth', async () => {
+    const server = await build();
+    for (let i = 0; i < 10; i++) {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/auth/nope',
+        remoteAddress: `2001:db8:1:2:${i + 1}::${i + 1}`,
+      });
+      expect(res.statusCode).not.toBe(429);
+    }
+    const res = await server.inject({
+      method: 'GET',
+      url: '/auth/nope',
+      remoteAddress: '2001:db8:1:2:ffff::9',
+    });
+    expect(res.statusCode).toBe(429);
+    const other = await server.inject({
+      method: 'GET',
+      url: '/auth/nope',
+      remoteAddress: '2001:db8:1:3::1',
+    });
+    expect(other.statusCode).not.toBe(429);
+  });
+});

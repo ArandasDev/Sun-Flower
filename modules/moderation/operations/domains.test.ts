@@ -70,6 +70,45 @@ describe('moderation.domains.block and allow', () => {
   });
 });
 
+describe('allow-list refusals', () => {
+  it.each(['com.br', 'github.io', 'https://GitHub.io/x'])(
+    'refuses the public suffix %s on allow',
+    async (domain) => {
+      expect(await run('moderation.domains.allow', { domain })).toEqual({
+        ok: false,
+        error: {
+          code: 'invalid',
+          message: 'Este domínio é um sufixo público e não pode ser permitido.',
+        },
+      });
+    },
+  );
+
+  it('still accepts a subdomain of a public suffix on allow', async () => {
+    expect(await run('moderation.domains.allow', { domain: 'x.github.io' })).toMatchObject({
+      ok: true,
+      data: { domain: 'x.github.io', list: 'allow' },
+    });
+  });
+
+  it('refuses a lookalike on allow', async () => {
+    expect(await run('moderation.domains.allow', { domain: 'steɑm-gift.com' })).toEqual({
+      ok: false,
+      error: {
+        code: 'invalid',
+        message: 'Este domínio imita um domínio conhecido e não pode ser permitido.',
+      },
+    });
+  });
+
+  it('still allows blocking both', async () => {
+    expect(await run('moderation.domains.block', { domain: 'com.br' })).toMatchObject({ ok: true });
+    expect(await run('moderation.domains.block', { domain: 'steɑm-gift.com' })).toMatchObject({
+      ok: true,
+    });
+  });
+});
+
 describe('moderation.domains.remove', () => {
   it('removes a listed domain', async () => {
     await run('moderation.domains.block', { domain: 'golpe.example' });

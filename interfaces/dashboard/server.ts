@@ -13,8 +13,9 @@ import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
 import type { Logger } from '../../shared/contracts/logger.ts';
 import { registerAuthRoutes } from './auth-routes.ts';
+import { clientKey } from './client-key.ts';
 import { apiError } from './errors.ts';
-import { LIVE_PATH, LiveHub, type LiveClock } from './live.ts';
+import { LIVE_PATH, LiveHub, type LiveClock, type LiveLimits } from './live.ts';
 import { registerOperationsRoute } from './operations-route.ts';
 import type { BotStatus, MemberDirectory, OAuthClient } from './ports.ts';
 import { CHANGING_METHODS, createSessionAuth, type SessionAuth } from './session.ts';
@@ -68,6 +69,8 @@ export interface DashboardDeps {
   readonly now?: () => number;
   /** Time and timers of the live channel; tests pass a clock they advance by hand. */
   readonly liveClock?: LiveClock;
+  /** Live connection limits; tests lower them. */
+  readonly liveLimits?: LiveLimits;
   /**
    * Called with the session's idHash after `POST /api/logout` deleted it, after the live
    * connections of that session were closed. Errors it throws are logged, never sent.
@@ -129,7 +132,7 @@ function isServerRequest(request: FastifyRequest): boolean {
  */
 function rateLimitKey(auth: SessionAuth, request: FastifyRequest): string {
   const record = auth.peek(request);
-  return record !== null ? `s:${record.idHash}` : `i:${request.ip}`;
+  return record !== null ? `s:${record.idHash}` : `i:${clientKey(request.ip)}`;
 }
 
 /**
@@ -281,7 +284,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   const limitLogin = app.createRateLimit({
     max: RATE_MAX_LOGIN,
     timeWindow: RATE_WINDOW_MS,
-    keyGenerator: (request) => `i:${request.ip}`,
+    keyGenerator: (request) => `i:${clientKey(request.ip)}`,
   });
   const limitAll = app.createRateLimit({
     max: RATE_MAX,
@@ -356,6 +359,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     statusSnapshot: () => statusSnapshot(deps.core, deps.status, now),
     logger,
     ...(deps.liveClock === undefined ? {} : { clock: deps.liveClock }),
+    ...(deps.liveLimits === undefined ? {} : { limits: deps.liveLimits }),
   });
   liveHubs.set(app, live);
   await live.register(app);

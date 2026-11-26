@@ -1,6 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { z } from 'zod';
 
+import { mergeSettings } from '../../shared/utilities/merge-settings.ts';
+
+export { mergeSettings };
+
 export class InvalidModuleConfigError extends Error {
   constructor(moduleId: string, paths: readonly string[]) {
     super(`Invalid settings for module "${moduleId}" at: ${paths.join(', ')}`);
@@ -89,7 +93,7 @@ export class ModuleConfigStore {
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
         : {};
-    const merged = { ...stored, ...partial };
+    const merged = mergeSettings(stored, partial);
     const result = parseSettings(moduleId, schema, merged);
     this.setSettings(moduleId, merged);
     return result;

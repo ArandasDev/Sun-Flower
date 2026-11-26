@@ -60,6 +60,22 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
 - A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
 
+### Security
+
+Correções da revisão ofensiva da Fase 3 (PR O). O registro está em [docs/security](docs/security/2026-11-25-revisao-ofensiva-fase-3.md).
+
+- Limites do painel ([0024](docs/decisions/0024-panel-session-limits.md)): no máximo 5 sessões por pessoa (a sexta apaga a menos usada e fecha a conexão ao vivo dela), 10 conexões ao vivo por pessoa e 500 no total.
+- O limite de login e o limite sem sessão do painel passam a contar cada bloco IPv6 `/64` como um cliente, e um IPv6 que representa um IPv4 conta como o IPv4.
+- Um upgrade ao vivo de uma sessão revogada durante o handshake é fechado.
+- A mescla de configurações é em profundidade: uma alteração parcial de objeto aninhado não zera mais os campos vizinhos.
+- Mais caracteres parecidos são reconhecidos no sinal de imitação, e uma regra nova sinaliza rótulo não ASCII a distância 1 ou menos de um domínio conhecido.
+- `moderation.domains.allow` e a reversão de caso com "permitir domínios" recusam sufixos públicos e domínios que imitam um conhecido.
+- Motivos com caracteres de controle de direção são recusados.
+- O motivo das ações de moderação não vai mais para os logs, que trazem só `hasReason`.
+- A redação dos logs cobre também `accessToken`, `refreshToken`, `clientSecret`, `access_token`, `refresh_token`, `client_secret`, `id_token`, `cookie`, `csrfToken` e `secret`, e os campos dos logs recentes não têm protótipo.
+- `.gitignore` cobre `.superpowers/`, `.env.*` (menos `.env.example`) e arquivos de banco `*.db`, `*.db-wal` e `*.db-shm`.
+- README: nota sobre manter `data/` fora de pastas sincronizadas e com permissão restrita.
+
 ## [0.2.0] - 2026-11-18
 
 ### Atenção: ação necessária antes de atualizar
