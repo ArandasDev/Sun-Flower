@@ -9,7 +9,7 @@ Este documento define as fases do projeto, a ordem em que são executadas e o qu
 | **Fase 0 — Base do repositório**   | Concluída: ruleset `main-protection` ativo na `main`, com a CI obrigatória.                                                                |
 | **Fase 1 — Core + Discord mínimo** | Concluída: `/ping` verificado no servidor real e diretrizes de CONTRIBUTING revisadas; release `v0.1.0` pendente.                          |
 | **Fase 2 — Moderação**             | Concluída: etapas 1 (phishing e ações manuais) e 2 (spam e flood) implementadas e verificadas no servidor real; release `v0.2.0` pendente. |
-| **Fase 3 — Painel administrativo** | Em andamento: etapas 1 (base segura) e 2 (moderação) implementadas, testes manuais pendentes; etapa 3 por fazer.                           |
+| **Fase 3 — Painel administrativo** | Em andamento: etapas 1 (base segura), 2 (moderação) e 3 (administração) implementadas, testes manuais e revisão ofensiva pendentes.        |
 
 Ao concluir uma fase, atualize esta tabela e marque a fase como concluída, no mesmo Pull Request que a encerra.
 
@@ -140,7 +140,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 1. Base segura: níveis de acesso, login, sessão, tempo real com presença e perfil. **Implementada** (PRs H, I e J); o teste manual do [README](../README.md#painel) está pendente.
 2. Moderação pelo painel: casos, ações manuais, domínios e configuração, com atualização ao vivo e "Meus casos" para todos. **Implementada** (PRs K e L); o teste manual do [README](../README.md#painel) está pendente. Limites: ainda não é possível limpar o canal de alertas nem editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`.
-3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões.
+3. Administração: desenvolvedores, permissões dos cargos, módulos, logs e sessões. **Implementada** (PRs M e N); o teste manual do [README](../README.md#painel) e a revisão ofensiva (spec §11.4), antes da `v0.3.0`, estão pendentes. Limites: um módulo dependente que falhou com a dependência desligada fica `FAILED` até ser ligado; cargos e usuários são digitados como ID; os logs em memória se perdem ao reiniciar; as leituras das telas contam no limite de alterações, e separá-las depende da pessoa mantenedora.
 
 **Critérios de conclusão:**
 

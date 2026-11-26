@@ -181,6 +181,12 @@ O painel é a interface `dashboard`: um servidor Fastify e um aplicativo React, 
 - A rota `POST /api/operations/:name` exige sessão e CSRF e valida o nome (`^[a-z][a-z0-9.-]{2,100}$`; fora disso, 404). O corpo precisa ser um objeto JSON (sem corpo vale `{}`). O ator vem sempre da sessão, nunca do corpo, e a `source` enviada ao Core é `dashboard`. Responde `200 { data }` ou `{ error: { code, message } }` com 403, 404, 409, 422, 500 ou 503.
 - O canal ao vivo envia `case.created` e `case.updated` (`{ caseId }`) só a quem tem `moderation.cases.read`, e a permissão é checada a cada envio.
 
+**Administração.** O serviço `admin` do Core cobre desenvolvedores, permissões de cargos, ligar e desligar módulos, logs recentes e sessões do painel. Ele é liberado pela capacidade `core.admin`, que só o módulo `administration` possui (contrato em [MODULES.md](MODULES.md) e [decisão 0023](decisions/0023-administration-module.md)); o painel o usa pelas operações `administration.*`, como qualquer outra.
+
+- Ligar e desligar acontece com o bot em execução, e os comandos são ressincronizados no Discord. O Core recusa desligar um módulo com `core.admin` ou do qual outro módulo ativo depende, e recusa ligar um módulo com uma dependência desligada.
+- Os logs recentes ficam só em memória (500 entradas), com IDs mascarados, e se perdem ao reiniciar.
+- Encerrar uma sessão fecha a conexão ao vivo dela na hora.
+
 ## 4. Princípios de Modularização
 
 A modularização é um dos fundamentos mais importantes do Sun Flower.

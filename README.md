@@ -118,7 +118,7 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 
 ## Painel
 
-O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel. Na etapa 2 ele ganha a moderação: casos, ações manuais, domínios e configuração, cada tela visível só a quem tem a permissão correspondente, e "Meus casos" em "Meu perfil", visível a todos.
+O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel. Na etapa 2 ele ganha a moderação: casos, ações manuais, domínios e configuração, cada tela visível só a quem tem a permissão correspondente, e "Meus casos" em "Meu perfil", visível a todos. Na etapa 3 ele ganha a administração: permissões dos cargos, desenvolvedores, módulos, logs e sessões.
 
 **Variáveis** (todas no `.env`): o painel liga quando `PANEL_PUBLIC_URL` está definida, e então `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` e `SESSION_SECRET` passam a ser obrigatórias; `PANEL_PORT` (padrão `3000`) e `PANEL_TRUST_PROXY` são opcionais:
 
@@ -217,6 +217,35 @@ Cada evento ao vivo de caso atualiza a lista e o detalhe no máximo uma vez a ca
 3. Duas abas salvam a mesma seção em `/moderacao`, e a segunda recebe o conflito com `Recarregar`.
 4. O dono, sem cargo, bane o usuário de teste em `/acoes`.
 5. Um membro comum vê só "Meus casos" em "Meu perfil".
+
+**Telas de administração (etapa 3).** As operações passam pelo módulo `administration` ([0023](docs/decisions/0023-administration-module.md)), com as mesmas checagens de permissão das demais, e o painel mostra cada tela só a quem pode usá-la:
+
+| Tela            | Endereço           | O que faz                                                                                                                  |
+| --------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Permissões      | `/permissoes`      | Associa e remove permissões de módulo de cada cargo do servidor.                                                           |
+| Desenvolvedores | `/desenvolvedores` | Lista, adiciona e remove desenvolvedores do bot. Remover pede confirmação.                                                 |
+| Módulos         | `/modulos`         | Liga e desliga módulos com o bot em execução, e os comandos são ressincronizados no Discord. Desligar pede confirmação.    |
+| Logs            | `/logs`            | Os 200 registros mais recentes (de 500 guardados), de nível `info` ou acima, com IDs mascarados, e o botão `Atualizar`.    |
+| Sessões         | `/sessoes`         | Lista as sessões do painel e encerra uma delas ou todas as de uma conta, com confirmação. A conexão ao vivo fecha na hora. |
+
+As telas buscam os dados ao abrir e depois de cada alteração, sem consulta periódica e sem recarregar quando a janela volta ao foco; só a reconexão ao vivo recarrega a tela aberta. Ao encerrar uma sessão, a conexão ao vivo dela fecha na hora, e aquele navegador volta para o login. O `npm run staff` continua funcionando como acesso de emergência: se o painel ficar inacessível, ou se ninguém tiver mais permissão para administrá-lo, use os comandos da seção [Desenvolvimento](#desenvolvimento).
+
+**Limites conhecidos da etapa 3:**
+
+- Um módulo dependente que falhou porque a dependência estava desligada continua em `FAILED` até ser ligado.
+- Cargos e usuários são digitados como IDs, sem seletor do Discord.
+- A memória de logs se perde quando o bot reinicia.
+- As leituras das telas de administração contam no limite de 30 por minuto das alterações; separá-las é uma decisão pendente com a pessoa mantenedora.
+- Com várias abas em Módulos enquanto módulos mudam, as leituras podem chegar ao limite de 30 por minuto das alterações, e as telas passam a receber erro de excesso de requisições. Separar as leituras desse limite é uma decisão pendente.
+- Cada leitura das telas de administração também entra no log em memória, e pode empurrar registros mais antigos para fora das 500 guardadas.
+- As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a política de segurança (CSP) real. O teste manual no servidor real continua pendente.
+
+**Teste manual da etapa 3** (pessoa mantenedora), atrás de um proxy HTTPS e com contas de teste:
+
+1. O dono associa uma permissão a um cargo, e a pessoa com o cargo passa a ver a tela correspondente.
+2. Um desenvolvedor desliga e liga um módulo, e o comando some e volta no Discord.
+3. Um desenvolvedor encerra a sessão de outra conta, que volta para o login na hora.
+4. Os logs mostram a alteração do item 1, com os IDs mascarados.
 
 ## Documentação
 

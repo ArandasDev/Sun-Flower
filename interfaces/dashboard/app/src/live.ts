@@ -61,6 +61,11 @@ export function screenFor(pathname: string): string {
   if (pathname.startsWith('/acoes')) return 'actions';
   if (pathname.startsWith('/dominios')) return 'domains';
   if (pathname.startsWith('/moderacao')) return 'moderation-config';
+  if (pathname.startsWith('/permissoes')) return 'grants';
+  if (pathname.startsWith('/desenvolvedores')) return 'developers';
+  if (pathname.startsWith('/modulos')) return 'modules';
+  if (pathname.startsWith('/logs')) return 'logs';
+  if (pathname.startsWith('/sessoes')) return 'sessions';
   return 'profile';
 }
 
@@ -258,7 +263,13 @@ export function useLiveConnection(clock: LiveClock = realClock): Live {
       const data = message['data'];
       switch (message['type']) {
         case 'status':
-          if (isStatus(data)) client.setQueryData(['status'], data);
+          if (isStatus(data)) {
+            client.setQueryData(['status'], data);
+            // The list of modules shows what the status only summarises.
+            coalescer.request('admin-modules', () => {
+              void client.invalidateQueries({ queryKey: ['admin', 'modules'] });
+            });
+          }
           break;
         case 'config.changed':
           if (isRecord(data) && typeof data['moduleId'] === 'string') {

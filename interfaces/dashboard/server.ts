@@ -359,43 +359,57 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
   });
   liveHubs.set(app, live);
   await live.register(app);
+  // Sessions ended through the admin service: close their live connections at once.
+  const stopListeningToRevocations = deps.core.sessions.onRevoked((idHashes) => {
+    for (const idHash of idHashes) live.revokeSession(idHash);
+  });
+  app.addHook('onClose', (_instance, done) => {
+    stopListeningToRevocations();
+    done();
+  });
   app.websocketServer.on('connection', (_socket: unknown, request: IncomingMessage) => {
     upgrades.markUpgraded(request);
   });
 
-  registerAuthRoutes(app, {
-    env,
-    core: deps.core,
-    directory: deps.directory,
-    oauth: deps.oauth,
-    logger,
-    auth,
-    now,
-    // Logout, or a new login replacing the session the browser held.
-    onLogout: (idHash) => {
-      live.revokeSession(idHash);
-      deps.onLogout?.(idHash);
-    },
-  });
-  registerStatusRoute(app, { core: deps.core, status: deps.status, auth, now });
-  registerOperationsRoute(app, { core: deps.core, auth });
+  try {
+    registerAuthRoutes(app, {
+      env,
+      core: deps.core,
+      directory: deps.directory,
+      oauth: deps.oauth,
+      logger,
+      auth,
+      now,
+      // Logout, or a new login replacing the session the browser held.
+      onLogout: (idHash) => {
+        live.revokeSession(idHash);
+        deps.onLogout?.(idHash);
+      },
+    });
+    registerStatusRoute(app, { core: deps.core, status: deps.status, auth, now });
+    registerOperationsRoute(app, { core: deps.core, auth });
 
-  await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
+    await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
 
-  // Cached after the first successful read; a missing file is looked up again on the next request.
-  let indexHtml: Buffer | undefined;
-  app.setNotFoundHandler(async (request, reply) => {
-    if (isServerRequest(request) || (request.method !== 'GET' && request.method !== 'HEAD')) {
-      return apiError(reply, 404, 'not_found', 'Não encontrado.');
-    }
-    try {
-      indexHtml ??= await readFile(join(staticDir, 'index.html'));
-      const html = indexHtml;
-      return reply.code(200).type('text/html; charset=utf-8').send(html);
-    } catch {
-      return reply.code(503).type('text/plain; charset=utf-8').send('Painel não compilado.');
-    }
-  });
+    // Cached after the first successful read; a missing file is looked up again on the next request.
+    let indexHtml: Buffer | undefined;
+    app.setNotFoundHandler(async (request, reply) => {
+      if (isServerRequest(request) || (request.method !== 'GET' && request.method !== 'HEAD')) {
+        return apiError(reply, 404, 'not_found', 'Não encontrado.');
+      }
+      try {
+        indexHtml ??= await readFile(join(staticDir, 'index.html'));
+        const html = indexHtml;
+        return reply.code(200).type('text/html; charset=utf-8').send(html);
+      } catch {
+        return reply.code(503).type('text/plain; charset=utf-8').send('Painel não compilado.');
+      }
+    });
+  } catch (error) {
+    // A failed registration leaves no server to close, so the subscription is released here.
+    stopListeningToRevocations();
+    throw error;
+  }
 
   return app;
 }

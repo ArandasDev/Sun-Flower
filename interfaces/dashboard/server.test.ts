@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { connect, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CoreHandle } from '../../core/application/core.ts';
 import type { PanelEnvironment } from '../../core/configuration/panel-environment.ts';
@@ -37,7 +37,10 @@ function makeEnv(trustProxy: string[] = []): PanelEnvironment {
 function makeDeps(overrides: Partial<DashboardDeps> = {}): DashboardDeps {
   return {
     env: makeEnv(),
-    core: { subscribe: () => () => undefined } as unknown as CoreHandle,
+    core: {
+      subscribe: () => () => undefined,
+      sessions: { onRevoked: () => () => undefined },
+    } as unknown as CoreHandle,
     directory: { lookup: () => Promise.resolve(undefined) },
     status: { connection: () => 'ready', startedAt: 0 },
     oauth: {} as OAuthClient,
@@ -525,5 +528,20 @@ describe('proxy trust warning', () => {
     const handle = await startDashboard(makeDeps({ env: { ...makeEnv(['127.0.0.1']), port: 0 } }));
     await handle.close();
     expect(logger.entries.filter((r) => r.level === 'warn')).toEqual([]);
+  });
+});
+
+describe('failed start-up', () => {
+  it('releases the revocation subscription when a later registration throws', async () => {
+    const unsubscribe = vi.fn();
+    const core = {
+      subscribe: () => () => undefined,
+      sessions: { onRevoked: () => unsubscribe },
+    } as unknown as CoreHandle;
+    // fastify-static refuses a relative root, the last registration of the build.
+    await expect(
+      buildDashboard(makeDeps({ core, staticDir: 'relative/public' })),
+    ).rejects.toThrow();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

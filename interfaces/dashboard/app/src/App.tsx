@@ -5,11 +5,16 @@ import { ReconnectBanner } from './components/ReconnectBanner.tsx';
 import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
 import { Actions } from './routes/Actions.tsx';
 import { Cases } from './routes/Cases.tsx';
+import { Developers } from './routes/Developers.tsx';
 import { Domains } from './routes/Domains.tsx';
+import { Grants } from './routes/Grants.tsx';
 import { Login } from './routes/Login.tsx';
+import { Logs } from './routes/Logs.tsx';
+import { Modules } from './routes/Modules.tsx';
 import { ModerationConfig } from './routes/ModerationConfig.tsx';
 import { Overview } from './routes/Overview.tsx';
 import { Profile } from './routes/Profile.tsx';
+import { Sessions } from './routes/Sessions.tsx';
 import { RequireSession } from './session.tsx';
 
 /** Below `RequireSession`, so the live connection only opens once `/api/me` succeeded. */
@@ -37,6 +42,11 @@ function LiveShell({ clock }: { clock: LiveClock }) {
               <Route path="acoes" element={<Actions />} />
               <Route path="dominios" element={<Domains />} />
               <Route path="moderacao" element={<ModerationConfig />} />
+              <Route path="permissoes" element={<Grants />} />
+              <Route path="desenvolvedores" element={<Developers />} />
+              <Route path="modulos" element={<Modules />} />
+              <Route path="logs" element={<Logs />} />
+              <Route path="sessoes" element={<Sessions />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </motion.main>

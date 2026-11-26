@@ -20,6 +20,11 @@ const SCREENS: Record<string, string> = {
   actions: 'Ações',
   domains: 'Domínios',
   'moderation-config': 'Moderação',
+  grants: 'Permissões',
+  developers: 'Desenvolvedores',
+  modules: 'Módulos',
+  logs: 'Logs',
+  sessions: 'Sessões',
 };
 
 export const NO_PERMISSION_TEXT = 'Sem permissão.';

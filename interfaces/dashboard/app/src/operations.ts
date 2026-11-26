@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -16,11 +17,25 @@ export async function runOperation<O>(name: string, input: object): Promise<O> {
   return body.data;
 }
 
-export function useOperationQuery<O>(key: QueryKey, name: string, input: object) {
+export interface OperationQueryOptions {
+  /** Keeps showing the previous key's data while a new key loads, so a filter change does not blank the list. */
+  keepPrevious?: boolean;
+  /** Admin reads count toward the request limit, so they skip the refetch on window focus. */
+  refetchOnFocus?: boolean;
+}
+
+export function useOperationQuery<O>(
+  key: QueryKey,
+  name: string,
+  input: object,
+  options: OperationQueryOptions = {},
+) {
   return useQuery({
     queryKey: key,
     queryFn: () => runOperation<O>(name, input),
     retry: false,
+    ...(options.keepPrevious === true ? { placeholderData: keepPreviousData } : {}),
+    ...(options.refetchOnFocus === false ? { refetchOnWindowFocus: false } : {}),
   });
 }
 

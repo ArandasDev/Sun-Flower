@@ -802,6 +802,14 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
+.panel > .domain-rows {
+  margin-top: 0;
+}
+
+.panel > .domain-rows li:last-child {
+  border-bottom: 0;
+}
+
 .domain-rows li > span {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -810,6 +818,34 @@ a {
 .domain-rows .button {
   flex: none;
   white-space: nowrap;
+}
+
+/* Permissions and developers */
+
+.grant-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.grant-groups h2 {
+  margin-top: 0;
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+.inline-form select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--sky);
+  color: var(--stem);
+  font: inherit;
+}
+
+.self-mark {
+  color: var(--leaf);
 }
 
 /* Moderation settings */
@@ -880,4 +916,56 @@ a {
 
 .case-row-static {
   cursor: default;
+}
+
+/* Modules, logs and sessions */
+
+.row-line {
+  display: block;
+}
+
+.session-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.session-head h2 {
+  margin: 0;
+}
+
+.table-scroll {
+  margin-top: 1rem;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.log-table {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.log-table th,
+.log-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.log-table th {
+  color: var(--seed);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.log-table td:first-child,
+.log-table td:nth-child(2),
+.log-table td:nth-child(3) {
+  white-space: nowrap;
 }
