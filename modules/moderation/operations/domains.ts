@@ -2,13 +2,44 @@ import { z } from 'zod';
 
 import type { ModuleContext } from '../../../shared/contracts/module.ts';
 import { fail, ok } from '../../../shared/contracts/operations.ts';
-import { INVALID_DOMAIN, DOMAIN_UNKNOWN } from '../commands/replies.ts';
+import {
+  INVALID_DOMAIN,
+  DOMAIN_UNKNOWN,
+  DOMAIN_PUBLIC_SUFFIX,
+  DOMAIN_LOOKALIKE,
+} from '../commands/replies.ts';
 import { normalizeDomain } from '../detection/links.ts';
+import { isLookalike } from '../detection/lookalike.ts';
 import type { DomainList, DomainStore } from '../domains.ts';
 
 const DOMAINS_PERMISSION = 'moderation.domains.manage';
 const LIST_LIMIT = 1000;
 const DOMAIN_MAX = 253;
+
+/** Shared suffixes that must never be allowed as a whole: one entry would trust every site under them. */
+const PUBLIC_SUFFIXES: ReadonlySet<string> = new Set([
+  'com.br',
+  'net.br',
+  'org.br',
+  'gov.br',
+  'edu.br',
+  'co.uk',
+  'org.uk',
+  'com.au',
+  'co.jp',
+  'github.io',
+  'gitlab.io',
+  'pages.dev',
+  'workers.dev',
+  'vercel.app',
+  'netlify.app',
+  'web.app',
+  'firebaseapp.com',
+  'herokuapp.com',
+  'blogspot.com',
+  'glitch.me',
+  'repl.co',
+]);
 
 export interface DomainOperationDeps {
   readonly domains: () => DomainStore;
@@ -42,6 +73,12 @@ export function registerDomainOperations(
       handler: (actor, input: z.output<typeof domainInput>) => {
         const domain = normalizeDomain(input.domain);
         if (domain === undefined) return Promise.resolve(fail('invalid', INVALID_DOMAIN));
+        if (list === 'allow') {
+          if (PUBLIC_SUFFIXES.has(domain)) {
+            return Promise.resolve(fail('invalid', DOMAIN_PUBLIC_SUFFIX));
+          }
+          if (isLookalike(domain)) return Promise.resolve(fail('invalid', DOMAIN_LOOKALIKE));
+        }
         deps.domains().set(domain, list, actor.userId, now().toISOString());
         return Promise.resolve(ok({ domain, list }));
       },

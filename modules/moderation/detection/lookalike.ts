@@ -36,11 +36,55 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
   ѕ: 's',
   г: 'r',
   ϲ: 'c',
+  т: 't',
+  м: 'm',
+  н: 'h',
+  к: 'k',
+  в: 'b',
+  ј: 'j',
   // Greek
   α: 'a',
   ο: 'o',
   ρ: 'p',
   ν: 'v',
+  τ: 't',
+  κ: 'k',
+  ι: 'i',
+  // Armenian
+  օ: 'o',
+  ս: 'u',
+  հ: 'h',
+  ո: 'n',
+  // Extended Latin
+  ɑ: 'a',
+  ɡ: 'g',
+  ı: 'i',
+  ȷ: 'j',
+  // Small capitals
+  ᴀ: 'a',
+  ʙ: 'b',
+  ᴄ: 'c',
+  ᴅ: 'd',
+  ᴇ: 'e',
+  ꜰ: 'f',
+  ɢ: 'g',
+  ʜ: 'h',
+  ɪ: 'i',
+  ᴊ: 'j',
+  ᴋ: 'k',
+  ʟ: 'l',
+  ᴍ: 'm',
+  ɴ: 'n',
+  ᴏ: 'o',
+  ᴘ: 'p',
+  ʀ: 'r',
+  ꜱ: 's',
+  ᴛ: 't',
+  ᴜ: 'u',
+  ᴠ: 'v',
+  ᴡ: 'w',
+  ʏ: 'y',
+  ᴢ: 'z',
   // Digits
   '0': 'o',
   '1': 'l',
@@ -95,6 +139,22 @@ function nearTarget(part: string): boolean {
   });
 }
 
+/** Every brand and official label, short ones included, for the non-ASCII rule. */
+const ALL_TARGETS: readonly string[] = [
+  ...new Set([
+    ...PROTECTED_BRANDS.map((b) => b.brand),
+    ...OFFICIAL_DOMAINS.map((o) => o.split('.').slice(0, -1).join('.')),
+  ]),
+].filter((t) => t.length >= MIN_LABEL_LETTERS);
+
+/** Rule 3: a label written with non-ASCII characters whose skeleton is within distance 1 of a target. */
+function nonAsciiNearTarget(original: string): boolean {
+  if (!/[^\p{ASCII}]/u.test(original)) return false;
+  const folded = skeleton(original);
+  if (folded.length < MIN_LABEL_LETTERS) return false;
+  return ALL_TARGETS.some((target) => levenshtein(folded, target) <= 1);
+}
+
 /** True when the domain imitates a protected brand without being official. */
 export function isLookalike(domain: string): boolean {
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) return false;
@@ -107,7 +167,7 @@ export function isLookalike(domain: string): boolean {
   const labels = unicode.split('.');
   const candidates = labels.length >= 2 ? labels.slice(0, -1) : labels;
   return candidates.some((label) => {
-    if (nearTarget(skeleton(label))) return true;
-    return label.split('-').some((part) => nearTarget(skeleton(part)));
+    if (nearTarget(skeleton(label)) || nonAsciiNearTarget(label)) return true;
+    return label.split('-').some((part) => nearTarget(skeleton(part)) || nonAsciiNearTarget(part));
   });
 }

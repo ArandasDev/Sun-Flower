@@ -290,6 +290,8 @@ interface CommandInteraction {
 
 Alvos de até 5 letras (`steam`) usam só a regra 1: a distância 1 marcaria palavras comuns (`team`, `steel`). Alvos mais longos usam as duas regras. Hosts IPv4 nunca são imitação.
 
+Atualização (2026-11-25): a lista de caracteres parecidos foi ampliada e rótulos não ASCII a distância 1 de um alvo também contam, após a revisão ofensiva da Fase 3.
+
 **Níveis:**
 
 | Pontuação                  | Nível        | Resposta automática                                            |
