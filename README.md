@@ -211,7 +211,7 @@ Cada evento ao vivo de caso atualiza a lista e o detalhe no máximo uma vez a ca
 
 - Ainda não é possível limpar o canal de alertas, nem no painel nem no `/mod`. No painel, um campo vazio mantém o canal atual.
 - Ainda não é possível editar os termos de isca (`baitTerms`), nem no painel nem no `/mod`. Eles mantêm o valor padrão ou o valor gravado.
-- O layout foi conferido em um navegador na revisão, em 1024 px e em 375 px de largura. O teste manual abaixo continua pendente.
+- O layout foi conferido em um navegador na revisão, em 1024 px e em 375 px de largura, e o teste manual abaixo passou no servidor real.
 
 **Teste manual da etapa 2** (pessoa mantenedora), atrás de um proxy HTTPS e com um usuário de teste:
 
@@ -242,7 +242,7 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 - As leituras das telas de administração contam no limite de 30 por minuto das alterações; separá-las é uma decisão pendente com a pessoa mantenedora.
 - Com várias abas em Módulos enquanto módulos mudam, as leituras podem chegar ao limite de 30 por minuto das alterações, e as telas passam a receber erro de excesso de requisições. Separar as leituras desse limite é uma decisão pendente.
 - Cada leitura das telas de administração também entra no log em memória, e pode empurrar registros mais antigos para fora das 500 guardadas.
-- As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a política de segurança (CSP) real. O teste manual no servidor real continua pendente.
+- As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a política de segurança (CSP) real, e o teste manual abaixo passou no servidor real.
 
 **Teste manual da etapa 3** (pessoa mantenedora), atrás de um proxy HTTPS e com contas de teste:
 

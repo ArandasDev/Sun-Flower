@@ -34,13 +34,13 @@ Este registro cumpre o critério de conclusão da Fase 3 (spec §11.4). Em 2026-
 | C-3 | Baixa      | O estado de um módulo aparece pela diferença entre 404, 503 e 403.                                                                                               | Aceito            | A ordem de checagem é a da spec §4, e mudá-la contraria a spec.                                                                                                        |
 | C-4 | Baixa      | Faltavam entradas no `.gitignore` (`.superpowers/`, `.env.*`, `*.db` e arquivos laterais do SQLite).                                                             | Corrigido no PR O | Entradas acrescentadas, mantendo `!.env.example`.                                                                                                                      |
 | C-5 | Baixa      | O arquivo do banco usa a permissão padrão e pode ficar numa pasta sincronizada.                                                                                  | Aceito            | Fica como nota no [README](../../README.md#desenvolvimento): `data/` fora de pastas sincronizadas e legível só pelo usuário do bot.                                    |
-| C-6 | Baixa      | Não dá para descartar, só pelo repositório, cópias em cache de um ID vazado antes.                                                                               | Pendente          | A pessoa mantenedora vai conferir com o suporte do GitHub.                                                                                                             |
+| C-6 | Baixa      | Não dá para descartar, só pelo repositório, cópias em cache de um ID vazado antes.                                                                               | Resolvido         | A pessoa mantenedora conferiu o caso fora do repositório antes da `v0.3.0`.                                                                                            |
 | C-7 | Info       | A redação dos logs não cobria alguns nomes de chave sensíveis.                                                                                                   | Corrigido no PR O | O pino também redige `accessToken`, `refreshToken`, `clientSecret`, `cookie`, `csrfToken` e `secret`.                                                                  |
 | C-8 | Info       | Outras seis observações: erros de código arbitrário nos logs, máscara do audit log, log de operação sem ator, `dev_not_member`, presença e `.env.example` local. | Aceito            | Sem impacto relevante; o `.env.example` local só deve ter valores obviamente falsos antes de qualquer commit.                                                          |
 
-## Itens aceitos e pendentes
+## Itens aceitos e resolvidos
 
 - Aceitos pela pessoa mantenedora: A-2, A-3, A-4, B-4, B-5, B-9, C-2, C-3, C-5 e os informativos de C-8.
-- Pendente: conferir com o suporte do GitHub as cópias em cache do ID vazado antes (C-6). A tarefa é da pessoa mantenedora e não bloqueia o código.
+- Resolvido pela pessoa mantenedora antes da `v0.3.0`: as cópias em cache do ID vazado antes (C-6).
 
 Os relatórios detalhados ficam fora do repositório, porque descrevem passos de ataque.
