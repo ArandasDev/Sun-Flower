@@ -304,12 +304,13 @@ export class LiveHub {
       return;
     }
     const { record } = admitted;
-    // The session may have been revoked or evicted while the upgrade was in flight.
+    // The session may have been revoked or evicted while the upgrade was in flight. Only a session
+    // that is really gone ends here; a failed lookup is left to the next revalidation, as there.
     let valid: boolean;
     try {
       valid = this.#core.sessions.peekByHash(record.idHash) !== null;
     } catch {
-      valid = false;
+      valid = true;
     }
     if (!valid) {
       this.#sendRaw(socket, 'session.ended', null);

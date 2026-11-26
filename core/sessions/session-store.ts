@@ -196,7 +196,7 @@ export class SessionStore {
     return removed;
   }
 
-  /** Listens to revocations made by `revokeByRef` and `revokeForUser`. Returns the unsubscribe function. */
+  /** Listens to revocations made by `revokeByRef` and `revokeForUser`, and to evictions by `create` over the per-person limit. Returns the unsubscribe function. */
   onRevoked(listener: (idHashes: readonly string[]) => void): () => void {
     this.#listeners.add(listener);
     return () => {

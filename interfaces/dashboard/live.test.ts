@@ -920,6 +920,24 @@ describe('session limit per person', { timeout: 20_000 }, () => {
     expect(hub.connectionCount(STAFF)).toBe(0);
   });
 
+  it('keeps the connection when the session lookup fails once the socket is open', async () => {
+    const { token } = sessions.create(STAFF);
+    // Authentication has finished once the member lookup returns; the next read is the one of #accept.
+    const original = deps.directory.lookup.bind(deps.directory);
+    vi.spyOn(deps.directory, 'lookup').mockImplementation(async (userId) => {
+      const found = await original(userId);
+      vi.spyOn(sessions, 'peekByHash').mockImplementation(() => {
+        throw new Error('db busy');
+      });
+      return found;
+    });
+    const client = await connect(token);
+    await barrier(client);
+    expect(client.ws.readyState).toBe(WebSocket.OPEN);
+    expect(client.messages.some((m) => m.type === 'session.ended')).toBe(false);
+    expect(hub.connectionCount(STAFF)).toBe(1);
+  });
+
   it('the 6th session ends the live connection of the first and keeps the other five (Review Focus 1)', async () => {
     const created = [];
     for (let i = 0; i < 5; i++) {

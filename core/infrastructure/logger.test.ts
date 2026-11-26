@@ -78,7 +78,18 @@ describe('createLogger', () => {
   });
 
   it('redacts more secret key names at depth 0 to 2 and keeps code', () => {
-    const keys = ['accessToken', 'refreshToken', 'clientSecret', 'cookie', 'csrfToken', 'secret'];
+    const keys = [
+      'accessToken',
+      'refreshToken',
+      'clientSecret',
+      'access_token',
+      'refresh_token',
+      'client_secret',
+      'id_token',
+      'cookie',
+      'csrfToken',
+      'secret',
+    ];
     for (const key of keys) {
       const entry = logOnce((l) => {
         l.info({ [key]: 'zero', a: { [key]: 'one' }, b: { c: { [key]: 'two' } } }, 'x');

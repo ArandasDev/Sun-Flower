@@ -52,7 +52,15 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 - Encerrar uma sessão fecha a conexão ao vivo dela na hora.
 - Teste manual da etapa 3 e limites conhecidos no README: um módulo dependente que falhou fica `FAILED` até ser ligado, cargos e usuários são digitados como ID, os logs em memória se perdem ao reiniciar, as leituras das telas contam no limite de alterações e as leituras também entram no log em memória. As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a CSP real; o teste manual no servidor real continua pendente.
 
-### Segurança
+### Changed
+
+- Decisão 0006 substituída em parte pela 0017: o dono do servidor recebe as permissões de todos os módulos, e os desenvolvedores, todas as permissões.
+- ROADMAP: decisões da Fase 3 resolvidas, etapas definidas e critério de acesso ajustado, porque membros sem permissões passam a ver o próprio perfil.
+- Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
+- `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
+- A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
+
+### Security
 
 Correções da revisão ofensiva da Fase 3 (PR O). O registro está em [docs/security](docs/security/2026-11-25-revisao-ofensiva-fase-3.md).
 
@@ -64,17 +72,9 @@ Correções da revisão ofensiva da Fase 3 (PR O). O registro está em [docs/sec
 - `moderation.domains.allow` e a reversão de caso com "permitir domínios" recusam sufixos públicos e domínios que imitam um conhecido.
 - Motivos com caracteres de controle de direção são recusados.
 - O motivo das ações de moderação não vai mais para os logs, que trazem só `hasReason`.
-- A redação dos logs cobre também `accessToken`, `refreshToken`, `clientSecret`, `cookie`, `csrfToken` e `secret`, e os campos dos logs recentes não têm protótipo.
+- A redação dos logs cobre também `accessToken`, `refreshToken`, `clientSecret`, `access_token`, `refresh_token`, `client_secret`, `id_token`, `cookie`, `csrfToken` e `secret`, e os campos dos logs recentes não têm protótipo.
 - `.gitignore` cobre `.superpowers/`, `.env.*` (menos `.env.example`) e arquivos de banco `*.db`, `*.db-wal` e `*.db-shm`.
 - README: nota sobre manter `data/` fora de pastas sincronizadas e com permissão restrita.
-
-### Changed
-
-- Decisão 0006 substituída em parte pela 0017: o dono do servidor recebe as permissões de todos os módulos, e os desenvolvedores, todas as permissões.
-- ROADMAP: decisões da Fase 3 resolvidas, etapas definidas e critério de acesso ajustado, porque membros sem permissões passam a ver o próprio perfil.
-- Desenvolvedores recebem todas as permissões e o dono do servidor, todas as de módulo (decisão 0017).
-- `npm run staff -- grant` recusa permissões que nenhum módulo declara e qualquer `administration.*`.
-- A presença enviada pelo canal ao vivo passa a trazer o nome e o avatar de cada pessoa, além do ID e da tela.
 
 ## [0.2.0] - 2026-11-18
 
