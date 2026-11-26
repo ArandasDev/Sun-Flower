@@ -43,6 +43,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 - **Celular** (menos de 768 px): o menu vira uma gaveta (`Sheet`) aberta pelo botão do cabeçalho, que se fecha ao escolher uma tela.
 - **Login, sem acesso e erro:** um cartão centralizado, sem o menu lateral.
 
+> **Atualização (2026-11-26):** o indicador de conexão ganha um terceiro estado, "Conectando…", mostrado enquanto a primeira conexão ainda não foi feita. "Ao vivo" e "Reconectando…" seguem como descritos.
+
 ## 4. Cores e tema
 
 - **Tokens:** as cores são os tokens do shadcn (`--background`, `--card`, `--primary` e outros), em variáveis CSS, nas variantes clara e escura.
@@ -81,6 +83,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 ## 6. Melhorias de uso
 
 ### 6.1. Notificações (toasts)
+
+> **Atualização (2026-11-26):** os toasts usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce. Ver a [0025](../decisions/0025-panel-ui-kit.md).
 
 - **Onde:** um `Toaster` do Sonner no canto inferior direito, ou no topo no celular. Ele mostra uma confirmação curta depois de uma ação que deu certo:
 
@@ -122,6 +126,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 - **`style="…"` via JavaScript:** os componentes podem definir estilo pelo JavaScript, como o React faz. Isso não é bloqueado pela CSP. Continua proibido gerar `<style>` ou atributos `style` no HTML entregue.
 
 ## 8. Dependências (só no app)
+
+> **Atualização (2026-11-26):** o `sonner` sai da lista. Os toasts usam o `Toast` do Radix, porque o Sonner 2.0.8 injeta um `<style>` sem nonce. Ver a [0025](../decisions/0025-panel-ui-kit.md).
 
 - `tailwindcss` e `@tailwindcss/vite`;
 - os pacotes do Radix usados pelos componentes copiados (`radix-ui` ou `@radix-ui/react-*`);

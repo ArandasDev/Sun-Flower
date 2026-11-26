@@ -9,6 +9,23 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 ### Added
 
 - Decisão [0025](docs/decisions/0025-panel-ui-kit.md) (Tailwind CSS e shadcn/ui no painel, com nonce de estilo na CSP) e spec do novo visual do painel ([2026-11-26-painel-visual-shadcn.md](docs/specs/2026-11-26-painel-visual-shadcn.md)).
+- Painel, novo visual (parte 1 de 2):
+  - Tailwind CSS 4 e componentes do shadcn/ui (Radix), com tokens na regra 60-30-10 e destaque amber;
+  - tema claro, escuro ou do sistema, guardado no navegador (`sunflower-theme`);
+  - menu lateral agrupado (Geral, Moderação e Administração), que recolhe (estado em `sunflower-sidebar`) e vira gaveta abaixo de 768 px;
+  - cabeçalho com o caminho "Você está em" e o indicador de conexão ("Conectando…", "Ao vivo" e "Reconectando…"), no lugar do aviso flutuante;
+  - menu da conta com a escolha de tema e o botão Sair;
+  - login, sem acesso, carregando e erro como um cartão centralizado.
+
+### Changed
+
+- O item de menu `/moderacao` do painel passa a se chamar "Configuração", dentro do grupo Moderação.
+- As telas restantes do painel ainda usam o CSS antigo, em uma camada legada, até a parte 2 do novo visual.
+- Os toasts do painel usarão o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
+
+### Security
+
+- O `index.html` do painel é entregue com um nonce de estilo novo a cada requisição (`<meta name="csp-nonce">` e `style-src 'self' 'nonce-…'`, só nessa resposta), com `Cache-Control: no-store`. `/` e `/index.html` não são mais servidos direto pelo plugin de arquivos estáticos. A CSP não usa `'unsafe-inline'`.
 
 ### Fixed
 

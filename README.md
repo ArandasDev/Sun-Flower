@@ -145,6 +145,10 @@ npm run build --prefix interfaces/dashboard/app
 
 **Hospedagem.** O bot não abre portas para a internet: coloque um proxy HTTPS na frente da porta local. O proxy precisa repassar o WebSocket de `/api/live`.
 
+O túnel ou proxy precisa repassar o cabeçalho `Origin` sem alteração. Sem isso, o painel abre, mas o canal ao vivo fica em `Reconectando…`.
+
+O `index.html` do painel não é guardado em cache, porque leva um nonce novo a cada carregamento.
+
 - **Caddy** (o WebSocket não pede diretivas extras; o IP do cliente só é lido corretamente com `PANEL_TRUST_PROXY=127.0.0.1`):
 
   ```caddyfile

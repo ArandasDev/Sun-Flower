@@ -233,6 +233,9 @@ O formato de erro é sempre `{ "error": { "code", "message" } }`.
 - **Dados ao vivo:** um evento ao vivo invalida a consulta correspondente do TanStack Query, que busca os dados de novo. A presença atualiza um indicador de quem está online e em qual tela.
 - **Conexão:** ao perder a conexão, o painel mostra "reconectando" e tenta de novo com espera crescente, até 30 s. Ao voltar, busca tudo de novo. Com `session.ended`, volta para a tela de login.
 - **Segurança no navegador:** nada de `dangerouslySetInnerHTML`, `eval` ou estilos inline (a CSP bloqueia). Textos vindos do servidor são sempre renderizados como texto.
+
+  > **Atualização (2026-11-26):** a regra "sem estilos inline" vale para o HTML entregue. Estilo definido por JavaScript é permitido, porque a CSP não o bloqueia. O `<style>` que as bibliotecas criam usa o nonce da [0025](../decisions/0025-panel-ui-kit.md).
+
 - **Acessibilidade:** as animações respeitam `prefers-reduced-motion`, e as telas funcionam no celular.
 
 **Telas:**

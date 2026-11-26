@@ -45,3 +45,5 @@ A CSP do painel (`default-src 'self'`) bloqueia `<style>` criado em tempo de exe
 - O servidor do painel passa a montar o `index.html` por requisição, em vez de devolver sempre o mesmo conteúdo.
 - Se uma biblioteca não aceitar nonce, o estilo dela precisa vir de um arquivo CSS estático, ou ela é trocada. Nenhuma violação de CSP no console é aceita.
 - Esta decisão complementa a [0019](0019-panel-stack.md) e não a substitui.
+
+> **Atualização (2026-11-26):** os toasts usam o `Toast` do Radix, não o Sonner. O Sonner 2.0.8 injeta um `<style>` sem nonce ao ser importado, o que viola a CSP. Por isso o Sonner sai da lista de dependências.
