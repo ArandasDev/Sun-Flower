@@ -2,7 +2,14 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  noToast,
+  okBody,
+  setupOperations,
+  type OperationCall,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -70,6 +77,7 @@ describe('sessions screen', () => {
     expect(calls.find((call) => call.name === 'administration.sessions.revoke')?.input).toEqual({
       ref: 'bbbbbbbbbbbbbbbb',
     });
+    expect(await findToast('Sessão revogada.')).toBeInTheDocument();
     await waitFor(() =>
       expect(
         within(screen.getByRole('region', { name: NAME(OTHER) })).getAllByRole('button', {
@@ -89,6 +97,7 @@ describe('sessions screen', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: NAME(OTHER) })).toBeNull());
+    expect(await findToast('Sessão revogada.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.sessions.revoke-all')?.input).toEqual(
       { userId: OTHER },
     );
@@ -105,6 +114,7 @@ describe('sessions screen', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     expect(await within(dialog).findByText('Sessão não encontrada.')).toBeInTheDocument();
+    expect(noToast()).toBe(true);
   });
 
   it('reloads the list even when ending a session fails', async () => {

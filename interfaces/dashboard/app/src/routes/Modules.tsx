@@ -8,6 +8,7 @@ import { Skeleton } from '../components/ui/skeleton.tsx';
 import { Switch } from '../components/ui/switch.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 
 interface ModuleEntry {
   id: string;
@@ -57,7 +58,8 @@ export function Modules() {
   const toggle = useOperationMutation<unknown, SetEnabledInput>(
     'administration.modules.set-enabled',
     {
-      onSuccess: () => {
+      onSuccess: (_data, input) => {
+        notify(input.enabled ? 'Módulo ligado.' : 'Módulo desligado.');
         setDisabling(null);
       },
       onSettled: async () => {

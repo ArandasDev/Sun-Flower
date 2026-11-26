@@ -2,7 +2,13 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  okBody,
+  setupOperations,
+  type OperationCall,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -57,6 +63,7 @@ describe('developers screen', () => {
     await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
     await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
     expect(await screen.findByText(NEW_ID)).toBeInTheDocument();
+    expect(await findToast('Desenvolvedor adicionado.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.developers.add')?.input).toEqual({
       userId: NEW_ID,
     });
@@ -92,6 +99,7 @@ describe('developers screen', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(screen.queryByText(OTHER)).toBeNull());
+    expect(await findToast('Desenvolvedor removido.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.developers.remove')?.input).toEqual({
       userId: OTHER,
     });

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 interface SessionEntry {
@@ -31,6 +32,7 @@ export function Sessions() {
   );
   const options = {
     onSuccess: () => {
+      notify('Sessão revogada.');
       setEnding(null);
     },
     onSettled: () => {

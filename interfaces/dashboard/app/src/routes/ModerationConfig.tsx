@@ -12,6 +12,7 @@ import { Switch } from '../components/ui/switch.tsx';
 import { Textarea } from '../components/ui/textarea.tsx';
 import { errorText } from '../labels.ts';
 import { runOperation, useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 
 const CONFLICT_TEXT = 'Outra pessoa alterou esta configuração. Recarregue para ver a versão atual.';
 const CONFIG_KEY = ['config', 'moderation'] as const;
@@ -641,6 +642,7 @@ function ConfigForm({ latest, reload }: FormProps) {
             steps: section.steps === true ? fresh.steps : current.steps,
           }));
           setSaved(section.id);
+          notify('Configuração salva.');
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 409) {

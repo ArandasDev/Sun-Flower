@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { AppHeader } from './components/AppHeader.tsx';
 import { AppSidebar } from './components/AppSidebar.tsx';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
+import { Toaster } from './components/Toaster.tsx';
 import { LiveContext, realClock, useLiveConnection, type LiveClock } from './live.ts';
 import { Actions } from './routes/Actions.tsx';
 import { Cases } from './routes/Cases.tsx';
@@ -54,6 +55,7 @@ function LiveShell({ clock }: { clock: LiveClock }) {
             </motion.main>
           </AnimatePresence>
         </SidebarInset>
+        <Toaster />
       </SidebarProvider>
     </LiveContext.Provider>
   );

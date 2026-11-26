@@ -7,6 +7,7 @@ import { Textarea } from '../components/ui/textarea.tsx';
 import { isSnowflake } from '../ids.ts';
 import { NO_PERMISSION_TEXT, actionErrorText } from '../labels.ts';
 import { useOperationMutation } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 type ActionId = 'warn' | 'timeout' | 'kick' | 'ban';
@@ -66,6 +67,7 @@ export function Actions() {
     {
       onSuccess: (data) => {
         setResult(data);
+        notify(`Caso #${data.caseId} registrado.`);
         setConfirming(false);
         setUserId('');
         setReason('');

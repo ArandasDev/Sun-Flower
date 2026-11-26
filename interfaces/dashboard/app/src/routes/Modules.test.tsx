@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { FakeClock, FakeWebSocket, lastSocket, stubWebSocket } from '../fake-websocket.ts';
-import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  okBody,
+  setupOperations,
+  type OperationCall,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -75,6 +81,7 @@ describe('modules screen', () => {
       { moduleId: 'moderation', enabled: false },
     );
     await waitFor(() => expect(listCalls(calls)).toBe(2));
+    expect(await findToast('Módulo desligado.')).toBeInTheDocument();
   });
 
   it('switches on without confirmation', async () => {
@@ -87,6 +94,7 @@ describe('modules screen', () => {
       ).toEqual({ moduleId: 'moderation', enabled: true }),
     );
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(await findToast('Módulo ligado.')).toBeInTheDocument();
   });
 
   it('draws the list inside a card so the rows keep their padding', async () => {

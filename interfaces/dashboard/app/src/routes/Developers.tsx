@@ -10,6 +10,7 @@ import { Skeleton } from '../components/ui/skeleton.tsx';
 import { isSnowflake } from '../ids.ts';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 interface DeveloperEntry {
@@ -35,6 +36,7 @@ export function Developers() {
   };
   const add = useOperationMutation<unknown, { userId: string }>('administration.developers.add', {
     onSuccess: () => {
+      notify('Desenvolvedor adicionado.');
       setUserId('');
       refresh();
       inputRef.current?.focus();
@@ -44,6 +46,7 @@ export function Developers() {
     'administration.developers.remove',
     {
       onSuccess: () => {
+        notify('Desenvolvedor removido.');
         setRemoving(null);
         refresh();
       },

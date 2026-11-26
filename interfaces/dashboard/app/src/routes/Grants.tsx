@@ -10,6 +10,7 @@ import { Skeleton } from '../components/ui/skeleton.tsx';
 import { isSnowflake } from '../ids.ts';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 
 interface GrantEntry {
   permission: string;
@@ -58,6 +59,7 @@ export function Grants() {
   };
   const grant = useOperationMutation<unknown, GrantInput>('administration.grants.grant', {
     onSuccess: () => {
+      notify('Permissão concedida.');
       setRoleId('');
       refresh();
       inputRef.current?.focus();
@@ -65,6 +67,7 @@ export function Grants() {
   });
   const revoke = useOperationMutation<unknown, GrantInput>('administration.grants.revoke', {
     onSuccess: () => {
+      notify('Permissão removida.');
       refresh();
       selectRef.current?.focus();
     },

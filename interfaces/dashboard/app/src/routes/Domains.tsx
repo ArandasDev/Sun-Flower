@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 
 type ListName = 'block' | 'allow';
 
@@ -25,12 +26,16 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
   };
   const add = useOperationMutation<unknown, { domain: string }>(`moderation.domains.${list}`, {
     onSuccess: () => {
+      notify('Domínio adicionado.');
       setText('');
       refresh();
     },
   });
   const remove = useOperationMutation<unknown, { domain: string }>('moderation.domains.remove', {
-    onSuccess: refresh,
+    onSuccess: () => {
+      notify('Domínio removido.');
+      refresh();
+    },
   });
   const error = add.error ?? remove.error ?? (query.isError ? query.error : null);
   const domains = query.data?.domains ?? [];

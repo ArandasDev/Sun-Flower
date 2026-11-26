@@ -8,6 +8,7 @@ import {
   errorText,
 } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { Badge } from './ui/badge.tsx';
@@ -132,6 +133,7 @@ function CaseBody({ id }: { id: number }) {
             ? 'Caso revertido. As mensagens apagadas não voltam.'
             : 'Caso revertido.',
         );
+        notify('Caso revertido.');
         successFocusRef.current = headingRef.current;
         close();
         refresh();
@@ -141,6 +143,7 @@ function CaseBody({ id }: { id: number }) {
   const dismiss = useOperationMutation<CaseFull, { id: number }>('moderation.cases.dismiss', {
     onSuccess: () => {
       setNotice('Caso descartado.');
+      notify('Caso descartado.');
       successFocusRef.current = headingRef.current;
       close();
       refresh();

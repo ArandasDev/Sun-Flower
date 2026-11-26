@@ -100,3 +100,10 @@ export function setupOperations(
   });
   return { ...renderApp(path, clock), calls };
 }
+
+/** A toast's text, looked up by its title so Radix's visually hidden announcement does not count. */
+export const findToast = (text: string) =>
+  screen.findByText(text, { selector: '[data-slot="toast-title"]' });
+
+/** True when no toast is on screen. */
+export const noToast = (): boolean => document.querySelector('[data-slot="toast"]') === null;
