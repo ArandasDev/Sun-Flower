@@ -50,8 +50,8 @@ function setup(override?: (call: OperationCall) => ReturnType<typeof okBody> | u
 describe('developers screen', () => {
   it('lists the developers and marks the own row', async () => {
     setup();
-    const own = (await screen.findByText(SELF)).closest('li');
-    const other = screen.getByText(OTHER).closest('li');
+    const own = (await screen.findByText(SELF)).closest('tr');
+    const other = screen.getByText(OTHER).closest('tr');
     expect(own).not.toBeNull();
     expect(within(own as HTMLElement).getByText('Você')).toBeInTheDocument();
     expect(within(other as HTMLElement).queryByText('Você')).toBeNull();
@@ -78,9 +78,9 @@ describe('developers screen', () => {
     expect(screen.getByLabelText('ID da pessoa')).toHaveFocus();
   });
 
-  it('draws the list inside a card so the rows keep their padding', async () => {
+  it('draws the table inside a card so the rows keep their padding', async () => {
     setup();
-    const list = (await screen.findByText(SELF)).closest('ul');
+    const list = (await screen.findByText(SELF)).closest('table');
     expect(list?.closest('[data-slot="card"]')).not.toBeNull();
   });
 
@@ -93,7 +93,7 @@ describe('developers screen', () => {
 
   it('asks for confirmation before removing, then sends the id', async () => {
     const { calls } = setup();
-    const row = (await screen.findByText(OTHER)).closest('li') as HTMLElement;
+    const row = (await screen.findByText(OTHER)).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
     expect(calls.some((call) => call.name === 'administration.developers.remove')).toBe(false);
     const dialog = await screen.findByRole('dialog');
@@ -111,7 +111,7 @@ describe('developers screen', () => {
         ? errorBody(409, 'conflict', SELF_CONFLICT)
         : undefined,
     );
-    const row = (await screen.findByText(SELF)).closest('li') as HTMLElement;
+    const row = (await screen.findByText(SELF)).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remover' }));
@@ -139,7 +139,7 @@ describe('developers screen: latest error', () => {
     await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
     await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
     expect(await screen.findByText('Pessoa inválida.')).toBeInTheDocument();
-    const row = screen.getByText(OTHER).closest('li') as HTMLElement;
+    const row = screen.getByText(OTHER).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
     expect(screen.queryByText('Pessoa inválida.')).toBeNull();
   });

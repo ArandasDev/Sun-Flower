@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
@@ -17,6 +18,8 @@ interface DeveloperEntry {
   userId: string;
   addedAt: string;
 }
+
+const column = createDataTableColumns<DeveloperEntry>();
 
 export function Developers() {
   const client = useQueryClient();
@@ -56,6 +59,40 @@ export function Developers() {
   const trimmed = userId.trim();
   const valid = isSnowflake(trimmed);
   const developers = query.data?.developers ?? [];
+  const columns = column.columns([
+    column.accessor('userId', {
+      header: 'Pessoa',
+      cell: ({ row }) => (
+        <span className="break-all whitespace-normal">
+          <span className="font-mono">{row.original.userId}</span>
+          {row.original.userId === me.id ? <strong className="font-semibold"> Você</strong> : null}
+        </span>
+      ),
+    }),
+    column.accessor((entry) => formatDate(entry.addedAt), {
+      id: 'addedAt',
+      header: 'Desde',
+      sortFn: sortBy((entry) => entry.addedAt),
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          onClick={() => {
+            add.reset();
+            remove.reset();
+            setRemoving(row.original.userId);
+          }}
+        >
+          Remover
+        </Button>
+      ),
+    }),
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -108,37 +145,7 @@ export function Developers() {
       {developers.length === 0 ? null : (
         <Card>
           <CardContent>
-            <ul className="flex flex-col divide-y rounded-md border">
-              {developers.map((entry) => (
-                <li
-                  key={entry.userId}
-                  className="flex items-center justify-between gap-3 px-3 py-2"
-                >
-                  <span className="min-w-0 text-sm">
-                    <span className="font-mono break-all">{entry.userId}</span>
-                    {entry.userId === me.id ? (
-                      <strong className="font-semibold"> Você</strong>
-                    ) : null}
-                    <span className="text-muted-foreground">
-                      {' '}
-                      desde {formatDate(entry.addedAt)}
-                    </span>
-                  </span>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      add.reset();
-                      remove.reset();
-                      setRemoving(entry.userId);
-                    }}
-                  >
-                    Remover
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <DataTable columns={columns} data={developers} />
           </CardContent>
         </Card>
       )}

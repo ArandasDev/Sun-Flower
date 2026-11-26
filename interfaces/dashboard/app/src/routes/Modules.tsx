@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { DataTable, createDataTableColumns } from '../components/DataTable.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Card, CardContent } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -43,6 +44,8 @@ function situationVariant(entry: ModuleEntry): 'secondary' | 'destructive' {
   return entry.enabled && entry.state === 'FAILED' ? 'destructive' : 'secondary';
 }
 
+const column = createDataTableColumns<ModuleEntry>();
+
 export function Modules() {
   const client = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -76,6 +79,75 @@ export function Modules() {
       headingRef.current?.focus({ preventScroll: true });
   }, [toggle.isPending, query.isFetching, query.data]);
   const modules = query.data?.modules ?? [];
+  const columns = column.columns([
+    column.accessor('name', {
+      header: 'Módulo',
+      cell: ({ row }) => (
+        <span className="whitespace-normal">
+          <strong className="font-semibold">{row.original.name}</strong>
+          <span className="text-muted-foreground"> versão {row.original.version}</span>
+        </span>
+      ),
+    }),
+    column.accessor((entry) => situation(entry), {
+      id: 'situation',
+      header: 'Situação',
+      cell: ({ row, getValue }) => (
+        <Badge variant={situationVariant(row.original)} className="whitespace-normal">
+          {getValue()}
+        </Badge>
+      ),
+    }),
+    column.accessor('description', {
+      header: 'Descrição',
+      cell: ({ row }) => {
+        const entry = row.original;
+        return (
+          <span className="flex min-w-48 flex-col gap-1 whitespace-normal text-muted-foreground">
+            {entry.description === '' ? null : <span>{entry.description}</span>}
+            {entry.dependencies.length === 0 ? null : (
+              <span>Depende de: {entry.dependencies.join(', ')}</span>
+            )}
+            {entry.canDisable || entry.state !== 'RUNNING' ? null : (
+              <span>Não pode ser desligado.</span>
+            )}
+          </span>
+        );
+      },
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => {
+        const entry = row.original;
+        if (entry.state === 'RUNNING') {
+          return entry.canDisable ? (
+            <Switch
+              checked
+              aria-label={entry.name}
+              disabled={toggle.isPending}
+              onCheckedChange={() => {
+                toggle.reset();
+                setDisabling(entry);
+              }}
+            />
+          ) : null;
+        }
+        return (
+          <Switch
+            checked={false}
+            aria-label={entry.name}
+            disabled={toggle.isPending}
+            onCheckedChange={() => {
+              toggle.reset();
+              watchFocus.current = true;
+              toggle.mutate({ moduleId: entry.id, enabled: true });
+            }}
+          />
+        );
+      },
+    }),
+  ]);
   const pageError =
     disabling === null && toggle.error !== null ? toggle.error : query.isError ? query.error : null;
 
@@ -102,56 +174,7 @@ export function Modules() {
       {modules.length === 0 ? null : (
         <Card>
           <CardContent>
-            <ul className="flex flex-col divide-y rounded-md border">
-              {modules.map((entry) => (
-                <li key={entry.id} className="flex items-start justify-between gap-3 px-3 py-3">
-                  <span className="flex min-w-0 flex-col gap-1 text-sm">
-                    <span>
-                      <strong className="font-semibold">{entry.name}</strong>
-                      <span className="text-muted-foreground"> versão {entry.version}</span>
-                    </span>
-                    <Badge variant={situationVariant(entry)} className="whitespace-normal">
-                      {situation(entry)}
-                    </Badge>
-                    {entry.description === '' ? null : (
-                      <span className="text-muted-foreground">{entry.description}</span>
-                    )}
-                    {entry.dependencies.length === 0 ? null : (
-                      <span className="text-muted-foreground">
-                        Depende de: {entry.dependencies.join(', ')}
-                      </span>
-                    )}
-                    {entry.canDisable || entry.state !== 'RUNNING' ? null : (
-                      <span className="text-muted-foreground">Não pode ser desligado.</span>
-                    )}
-                  </span>
-                  {entry.state === 'RUNNING' ? (
-                    entry.canDisable ? (
-                      <Switch
-                        checked
-                        aria-label={entry.name}
-                        disabled={toggle.isPending}
-                        onCheckedChange={() => {
-                          toggle.reset();
-                          setDisabling(entry);
-                        }}
-                      />
-                    ) : null
-                  ) : (
-                    <Switch
-                      checked={false}
-                      aria-label={entry.name}
-                      disabled={toggle.isPending}
-                      onCheckedChange={() => {
-                        toggle.reset();
-                        watchFocus.current = true;
-                        toggle.mutate({ moduleId: entry.id, enabled: true });
-                      }}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
+            <DataTable columns={columns} data={modules} />
           </CardContent>
         </Card>
       )}

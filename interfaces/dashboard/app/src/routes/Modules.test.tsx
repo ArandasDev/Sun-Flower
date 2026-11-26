@@ -61,17 +61,17 @@ describe('modules screen', () => {
         dependencies: ['moderation'],
       }),
     ]);
-    const running = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const running = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     expect(within(running).getByText('Ligado')).toBeInTheDocument();
     expect(within(running).getByText(/1\.0\.0/)).toBeInTheDocument();
-    const stopped = screen.getByText('Ping').closest('li') as HTMLElement;
+    const stopped = screen.getByText('Ping').closest('tr') as HTMLElement;
     expect(within(stopped).getByText('Desligado')).toBeInTheDocument();
     expect(within(stopped).getByText('Depende de: moderation')).toBeInTheDocument();
   });
 
   it('asks for confirmation before switching off, then sends the module and false', async () => {
     const { calls } = setup([entry({})]);
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(calls.some((call) => call.name === 'administration.modules.set-enabled')).toBe(false);
     const dialog = await screen.findByRole('dialog');
@@ -86,7 +86,7 @@ describe('modules screen', () => {
 
   it('switches on without confirmation', async () => {
     const { calls } = setup([entry({ enabled: false, state: 'STOPPED' })]);
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     await waitFor(() =>
       expect(
@@ -97,17 +97,17 @@ describe('modules screen', () => {
     expect(await findToast('Módulo ligado.')).toBeInTheDocument();
   });
 
-  it('draws the list inside a card so the rows keep their padding', async () => {
+  it('draws the table inside a card so the rows keep their padding', async () => {
     setup([entry({})]);
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     expect(row.closest('[data-slot="card"]')).not.toBeNull();
   });
 
   it('shows a running module as a checked switch and a stopped one as unchecked', async () => {
     setup([entry({}), entry({ id: 'ping', name: 'Ping', enabled: false, state: 'STOPPED' })]);
-    const running = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const running = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     expect(within(running).getByRole('switch', { name: 'Moderação' })).toBeChecked();
-    const stopped = screen.getByText('Ping').closest('li') as HTMLElement;
+    const stopped = screen.getByText('Ping').closest('tr') as HTMLElement;
     expect(within(stopped).getByRole('switch', { name: 'Ping' })).not.toBeChecked();
   });
 
@@ -125,7 +125,7 @@ describe('modules screen', () => {
       }
       return undefined;
     });
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     await screen.findByText('Não pode ser desligado.');
     await waitFor(() =>
@@ -141,7 +141,7 @@ describe('modules screen', () => {
         ? errorBody(409, 'conflict', text)
         : undefined,
     );
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Desligar' }));
@@ -155,7 +155,7 @@ describe('modules screen', () => {
         ? errorBody(500, 'failed', text)
         : undefined,
     );
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(await screen.findByText(text)).toBeInTheDocument();
     await waitFor(() => expect(listCalls(calls)).toBe(2));
@@ -168,14 +168,14 @@ describe('modules screen', () => {
         ? errorBody(503, 'unavailable', text)
         : undefined,
     );
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     await userEvent.click(within(row).getByRole('switch', { name: 'Moderação' }));
     expect(await screen.findByText(text)).toBeInTheDocument();
   });
 
   it('shows FAILED with the time of the failure and offers Ligar', async () => {
     setup([entry({ state: 'FAILED', failedAt: FAILED_AT })]);
-    const row = (await screen.findByText('Moderação')).closest('li') as HTMLElement;
+    const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
     expect(
       within(row).getByText(`Falhou ao iniciar (${formatDate(FAILED_AT)})`),
     ).toBeInTheDocument();
@@ -191,7 +191,7 @@ describe('modules screen', () => {
     setup([entry({ id: 'administration', name: 'Administração', canDisable: false })]);
     // "Administração" is also a menu group, so look only at the screen.
     const main = await screen.findByRole('main');
-    const row = (await within(main).findByText('Administração')).closest('li') as HTMLElement;
+    const row = (await within(main).findByText('Administração')).closest('tr') as HTMLElement;
     expect(within(row).getByText('Não pode ser desligado.')).toBeInTheDocument();
     expect(within(row).queryByRole('switch')).toBeNull();
   });

@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
+import { DataTable, createDataTableColumns } from '../components/DataTable.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
@@ -10,6 +11,12 @@ import { useOperationMutation, useOperationQuery } from '../operations.ts';
 import { notify } from '../toast.ts';
 
 type ListName = 'block' | 'allow';
+
+interface DomainRow {
+  domain: string;
+}
+
+const column = createDataTableColumns<DomainRow>();
 
 function DomainList({ list, title }: { list: ListName; title: string }) {
   const client = useQueryClient();
@@ -39,6 +46,36 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
   });
   const error = add.error ?? remove.error ?? (query.isError ? query.error : null);
   const domains = query.data?.domains ?? [];
+  const rows = domains.map((domain) => ({ domain }));
+  const domainId = (index: number): string => `${titleId}-d${String(index)}`;
+  const columns = column.columns([
+    column.accessor('domain', {
+      header: 'Domínio',
+      cell: ({ row }) => (
+        <span className="font-mono break-all whitespace-normal" id={domainId(row.index)}>
+          {row.original.domain}
+        </span>
+      ),
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          aria-describedby={domainId(row.index)}
+          disabled={remove.isPending}
+          onClick={() => {
+            remove.mutate({ domain: row.original.domain });
+          }}
+        >
+          Remover
+        </Button>
+      ),
+    }),
+  ]);
 
   return (
     <Card role="region" aria-labelledby={titleId}>
@@ -86,35 +123,9 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
             ))}
           </div>
         ) : null}
-        {query.isSuccess && domains.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum domínio nesta lista.</p>
+        {domains.length > 0 || query.isSuccess ? (
+          <DataTable columns={columns} data={rows} emptyText="Nenhum domínio nesta lista." />
         ) : null}
-        {domains.length === 0 ? null : (
-          <ul className="flex flex-col divide-y rounded-md border">
-            {domains.map((domain, index) => (
-              <li key={domain} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span
-                  className="min-w-0 font-mono text-sm break-all"
-                  id={`${titleId}-d${String(index)}`}
-                >
-                  {domain}
-                </span>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  aria-describedby={`${titleId}-d${String(index)}`}
-                  disabled={remove.isPending}
-                  onClick={() => {
-                    remove.mutate({ domain });
-                  }}
-                >
-                  Remover
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
       </CardContent>
     </Card>
   );

@@ -49,6 +49,8 @@ describe('logs screen', () => {
     setup([{ time: TIME, level: 'info', message: long, fields: { id: long } }]);
     const cell = (await screen.findByText(long)).closest('td') as HTMLElement;
     expect(cell).toHaveClass('wrap-anywhere', 'whitespace-pre-wrap');
+    expect(cell).not.toHaveClass('truncate');
+    expect(cell.textContent).toBe(long);
   });
 
   it('sends minLevel when the filter changes', async () => {

@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
+import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
@@ -27,6 +28,8 @@ interface GrantInput {
   permission: string;
   roleId: string;
 }
+
+const column = createDataTableColumns<GrantEntry>();
 
 function groupByPermission(grants: GrantEntry[]): [string, GrantEntry[]][] {
   const groups = new Map<string, GrantEntry[]>();
@@ -78,6 +81,37 @@ export function Grants() {
   const trimmed = roleId.trim();
   const valid = isSnowflake(trimmed);
   const groups = groupByPermission(query.data?.grants ?? []);
+  const columns = column.columns([
+    column.accessor('roleId', {
+      header: 'Cargo',
+      cell: ({ getValue }) => (
+        <span className="font-mono break-all whitespace-normal">{getValue()}</span>
+      ),
+    }),
+    column.accessor((entry) => formatDate(entry.grantedAt), {
+      id: 'grantedAt',
+      header: 'Desde',
+      sortFn: sortBy((entry) => entry.grantedAt),
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          disabled={revoke.isPending}
+          onClick={() => {
+            grant.reset();
+            revoke.mutate({ permission: row.original.permission, roleId: row.original.roleId });
+          }}
+        >
+          Remover
+        </Button>
+      ),
+    }),
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -160,34 +194,7 @@ export function Grants() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="flex flex-col divide-y rounded-md border">
-                {entries.map((entry) => (
-                  <li
-                    key={entry.roleId}
-                    className="flex items-center justify-between gap-3 px-3 py-2"
-                  >
-                    <span className="min-w-0 text-sm">
-                      <span className="font-mono break-all">{entry.roleId}</span>
-                      <span className="text-muted-foreground">
-                        {' '}
-                        desde {formatDate(entry.grantedAt)}
-                      </span>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={revoke.isPending}
-                      onClick={() => {
-                        grant.reset();
-                        revoke.mutate({ permission: entry.permission, roleId: entry.roleId });
-                      }}
-                    >
-                      Remover
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <DataTable columns={columns} data={entries} />
             </CardContent>
           </Card>
         ))}
