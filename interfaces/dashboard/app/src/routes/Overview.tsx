@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, apiFetch } from '../api.ts';
+import { Badge } from '../components/ui/badge.tsx';
+import { Card, CardContent } from '../components/ui/card.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
 import { formatUptime } from '../format.ts';
 import { connectionLabel, moduleStateLabel } from '../labels.ts';
 import { NoPermission } from './NoPermission.tsx';
@@ -15,6 +18,8 @@ export function statusRefetchInterval(query: { state: { status: string } }): num
   return query.state.status === 'error' ? false : 15_000;
 }
 
+const TITLE_CLASS = 'text-2xl font-semibold tracking-tight';
+
 export function Overview() {
   const query = useQuery({
     queryKey: ['status'],
@@ -25,49 +30,59 @@ export function Overview() {
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 403) return <NoPermission />;
     return (
-      <section>
-        <h1>Visão geral</h1>
-        <p role="alert">{query.error.message}</p>
+      <section className="flex flex-col gap-4">
+        <h1 className={TITLE_CLASS}>Visão geral</h1>
+        <p role="alert" className="text-sm text-destructive">
+          {query.error.message}
+        </p>
       </section>
     );
   }
   if (query.isPending) {
     return (
-      <section>
-        <h1>Visão geral</h1>
-        <p className="muted">Carregando…</p>
+      <section className="flex max-w-2xl flex-col gap-4">
+        <h1 className={TITLE_CLASS}>Visão geral</h1>
+        <p className="sr-only">Carregando…</p>
+        <Skeleton aria-hidden="true" className="h-24 w-full" />
+        <Skeleton aria-hidden="true" className="h-40 w-full" />
       </section>
     );
   }
   const status = query.data;
   return (
-    <section>
-      <h1>Visão geral</h1>
-      <div className="panel">
-        <dl className="facts">
-          <div>
-            <dt>Conexão</dt>
-            <dd className={`connection connection-${status.connection}`}>
-              {connectionLabel(status.connection)}
-            </dd>
-          </div>
-          <div>
-            <dt>Tempo no ar</dt>
-            <dd>{formatUptime(status.uptimeMs)}</dd>
-          </div>
-        </dl>
-      </div>
-      <h2>Módulos</h2>
-      <ul className="panel modules">
-        {status.modules.map((module) => (
-          <li key={module.id}>
-            <span>{module.id}</span>
-            <span className={`state state-${module.state.toLowerCase()}`}>
-              {moduleStateLabel(module.state)}
-            </span>
-          </li>
-        ))}
-      </ul>
+    <section className="flex max-w-2xl flex-col gap-4">
+      <h1 className={TITLE_CLASS}>Visão geral</h1>
+      <Card>
+        <CardContent>
+          <dl className="flex flex-wrap gap-x-12 gap-y-4">
+            <div className="flex flex-col gap-1">
+              <dt className="text-sm text-muted-foreground">Conexão</dt>
+              <dd>
+                <Badge variant={status.connection === 'disconnected' ? 'destructive' : 'secondary'}>
+                  {connectionLabel(status.connection)}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-sm text-muted-foreground">Tempo no ar</dt>
+              <dd className="text-lg font-semibold">{formatUptime(status.uptimeMs)}</dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+      <h2 className="text-lg font-semibold">Módulos</h2>
+      <Card className="py-2">
+        <ul className="divide-y">
+          {status.modules.map((module) => (
+            <li key={module.id} className="flex items-center justify-between gap-4 px-6 py-2.5">
+              <span className="font-mono text-sm">{module.id}</span>
+              <Badge variant={module.state === 'FAILED' ? 'destructive' : 'secondary'}>
+                {moduleStateLabel(module.state)}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </section>
   );
 }

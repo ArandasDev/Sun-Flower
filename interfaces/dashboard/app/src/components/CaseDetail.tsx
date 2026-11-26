@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   caseActionLabel,
   caseKindLabel,
@@ -10,6 +10,11 @@ import {
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
 import { useCurrentMe } from '../session.tsx';
 import { ConfirmDialog } from './ConfirmDialog.tsx';
+import { Badge } from './ui/badge.tsx';
+import { Button } from './ui/button.tsx';
+import { Label } from './ui/label.tsx';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet.tsx';
+import { Skeleton } from './ui/skeleton.tsx';
 
 export interface CaseSummary {
   id: number;
@@ -50,18 +55,49 @@ export function formatDate(iso: string): string {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-sm break-words">{children}</dd>
     </div>
   );
+}
+
+function Mono({ children }: { children: React.ReactNode }) {
+  return <span className="font-mono text-xs">{children}</span>;
 }
 
 const DASH = '—';
 
 type Pending = 'revert' | 'dismiss' | null;
 
+/** The case detail in a Sheet on the right; Escape and "Fechar" call `onClose`. */
 export function CaseDetail({ id, onClose }: { id: number; onClose: () => void }) {
+  // There is no Radix Trigger (the URL opens the case), so the case row that had focus when
+  // the detail opened is kept here to give focus back on close.
+  const [opener] = useState(() => document.activeElement);
+  return (
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent
+        side="right"
+        aria-describedby={undefined}
+        className="w-full gap-0 overflow-y-auto sm:max-w-md"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+        }}
+      >
+        <CaseBody id={id} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function CaseBody({ id }: { id: number }) {
   const me = useCurrentMe();
   const client = useQueryClient();
   const canAct = me.permissions.includes('moderation.cases.revert');
@@ -70,10 +106,11 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
   const [allowDomains, setAllowDomains] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const domainsId = useId();
   // Set only after a success: the opener is about to disappear, so focus goes to the heading.
   const successFocusRef = useRef<HTMLElement | null>(null);
 
-  // Opening a case moves focus here: on a phone this scrolls the detail into view.
+  // Opening a case moves focus to its heading, inside the Sheet's focus trap.
   useEffect(() => {
     headingRef.current?.focus();
   }, []);
@@ -111,30 +148,34 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
   });
 
   const header = (
-    <div className="detail-head">
-      <h2 ref={headingRef} tabIndex={-1}>
+    <SheetHeader className="border-b pr-12">
+      <SheetTitle ref={headingRef} tabIndex={-1} className="text-lg outline-none">
         Caso {id}
-      </h2>
-      <button type="button" className="button button-quiet" onClick={onClose}>
-        Fechar
-      </button>
-    </div>
+      </SheetTitle>
+    </SheetHeader>
   );
 
   if (query.isError) {
     return (
-      <aside className="panel detail" aria-label={`Caso ${id}`}>
+      <>
         {header}
-        <p role="alert">{errorText(query.error)}</p>
-      </aside>
+        <p role="alert" className="p-4 text-sm text-destructive">
+          {errorText(query.error)}
+        </p>
+      </>
     );
   }
   if (query.isPending) {
     return (
-      <aside className="panel detail" aria-label={`Caso ${id}`}>
+      <>
         {header}
-        <p className="muted">Carregando…</p>
-      </aside>
+        <div className="flex flex-col gap-3 p-4">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1, 2, 3, 4].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-8 w-full" />
+          ))}
+        </div>
+      </>
     );
   }
   const record = query.data;
@@ -144,86 +185,85 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
   const active = pending === 'revert' ? revert : dismiss;
 
   return (
-    <aside className="panel detail" aria-label={`Caso ${id}`}>
+    <>
       {header}
-      <dl className="facts detail-facts">
-        <Field label="Tipo">{caseKindLabel(record.kind, record.level)}</Field>
-        <Field label="Ação">{caseActionLabel(record.action)}</Field>
-        <Field label="Situação">{caseStatusLabel(record.status)}</Field>
-        <Field label="Data">{formatDate(record.createdAt)}</Field>
-        <Field label="Alvo">
-          <span className="mono">{record.targetUserId}</span>
-        </Field>
-        <Field label="Moderador">
-          {record.actorUserId === null ? (
-            'Automático'
-          ) : (
-            <span className="mono">{record.actorUserId}</span>
-          )}
-        </Field>
-        <Field label="Canal">
-          {record.channelId === null ? DASH : <span className="mono">{record.channelId}</span>}
-        </Field>
-        <Field label="Pontuação">{record.score}</Field>
-        <Field label="Motivo">{record.reason === '' ? DASH : record.reason}</Field>
-        <Field label="Domínios">
-          {record.domains.length === 0 ? DASH : record.domains.join(', ')}
-        </Field>
-        <Field label="Regras">
-          {record.rules.length === 0
-            ? DASH
-            : record.rules.map((hit) => `${caseRuleLabel(hit.rule)} (${hit.count})`).join(', ')}
-        </Field>
-        <Field label="Sinais">
-          {record.signals.length === 0
-            ? DASH
-            : record.signals.map((signal) => `${signal.name} (${signal.points})`).join(', ')}
-        </Field>
-        <Field label="Silenciado até">
-          {record.timeoutUntil === null ? DASH : formatDate(record.timeoutUntil)}
-        </Field>
-        <Field label="Revertido">
-          {record.revertedAt === null ? DASH : formatDate(record.revertedAt)}
-        </Field>
-        <Field label="Revertido por">
-          {record.revertedBy === null ? DASH : <span className="mono">{record.revertedBy}</span>}
-        </Field>
-      </dl>
-      {notice === null ? null : (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      )}
-      {canAct && (canRevert || canDismiss) ? (
-        <div className="detail-actions">
-          {canRevert ? (
-            <button
-              type="button"
-              className="button"
-              onClick={() => {
-                setNotice(null);
-                revert.reset();
-                setPending('revert');
-              }}
-            >
-              Reverter
-            </button>
-          ) : null}
-          {canDismiss ? (
-            <button
-              type="button"
-              className="button button-quiet"
-              onClick={() => {
-                setNotice(null);
-                dismiss.reset();
-                setPending('dismiss');
-              }}
-            >
-              Descartar
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-4 p-4">
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Tipo">{caseKindLabel(record.kind, record.level)}</Field>
+          <Field label="Ação">{caseActionLabel(record.action)}</Field>
+          <Field label="Situação">
+            <Badge variant="secondary">{caseStatusLabel(record.status)}</Badge>
+          </Field>
+          <Field label="Data">{formatDate(record.createdAt)}</Field>
+          <Field label="Alvo">
+            <Mono>{record.targetUserId}</Mono>
+          </Field>
+          <Field label="Moderador">
+            {record.actorUserId === null ? 'Automático' : <Mono>{record.actorUserId}</Mono>}
+          </Field>
+          <Field label="Canal">
+            {record.channelId === null ? DASH : <Mono>{record.channelId}</Mono>}
+          </Field>
+          <Field label="Pontuação">{record.score}</Field>
+          <Field label="Motivo">{record.reason === '' ? DASH : record.reason}</Field>
+          <Field label="Domínios">
+            {record.domains.length === 0 ? DASH : record.domains.join(', ')}
+          </Field>
+          <Field label="Regras">
+            {record.rules.length === 0
+              ? DASH
+              : record.rules.map((hit) => `${caseRuleLabel(hit.rule)} (${hit.count})`).join(', ')}
+          </Field>
+          <Field label="Sinais">
+            {record.signals.length === 0
+              ? DASH
+              : record.signals.map((signal) => `${signal.name} (${signal.points})`).join(', ')}
+          </Field>
+          <Field label="Silenciado até">
+            {record.timeoutUntil === null ? DASH : formatDate(record.timeoutUntil)}
+          </Field>
+          <Field label="Revertido">
+            {record.revertedAt === null ? DASH : formatDate(record.revertedAt)}
+          </Field>
+          <Field label="Revertido por">
+            {record.revertedBy === null ? DASH : <Mono>{record.revertedBy}</Mono>}
+          </Field>
+        </dl>
+        {notice === null ? null : (
+          <p className="text-sm font-semibold" role="status">
+            {notice}
+          </p>
+        )}
+        {canAct && (canRevert || canDismiss) ? (
+          <div className="flex flex-wrap gap-2">
+            {canRevert ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setNotice(null);
+                  revert.reset();
+                  setPending('revert');
+                }}
+              >
+                Reverter
+              </Button>
+            ) : null}
+            {canDismiss ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setNotice(null);
+                  dismiss.reset();
+                  setPending('dismiss');
+                }}
+              >
+                Descartar
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       {pending === null ? null : (
         <ConfirmDialog
           title={pending === 'revert' ? `Reverter o caso ${id}?` : `Descartar o caso ${id}?`}
@@ -241,16 +281,20 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
             <>
               <p>Isso desfaz a ação no Discord. Mensagens apagadas não voltam.</p>
               {record.domains.length === 0 ? null : (
-                <label className="check">
+                <div className="flex items-center gap-2">
                   <input
+                    id={domainsId}
                     type="checkbox"
+                    className="size-4 accent-primary"
                     checked={allowDomains}
                     onChange={(event) => {
                       setAllowDomains(event.target.checked);
                     }}
                   />
-                  Permitir também os domínios do caso
-                </label>
+                  <Label htmlFor={domainsId} className="font-normal">
+                    Permitir também os domínios do caso
+                  </Label>
+                </div>
               )}
             </>
           ) : (
@@ -258,6 +302,6 @@ export function CaseDetail({ id, onClose }: { id: number; onClose: () => void })
           )}
         </ConfirmDialog>
       )}
-    </aside>
+    </>
   );
 }

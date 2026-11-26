@@ -42,6 +42,8 @@ function detail(id: number, extra: Record<string, unknown> = {}) {
 
 const READ = 'moderation.cases.read';
 const REVERT = 'moderation.cases.revert';
+/** The revert or dismiss confirmation; the case detail Sheet is a dialog too. */
+const CONFIRMATION = /^(Reverter|Descartar) o caso 5\?$/;
 
 interface Call {
   name: string;
@@ -317,7 +319,7 @@ describe('case detail', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Descartar' }));
     await screen.findByRole('dialog');
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: CONFIRMATION })).toBeNull());
     expect(calls.some((call) => call.name === 'moderation.cases.dismiss')).toBe(false);
   });
 
@@ -415,7 +417,7 @@ describe('case detail, review fixes', () => {
     await within(dialog).findByText('Sem permissão.');
     expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveFocus();
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: CONFIRMATION })).toBeNull());
   });
 
   it('returns focus to the opener on cancel', async () => {
@@ -423,8 +425,22 @@ describe('case detail, review fixes', () => {
     const opener = screen.getByRole('button', { name: 'Reverter' });
     await userEvent.click(opener);
     await userEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: CONFIRMATION })).toBeNull());
     expect(opener).toHaveFocus();
+  });
+
+  it('closes only the confirmation on Escape inside the detail sheet, focus back on Reverter', async () => {
+    await openCase([READ, REVERT]);
+    const sheet = screen.getByRole('dialog', { name: 'Caso 5' });
+    const opener = within(sheet).getByRole('button', { name: 'Reverter' });
+    await userEvent.click(opener);
+    await screen.findByRole('dialog', { name: 'Reverter o caso 5?' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Reverter o caso 5?' })).toBeNull(),
+    );
+    expect(screen.getByRole('dialog', { name: 'Caso 5' })).toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   it('returns focus to the detail heading after a successful revert', async () => {
@@ -432,7 +448,7 @@ describe('case detail, review fixes', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reverter' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reverter' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: CONFIRMATION })).toBeNull());
     expect(screen.getByRole('heading', { level: 2, name: 'Caso 5' })).toHaveFocus();
   });
 
