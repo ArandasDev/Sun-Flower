@@ -12,7 +12,13 @@ import {
   type RecordingLogger,
 } from '../../tests/helpers/recording-logger.ts';
 import type { OAuthClient } from './ports.ts';
-import { buildDashboard, startDashboard, type DashboardDeps } from './server.ts';
+import {
+  buildDashboard,
+  cspWithStyleNonce,
+  renderIndex,
+  startDashboard,
+  type DashboardDeps,
+} from './server.ts';
 
 const anyString = expect.any(String) as string;
 const CSP =
@@ -74,7 +80,7 @@ afterEach(async () => {
 });
 
 describe('security headers', () => {
-  it.each(['/', '/api/nope'])('sets the exact CSP and companions on %s', async (url) => {
+  it.each(['/api/nope', '/app.js'])('sets the exact CSP and companions on %s', async (url) => {
     const server = await build();
     const res = await server.inject({ method: 'GET', url });
     expect(res.headers['content-security-policy']).toBe(CSP);
@@ -241,6 +247,70 @@ describe('static files', () => {
   });
 });
 
+describe('index.html style nonce', () => {
+  const metaNonce = (body: string): string | undefined =>
+    /<meta name="csp-nonce" content="([^"]*)"/.exec(body)?.[1];
+  const cspNonce = (csp: unknown): string | undefined =>
+    /style-src 'self' 'nonce-([^']*)'/.exec(String(csp))?.[1];
+
+  beforeEach(() => {
+    writeFileSync(
+      join(staticDir, 'index.html'),
+      '<meta name="csp-nonce" content="__CSP_NONCE__" /><i>__CSP_NONCE__</i>',
+    );
+    mkdirSync(join(staticDir, 'assets'));
+    writeFileSync(join(staticDir, 'assets', 'x.js'), 'console.log(2);');
+  });
+
+  it('renders a fresh nonce per response, equal in the meta and in the CSP', async () => {
+    const server = await build();
+    const first = await server.inject({ method: 'GET', url: '/' });
+    const second = await server.inject({ method: 'GET', url: '/' });
+    const nonce = metaNonce(first.body);
+    expect(nonce).toMatch(/^[A-Za-z0-9+/]{22}==$/);
+    expect(cspNonce(first.headers['content-security-policy'])).toBe(nonce);
+    expect(first.headers['content-security-policy']).toBe(cspWithStyleNonce(nonce ?? ''));
+    expect(metaNonce(second.body)).not.toBe(nonce);
+  });
+
+  it.each([
+    ['GET', '/index.html'],
+    ['GET', '/casos'],
+    ['HEAD', '/'],
+  ])('gives %s %s a nonce, with no placeholder left and no caching', async (method, url) => {
+    const server = await build();
+    const res = await server.inject({ method: method as 'GET' | 'HEAD', url });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('__CSP_NONCE__');
+    expect(cspNonce(res.headers['content-security-policy'])).toMatch(/^[A-Za-z0-9+/]{22}==$/);
+    expect(res.headers['cache-control']).toBe('no-store');
+    if (method === 'GET') {
+      expect(metaNonce(res.body)).toBe(cspNonce(res.headers['content-security-policy']));
+    }
+  });
+
+  it('keeps style-src out of the API and of static files', async () => {
+    const server = await build();
+    const api = await server.inject({ method: 'GET', url: '/api/me' });
+    const file = await server.inject({ method: 'GET', url: '/assets/x.js' });
+    expect(file.statusCode).toBe(200);
+    for (const res of [api, file]) {
+      expect(res.headers['content-security-policy']).not.toContain('style-src');
+    }
+  });
+
+  it('still answers 503 when the panel was not built', async () => {
+    const server = await build({ staticDir: join(root, 'missing') });
+    const res = await server.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toBe('Painel não compilado.');
+  });
+
+  it('renderIndex replaces every marker', () => {
+    expect(renderIndex('a__CSP_NONCE__b__CSP_NONCE__', 'N')).toBe('aNbN');
+  });
+});
+
 describe('error handling', () => {
   it('answers 500 without a stack and logs only the error name', async () => {
     const server = await build();
@@ -263,8 +333,15 @@ const HEADERS = {
   'referrer-policy': 'same-origin',
 };
 
-function expectSecurityHeaders(headers: Record<string, unknown>): void {
-  for (const [name, value] of Object.entries(HEADERS)) expect(headers[name]).toBe(value);
+function expectSecurityHeaders(headers: Record<string, unknown>, withNonce = false): void {
+  for (const [name, value] of Object.entries(HEADERS)) {
+    if (withNonce && name === 'content-security-policy') {
+      expect(String(headers[name])).toMatch(/; style-src 'self' 'nonce-[A-Za-z0-9+/=]+'$/);
+      expect(String(headers[name]).startsWith(value)).toBe(true);
+    } else {
+      expect(headers[name]).toBe(value);
+    }
+  }
   expect(headers['strict-transport-security']).toMatch(/max-age=\d+/);
 }
 
@@ -353,7 +430,7 @@ describe('review fixes', () => {
     const server = await build();
     const spa = await server.inject({ method: 'GET', url: '/spa/route' });
     expect(spa.statusCode).toBe(200);
-    expectSecurityHeaders(spa.headers);
+    expectSecurityHeaders(spa.headers, true);
     for (let i = 0; i < 120; i++) await server.inject({ method: 'GET', url: '/api/nope' });
     const limited = await server.inject({ method: 'GET', url: '/api/nope' });
     expect(limited.statusCode).toBe(429);

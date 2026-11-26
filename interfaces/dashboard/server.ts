@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import type { Socket } from 'node:net';
@@ -31,6 +32,19 @@ const CSP = [
   "base-uri 'none'",
   "form-action 'self'",
 ].join('; ');
+
+/** Marker in index.html that is replaced by the per-request style nonce. */
+export const STYLE_NONCE_PLACEHOLDER = '__CSP_NONCE__';
+
+/** The CSP of the index.html response: the usual one plus a style-src that accepts this nonce. */
+export function cspWithStyleNonce(nonce: string): string {
+  return `${CSP}; style-src 'self' 'nonce-${nonce}'`;
+}
+
+/** Puts the nonce in every place index.html has the marker. */
+export function renderIndex(html: string, nonce: string): string {
+  return html.replaceAll(STYLE_NONCE_PLACEHOLDER, nonce);
+}
 
 /** Sent on every response; helmet adds the same values to routed ones, errors before routing need this. */
 const SECURITY_HEADERS: Readonly<Record<string, string>> = {
@@ -393,18 +407,29 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
     registerStatusRoute(app, { core: deps.core, status: deps.status, auth, now });
     registerOperationsRoute(app, { core: deps.core, auth });
 
-    await app.register(fastifyStatic, { root: staticDir, dotfiles: 'deny' });
+    // index.html only leaves through the not-found handler below, which adds the style nonce.
+    await app.register(fastifyStatic, {
+      root: staticDir,
+      dotfiles: 'deny',
+      index: false,
+      allowedPath: (path) => path !== '/' && path !== '/index.html',
+    });
 
     // Cached after the first successful read; a missing file is looked up again on the next request.
-    let indexHtml: Buffer | undefined;
+    let indexHtml: string | undefined;
     app.setNotFoundHandler(async (request, reply) => {
       if (isServerRequest(request) || (request.method !== 'GET' && request.method !== 'HEAD')) {
         return apiError(reply, 404, 'not_found', 'Não encontrado.');
       }
       try {
-        indexHtml ??= await readFile(join(staticDir, 'index.html'));
-        const html = indexHtml;
-        return reply.code(200).type('text/html; charset=utf-8').send(html);
+        indexHtml ??= await readFile(join(staticDir, 'index.html'), 'utf8');
+        const nonce = randomBytes(16).toString('base64');
+        return reply
+          .code(200)
+          .header('content-security-policy', cspWithStyleNonce(nonce))
+          .header('cache-control', 'no-store')
+          .type('text/html; charset=utf-8')
+          .send(renderIndex(indexHtml, nonce));
       } catch {
         return reply.code(503).type('text/plain; charset=utf-8').send('Painel não compilado.');
       }
