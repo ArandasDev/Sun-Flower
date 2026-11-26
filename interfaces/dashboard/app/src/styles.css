@@ -802,6 +802,14 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
+.panel > .domain-rows {
+  margin-top: 0;
+}
+
+.panel > .domain-rows li:last-child {
+  border-bottom: 0;
+}
+
 .domain-rows li > span {
   min-width: 0;
   overflow-wrap: anywhere;

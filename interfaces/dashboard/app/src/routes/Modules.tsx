@@ -62,7 +62,8 @@ export function Modules() {
   useEffect(() => {
     if (toggle.isPending || query.isFetching || !watchFocus.current) return;
     watchFocus.current = false;
-    if (document.activeElement === document.body) headingRef.current?.focus();
+    if (document.activeElement === document.body)
+      headingRef.current?.focus({ preventScroll: true });
   }, [toggle.isPending, query.isFetching, query.data]);
   const modules = query.data?.modules ?? [];
   const pageError =
