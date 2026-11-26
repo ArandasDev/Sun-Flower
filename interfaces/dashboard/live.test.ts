@@ -896,6 +896,30 @@ describe('sessions revoked through the admin service', { timeout: 20_000 }, () =
 });
 
 describe('session limit per person', { timeout: 20_000 }, () => {
+  it('ends an upgrade whose session was revoked while the handshake was in flight', async () => {
+    const { token, record } = sessions.create(STAFF);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = deps.directory.lookup.bind(deps.directory);
+    vi.spyOn(deps.directory, 'lookup').mockImplementation(async (userId) => {
+      await gate;
+      return original(userId);
+    });
+    const client = connect(token);
+    const opened = client.catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    sessions.revokeByRef(sessions.refOf(record.idHash));
+    release();
+    const ready = await withTimeout(opened, 'open');
+    if (ready === undefined) throw new Error('upgrade was refused');
+    const result = await withTimeout(ready.closed, 'close');
+    expect(result.code).toBe(4401);
+    expect(result.messages.at(-1)).toEqual({ type: 'session.ended', data: null });
+    expect(hub.connectionCount(STAFF)).toBe(0);
+  });
+
   it('the 6th session ends the live connection of the first and keeps the other five (Review Focus 1)', async () => {
     const created = [];
     for (let i = 0; i < 5; i++) {
@@ -915,6 +939,7 @@ describe('session limit per person', { timeout: 20_000 }, () => {
       expect(client.ws.readyState).toBe(WebSocket.OPEN);
     }
     expect(sessions.peek(sixth.token)).not.toBeNull();
+    expect(sessions.peek(created[0]?.token ?? '')).toBeNull();
     expect(sessions.list().filter((record) => record.userId === STAFF)).toHaveLength(5);
   });
 });

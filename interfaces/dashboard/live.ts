@@ -304,6 +304,18 @@ export class LiveHub {
       return;
     }
     const { record } = admitted;
+    // The session may have been revoked or evicted while the upgrade was in flight.
+    let valid: boolean;
+    try {
+      valid = this.#core.sessions.peekByHash(record.idHash) !== null;
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
+      this.#sendRaw(socket, 'session.ended', null);
+      socket.close(CLOSE_SESSION_ENDED);
+      return;
+    }
     // Upgrades admitted concurrently are counted again once open.
     if (this.#overLimit(record.idHash, record.userId)) {
       socket.close(CLOSE_LIMITS);
@@ -599,6 +611,15 @@ export class LiveHub {
     this.#send(connection, 'session.ended', null);
     connection.ended = true;
     connection.socket.close(CLOSE_SESSION_ENDED);
+  }
+
+  #sendRaw(socket: WebSocket, type: string, data: unknown): void {
+    if (socket.readyState !== OPEN) return;
+    try {
+      socket.send(JSON.stringify({ type, data }));
+    } catch (error) {
+      this.#logger.error({ error: errorName(error) }, 'live send failed');
+    }
   }
 
   #send(connection: Connection, type: string, data: unknown): void {
