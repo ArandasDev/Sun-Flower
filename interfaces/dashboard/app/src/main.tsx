@@ -5,10 +5,16 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from './App.tsx';
 import { makeQueryClient } from './query-client.ts';
+import { installStyleNonce } from './style-nonce.ts';
+import { applyTheme, readThemeChoice } from './theme.ts';
+import './index.css';
 import './styles.css';
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('Missing #root element.');
+
+installStyleNonce();
+applyTheme(readThemeChoice());
 
 const client = makeQueryClient();
 
