@@ -122,6 +122,25 @@ describe('developers screen', () => {
     expect(list?.closest('[data-slot="card"]')).not.toBeNull();
   });
 
+  it('puts the search in the card header and filters the developers', async () => {
+    setup();
+    await screen.findByText(SELF);
+    const search = screen.getByLabelText('Buscar');
+    expect(search.closest('[data-slot="card-header"]')).not.toBeNull();
+    await userEvent.type(search, OTHER);
+    expect(screen.queryByText(SELF)).toBeNull();
+    expect(screen.getByText(OTHER)).toBeInTheDocument();
+  });
+
+  it('shows the empty state when there is no developer', async () => {
+    setup((call) =>
+      call.name === 'administration.developers.list' ? okBody({ developers: [] }) : undefined,
+    );
+    const empty = await screen.findByText('Nenhum desenvolvedor.');
+    expect(empty.closest('.border-dashed')).not.toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
   it('blocks an invalid id', async () => {
     setup();
     await screen.findByText(OTHER);

@@ -12,12 +12,20 @@ const DOT = {
 } as const;
 
 /** A neutral badge with a dot: active, stopped or discarded, failed, or in transition. Colour stays off the text, so amber is kept for the main action. */
-export function StatusBadge({ tone, children }: { tone: StatusTone; children: ReactNode }) {
+export function StatusBadge({
+  tone,
+  className,
+  children,
+}: {
+  tone: StatusTone;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <Badge
       variant="outline"
       data-tone={tone}
-      className={cn(tone === 'failed' && 'text-destructive')}
+      className={cn(tone === 'failed' && 'text-destructive', className)}
     >
       <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', DOT[tone])} />
       {children}

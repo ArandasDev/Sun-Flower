@@ -1,10 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
-import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
-import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent } from '../components/ui/card.tsx';
+import {
+  DataTable,
+  DataTableSearch,
+  createDataTableColumns,
+  sortBy,
+} from '../components/DataTable.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { RowActions } from '../components/RowActions.tsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
@@ -26,7 +33,7 @@ export function Sessions() {
   const client = useQueryClient();
   const me = useCurrentMe();
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const personId = useId();
+  const [search, setSearch] = useState('');
   const [ending, setEnding] = useState<Ending | null>(null);
   const query = useOperationQuery<{ sessions: SessionEntry[] }>(
     ['admin', 'sessions'],
@@ -65,7 +72,7 @@ export function Sessions() {
     column.accessor('userId', {
       header: 'Pessoa',
       cell: ({ row }) => (
-        <span id={`${personId}-${row.id}`} className="font-mono break-all whitespace-normal">
+        <span className="font-mono break-all whitespace-normal">
           {row.original.userId}
           {row.original.userId === me.id ? (
             <>
@@ -93,42 +100,35 @@ export function Sessions() {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            aria-describedby={`${personId}-${row.id}`}
-            onClick={() => {
-              open({ kind: 'one', entry: row.original });
-            }}
-          >
-            Encerrar
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            aria-describedby={`${personId}-${row.id}`}
-            onClick={() => {
-              open({ kind: 'all', userId: row.original.userId });
-            }}
-          >
-            Encerrar todas desta pessoa
-          </Button>
-        </div>
+        <RowActions
+          label={`Ações da sessão de ${row.original.userId}`}
+          items={[
+            {
+              label: 'Encerrar',
+              onSelect: () => {
+                open({ kind: 'one', entry: row.original });
+              },
+            },
+            {
+              label: 'Encerrar todas desta pessoa',
+              destructive: true,
+              onSelect: () => {
+                open({ kind: 'all', userId: row.original.userId });
+              },
+            },
+          ]}
+        />
       ),
     }),
   ]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
-        Sessões
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Sessões abertas no painel. Encerrar uma sessão fecha o painel dessa pessoa na hora.
-      </p>
+    <>
+      <PageHeader
+        title="Sessões"
+        description="Sessões abertas no painel. Encerrar uma sessão fecha o painel dessa pessoa na hora."
+        headingRef={headingRef}
+      />
       <p role="alert" className="text-sm text-destructive empty:hidden">
         {query.isError ? errorText(query.error) : null}
       </p>
@@ -140,18 +140,24 @@ export function Sessions() {
           ))}
         </div>
       ) : null}
-      {sessions.length > 0 || query.isSuccess ? (
+      {query.isSuccess && sessions.length === 0 ? (
+        <EmptyState title="Nenhuma sessão aberta." />
+      ) : null}
+      {sessions.length === 0 ? null : (
         <Card>
+          <CardHeader className="border-b">
+            <DataTableSearch value={search} onChange={setSearch} />
+          </CardHeader>
           <CardContent>
             <DataTable
               columns={columns}
               data={sessions}
               getRowId={(entry) => entry.ref}
-              emptyText="Nenhuma sessão aberta."
+              search={search}
             />
           </CardContent>
         </Card>
-      ) : null}
+      )}
       {ending === null ? null : (
         <ConfirmDialog
           title={ending.kind === 'one' ? 'Encerrar sessão' : 'Encerrar todas as sessões'}
@@ -182,6 +188,6 @@ export function Sessions() {
           )}
         </ConfirmDialog>
       )}
-    </section>
+    </>
   );
 }

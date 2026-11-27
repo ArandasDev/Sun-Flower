@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { DataTable, createDataTableColumns } from './DataTable.tsx';
+import { useState } from 'react';
+import { DataTable, DataTableSearch, createDataTableColumns } from './DataTable.tsx';
 
 interface Item {
   name: string;
@@ -79,6 +80,22 @@ describe('DataTable', () => {
     render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'Abrir');
     expect(screen.getByText('Nenhum resultado para a busca.')).toBeInTheDocument();
+  });
+
+  it('searches with a field the screen renders itself, and then shows none of its own', async () => {
+    function Screen() {
+      const [search, setSearch] = useState('');
+      return (
+        <>
+          <DataTableSearch value={search} onChange={setSearch} />
+          <DataTable columns={columns} data={DATA} search={search} />
+        </>
+      );
+    }
+    render(<Screen />);
+    expect(screen.getAllByLabelText('Buscar')).toHaveLength(1);
+    await userEvent.type(screen.getByLabelText('Buscar'), '  dominio  ');
+    expect(names()).toEqual(['Domínio']);
   });
 
   it('cycles ascending, descending and back to the server order', async () => {

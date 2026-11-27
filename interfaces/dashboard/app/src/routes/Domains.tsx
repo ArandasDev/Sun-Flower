@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { AddDialog } from '../components/AddDialog.tsx';
-import { DataTable, createDataTableColumns } from '../components/DataTable.tsx';
+import { DataTable, DataTableSearch, createDataTableColumns } from '../components/DataTable.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { Button } from '../components/ui/button.tsx';
@@ -34,6 +34,7 @@ function DomainList({ list, title, dialogTitle }: DomainListProps) {
   const inputId = useId();
   const [text, setText] = useState('');
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
   const query = useOperationQuery<{ domains: string[] }>(
     ['domains', list],
     'moderation.domains.list',
@@ -136,6 +137,9 @@ function DomainList({ list, title, dialogTitle }: DomainListProps) {
             </div>
           </AddDialog>
         </CardAction>
+        {domains.length === 0 ? null : (
+          <DataTableSearch value={search} onChange={setSearch} className="mt-2" />
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p role="alert" className="text-sm text-destructive empty:hidden">
@@ -153,7 +157,12 @@ function DomainList({ list, title, dialogTitle }: DomainListProps) {
           <EmptyState title="Nenhum domínio nesta lista." />
         ) : null}
         {domains.length === 0 ? null : (
-          <DataTable columns={columns} data={rows} getRowId={(item) => item.domain} />
+          <DataTable
+            columns={columns}
+            data={rows}
+            getRowId={(item) => item.domain}
+            search={search}
+          />
         )}
       </CardContent>
     </Card>

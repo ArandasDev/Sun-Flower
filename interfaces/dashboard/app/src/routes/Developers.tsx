@@ -4,10 +4,16 @@ import { useId, useRef, useState } from 'react';
 import { AddDialog } from '../components/AddDialog.tsx';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
-import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
+import {
+  DataTable,
+  DataTableSearch,
+  createDataTableColumns,
+  sortBy,
+} from '../components/DataTable.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent } from '../components/ui/card.tsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -31,6 +37,7 @@ export function Developers() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [userId, setUserId] = useState('');
   const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
   const query = useOperationQuery<{ developers: DeveloperEntry[] }>(
     ['admin', 'developers'],
@@ -152,10 +159,21 @@ export function Developers() {
           ))}
         </div>
       ) : null}
+      {query.isSuccess && developers.length === 0 ? (
+        <EmptyState title="Nenhum desenvolvedor." />
+      ) : null}
       {developers.length === 0 ? null : (
         <Card>
+          <CardHeader className="border-b">
+            <DataTableSearch value={search} onChange={setSearch} />
+          </CardHeader>
           <CardContent>
-            <DataTable columns={columns} data={developers} getRowId={(entry) => entry.userId} />
+            <DataTable
+              columns={columns}
+              data={developers}
+              getRowId={(entry) => entry.userId}
+              search={search}
+            />
           </CardContent>
         </Card>
       )}

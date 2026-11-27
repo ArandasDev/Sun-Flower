@@ -51,6 +51,19 @@ describe('domains screen', () => {
     expect(await within(allowed).findByText('good.example.com')).toBeInTheDocument();
   });
 
+  it('puts the search of each list in its card header', async () => {
+    setup(['good.example.com', 'fine.example.com']);
+    const allowed = await screen.findByRole('region', { name: 'Permitidos' });
+    await within(allowed).findByText('good.example.com');
+    const search = within(allowed).getByLabelText('Buscar');
+    expect(search.closest('[data-slot="card-header"]')).not.toBeNull();
+    await userEvent.type(search, 'fine');
+    expect(within(allowed).queryByText('good.example.com')).toBeNull();
+    expect(within(allowed).getByText('fine.example.com')).toBeInTheDocument();
+    const blocked = screen.getByRole('region', { name: 'Bloqueados' });
+    expect(within(blocked).getByText('bad.example.com')).toBeInTheDocument();
+  });
+
   it('adds a domain to the blocked list from the dialog and shows it', async () => {
     const { calls } = setup();
     const blocked = await screen.findByRole('region', { name: 'Bloqueados' });

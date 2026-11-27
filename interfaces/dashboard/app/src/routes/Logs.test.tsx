@@ -83,6 +83,30 @@ describe('logs screen', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
   });
 
+  it('puts the level filter, Atualizar and the search in the card header', async () => {
+    setup([{ time: TIME, level: 'info', message: 'hello', fields: {} }]);
+    await screen.findByText('hello');
+    const header = screen.getByLabelText('Nível mínimo').closest('[data-slot="card-header"]');
+    expect(header).not.toBeNull();
+    const toolbar = within(header as HTMLElement);
+    expect(toolbar.getByRole('button', { name: 'Atualizar' })).toBeInTheDocument();
+    expect(toolbar.getByLabelText('Buscar')).toBeInTheDocument();
+    expect(screen.getByRole('table').closest('[data-slot="card"]')).toBe(
+      header?.closest('[data-slot="card"]'),
+    );
+  });
+
+  it('filters the rows with the search in the card header', async () => {
+    setup([
+      { time: TIME, level: 'info', message: 'hello', fields: {} },
+      { time: TIME, level: 'info', message: 'bye', fields: {} },
+    ]);
+    await screen.findByText('hello');
+    await userEvent.type(screen.getByLabelText('Buscar'), 'bye');
+    expect(screen.queryByText('hello')).toBeNull();
+    expect(screen.getByText('bye')).toBeInTheDocument();
+  });
+
   it('fetches again with Atualizar', async () => {
     const { calls } = setup([{ time: TIME, level: 'info', message: 'hello', fields: {} }]);
     await screen.findByText('hello');
@@ -102,7 +126,9 @@ describe('logs screen', () => {
 
   it('shows an empty state', async () => {
     setup([]);
-    expect(await screen.findByText('Nenhum registro.')).toBeInTheDocument();
+    const empty = await screen.findByText('Nenhum registro.');
+    expect(empty.closest('.border-dashed')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Atualizar' })).toBeInTheDocument();
   });
 
   it('shows "Sem permissão." on a 403', async () => {

@@ -1,9 +1,16 @@
 import { useId, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
-import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
+import {
+  DataTable,
+  DataTableSearch,
+  createDataTableColumns,
+  sortBy,
+} from '../components/DataTable.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent } from '../components/ui/card.tsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Label } from '../components/ui/label.tsx';
 import { NativeSelect } from '../components/ui/native-select.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -79,6 +86,7 @@ const COLUMNS = column.columns([
 export function Logs() {
   const levelId = useId();
   const [minLevel, setMinLevel] = useState<MinLevel>('info');
+  const [search, setSearch] = useState('');
   const query = useOperationQuery<{ entries: LogEntry[] }>(
     ['admin', 'logs', minLevel],
     'administration.logs.recent',
@@ -88,59 +96,62 @@ export function Logs() {
   const entries = query.data?.entries ?? [];
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Logs</h1>
-      <p className="text-sm text-muted-foreground">
-        Os registros mais recentes do bot, do mais novo para o mais antigo. Eles só se atualizam
-        quando você abre a tela ou usa o botão Atualizar.
-      </p>
+    <>
+      <PageHeader
+        title="Logs"
+        description="Os registros mais recentes do bot, do mais novo para o mais antigo. Eles só se atualizam quando você abre a tela ou usa o botão Atualizar."
+      />
       <Card>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={levelId}>Nível mínimo</Label>
-            <NativeSelect
-              id={levelId}
-              value={minLevel}
-              onChange={(event) => {
-                setMinLevel(event.target.value as MinLevel);
+        <CardHeader className="border-b">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={levelId}>Nível mínimo</Label>
+              <NativeSelect
+                id={levelId}
+                value={minLevel}
+                onChange={(event) => {
+                  setMinLevel(event.target.value as MinLevel);
+                }}
+              >
+                {LEVEL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+            <Button
+              type="button"
+              disabled={query.isFetching}
+              onClick={() => {
+                void query.refetch();
               }}
             >
-              {LEVEL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </NativeSelect>
+              Atualizar
+            </Button>
+            {entries.length === 0 ? null : (
+              <DataTableSearch value={search} onChange={setSearch} className="sm:w-64" />
+            )}
           </div>
-          <Button
-            type="button"
-            disabled={query.isFetching}
-            onClick={() => {
-              void query.refetch();
-            }}
-          >
-            Atualizar
-          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p role="alert" className="text-sm text-destructive empty:hidden">
+            {query.isError ? errorText(query.error) : null}
+          </p>
+          {query.isPending ? (
+            <div className="flex flex-col gap-2">
+              <p className="sr-only">Carregando…</p>
+              {[0, 1].map((index) => (
+                <Skeleton key={index} aria-hidden="true" className="h-9 w-full" />
+              ))}
+            </div>
+          ) : null}
+          {query.isSuccess && entries.length === 0 ? <EmptyState title="Nenhum registro." /> : null}
+          {entries.length === 0 ? null : (
+            <DataTable columns={COLUMNS} data={entries} search={search} />
+          )}
         </CardContent>
       </Card>
-      <p role="alert" className="text-sm text-destructive empty:hidden">
-        {query.isError ? errorText(query.error) : null}
-      </p>
-      {query.isPending ? (
-        <div className="flex flex-col gap-2">
-          <p className="sr-only">Carregando…</p>
-          {[0, 1].map((index) => (
-            <Skeleton key={index} aria-hidden="true" className="h-9 w-full" />
-          ))}
-        </div>
-      ) : null}
-      {entries.length > 0 || query.isSuccess ? (
-        <Card>
-          <CardContent>
-            <DataTable columns={COLUMNS} data={entries} emptyText="Nenhum registro." />
-          </CardContent>
-        </Card>
-      ) : null}
-    </section>
+    </>
   );
 }
