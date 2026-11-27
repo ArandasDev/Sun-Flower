@@ -242,7 +242,8 @@ describe('connection', () => {
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
     expect(clock.pendingDelays()).toEqual([]);
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
     expect(client.getQueryData(['me'])).toBeUndefined();
   });
 
@@ -255,7 +256,8 @@ describe('connection', () => {
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
     expect(clock.pendingDelays()).toEqual([]);
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('logging out clears the whole cache', async () => {
@@ -265,7 +267,8 @@ describe('connection', () => {
     client.setQueryData(['config', 'moderation'], { a: 1 });
     await clickSignOut();
     await screen.findByRole('link', { name: 'Entrar com Discord' });
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('the login screen clears the cache when it mounts', async () => {
@@ -288,7 +291,8 @@ describe('connection', () => {
     const { client } = renderApp('/visao-geral', clock);
     client.setQueryData(['config', 'moderation'], { a: 1 });
     await screen.findByRole('link', { name: 'Entrar com Discord' });
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('closes the socket when leaving', async () => {

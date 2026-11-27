@@ -133,10 +133,9 @@ describe('routing and labels', () => {
   it('redirects unknown routes to /', async () => {
     stubFetch(() => me('member'));
     renderApp('/nao-existe');
-    expect(await screen.findByRole('link', { name: 'Meu perfil' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    const link = await screen.findByRole('link', { name: 'Meu perfil' });
+    // The menu renders before the redirect lands, so wait for the link to become current.
+    await waitFor(() => expect(link).toHaveAttribute('aria-current', 'page'));
   });
 
   it('falls back to "Membro" for an unknown level', async () => {
