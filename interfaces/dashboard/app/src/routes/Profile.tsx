@@ -1,7 +1,7 @@
 import { formatDate } from '../components/CaseDetail.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
-import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
+import { StatusBadge } from '../components/StatusBadge.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -13,7 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table.tsx';
-import { caseActionLabel, caseKindLabel, caseStatusLabel, levelLabel } from '../labels.ts';
+import {
+  caseActionLabel,
+  caseKindLabel,
+  caseStatusLabel,
+  caseStatusTone,
+  levelLabel,
+} from '../labels.ts';
 import { useOperationQuery } from '../operations.ts';
 import { useCurrentMe } from '../session.tsx';
 
@@ -23,12 +29,6 @@ interface MyCase {
   kind: string;
   action: string;
   status: string;
-}
-
-function caseTone(status: string): StatusTone {
-  if (status === 'open') return 'pending';
-  if (status === 'actioned') return 'active';
-  return 'inactive';
 }
 
 function MyCases() {
@@ -82,7 +82,7 @@ function MyCases() {
                   <TableCell>{caseKindLabel(row.kind, null)}</TableCell>
                   <TableCell>{caseActionLabel(row.action)}</TableCell>
                   <TableCell>
-                    <StatusBadge tone={caseTone(row.status)}>
+                    <StatusBadge tone={caseStatusTone(row.status)}>
                       {caseStatusLabel(row.status)}
                     </StatusBadge>
                   </TableCell>

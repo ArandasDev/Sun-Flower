@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { CaseDetail, formatDate, type CaseSummary } from '../components/CaseDetail.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
-import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
+import { StatusBadge } from '../components/StatusBadge.tsx';
 import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardFooter, CardHeader } from '../components/ui/card.tsx';
@@ -24,6 +24,7 @@ import {
   caseKindLabel,
   caseRuleLabel,
   caseStatusLabel,
+  caseStatusTone,
   errorText,
 } from '../labels.ts';
 import { isSnowflake } from '../ids.ts';
@@ -36,12 +37,6 @@ interface CasesPage {
 
 const STATUSES = ['open', 'actioned', 'reverted', 'dismissed'] as const;
 const RULES = ['flood', 'repeat', 'mentions'] as const;
-
-function caseTone(status: string): StatusTone {
-  if (status === 'open') return 'pending';
-  if (status === 'actioned') return 'active';
-  return 'inactive';
-}
 
 /** The name the row button had when the whole row was the button, separators included. */
 function rowName(row: CaseSummary): string {
@@ -204,7 +199,10 @@ export function Cases() {
                     key={row.id}
                     className="cursor-pointer"
                     data-state={row.id === selected ? 'selected' : undefined}
-                    onClick={() => {
+                    onClick={(event) => {
+                      // The detail returns focus to what had it when it opened, so a click on
+                      // another cell first moves focus to the row button.
+                      event.currentTarget.querySelector('button')?.focus();
                       setParam('caso', String(row.id), true);
                     }}
                   >
@@ -222,7 +220,7 @@ export function Cases() {
                     <TableCell>{caseKindLabel(row.kind, row.level)}</TableCell>
                     <TableCell>{caseActionLabel(row.action)}</TableCell>
                     <TableCell>
-                      <StatusBadge tone={caseTone(row.status)}>
+                      <StatusBadge tone={caseStatusTone(row.status)}>
                         {caseStatusLabel(row.status)}
                       </StatusBadge>
                     </TableCell>

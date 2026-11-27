@@ -530,4 +530,15 @@ describe('cases table', () => {
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByText('Link suspeito')).toBeInTheDocument();
   });
+
+  it('returns focus to the row button when a detail opened from another cell closes', async () => {
+    setup([READ], standard);
+    const button = await screen.findByRole('button', { name: /Caso 5/ });
+    const row = button.closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByText(TARGET));
+    await screen.findByText('Link suspeito');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Caso 5' })).toBeNull());
+    expect(button).toHaveFocus();
+  });
 });
