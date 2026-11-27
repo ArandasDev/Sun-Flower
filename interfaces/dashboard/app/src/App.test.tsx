@@ -89,7 +89,7 @@ describe('logout failure', () => {
     renderApp('/');
     await clickSignOut();
     expect(await screen.findByText('Não foi possível sair. Tente de novo.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conta de Girassol' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Entrar com Discord' })).toBeNull();
   });
 

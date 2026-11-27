@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { Button } from '../components/ui/button.tsx';
+import { Input } from '../components/ui/input.tsx';
+import { Label } from '../components/ui/label.tsx';
+import { Textarea } from '../components/ui/textarea.tsx';
 import { isSnowflake } from '../ids.ts';
 import { NO_PERMISSION_TEXT, actionErrorText } from '../labels.ts';
 import { useOperationMutation } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 type ActionId = 'warn' | 'timeout' | 'kick' | 'ban';
@@ -51,6 +56,10 @@ export function Actions() {
   const submitRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<ActionId, HTMLButtonElement>());
+  const userIdId = useId();
+  const reasonId = useId();
+  const minutesId = useId();
+  const daysId = useId();
 
   const current = allowed.find((spec) => spec.id === selected) ?? allowed[0];
   const mutation = useOperationMutation<ActionResult, Record<string, unknown>>(
@@ -58,6 +67,7 @@ export function Actions() {
     {
       onSuccess: (data) => {
         setResult(data);
+        notify(`Caso #${data.caseId} registrado.`);
         setConfirming(false);
         setUserId('');
         setReason('');
@@ -72,9 +82,11 @@ export function Actions() {
 
   if (current === undefined) {
     return (
-      <section>
-        <h1>Ações</h1>
-        <p role="alert">{NO_PERMISSION_TEXT}</p>
+      <section className="flex flex-col gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Ações</h1>
+        <p role="alert" className="text-sm text-destructive">
+          {NO_PERMISSION_TEXT}
+        </p>
       </section>
     );
   }
@@ -128,9 +140,13 @@ export function Actions() {
   };
 
   return (
-    <section>
-      <h1>Ações</h1>
-      <div role="tablist" aria-label="Ação de moderação" className="tabs">
+    <section className="flex max-w-2xl flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Ações</h1>
+      <div
+        role="tablist"
+        aria-label="Ação de moderação"
+        className="inline-flex w-fit flex-wrap gap-1 rounded-lg bg-muted p-1"
+      >
         {allowed.map((spec, index) => (
           <button
             key={spec.id}
@@ -144,7 +160,7 @@ export function Actions() {
             aria-selected={spec.id === current.id}
             aria-controls="action-panel"
             tabIndex={spec.id === current.id ? 0 : -1}
-            className="tab"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             onClick={() => {
               select(spec.id);
             }}
@@ -160,7 +176,7 @@ export function Actions() {
         id="action-panel"
         role="tabpanel"
         aria-labelledby={`tab-${current.id}`}
-        className="panel action-form"
+        className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:p-6"
         onSubmit={(event) => {
           event.preventDefault();
           if (!valid || mutation.isPending) return;
@@ -168,23 +184,26 @@ export function Actions() {
           else setConfirming(true);
         }}
       >
-        <label>
-          ID do usuário
-          <input
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={userIdId}>ID do usuário</Label>
+          <Input
+            id={userIdId}
             type="text"
             inputMode="numeric"
             autoComplete="off"
+            className="font-mono"
             value={userId}
             aria-invalid={idInvalid}
             onChange={(event) => {
               setUserId(event.target.value);
             }}
           />
-        </label>
-        {idInvalid ? <p className="field-hint">Use de 17 a 20 dígitos.</p> : null}
-        <label>
-          Motivo
-          <textarea
+          {idInvalid ? <p className="text-sm text-destructive">Use de 17 a 20 dígitos.</p> : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={reasonId}>Motivo</Label>
+          <Textarea
+            id={reasonId}
             rows={3}
             maxLength={REASON_MAX}
             value={reason}
@@ -192,65 +211,69 @@ export function Actions() {
               setReason(event.target.value);
             }}
           />
-        </label>
+        </div>
         {current.id === 'timeout' ? (
-          <label>
-            Minutos
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={minutesId}>Minutos</Label>
+            <Input
+              id={minutesId}
               type="text"
               inputMode="numeric"
               autoComplete="off"
+              className="w-40"
               value={minutes}
               aria-invalid={minutesValue === null}
               onChange={(event) => {
                 setMinutes(event.target.value);
               }}
             />
-          </label>
-        ) : null}
-        {current.id === 'timeout' && minutesValue === null ? (
-          <p className="field-hint">Use de 1 a {String(MINUTES_MAX)} minutos.</p>
+            {minutesValue === null ? (
+              <p className="text-sm text-destructive">Use de 1 a {String(MINUTES_MAX)} minutos.</p>
+            ) : null}
+          </div>
         ) : null}
         {current.id === 'ban' ? (
-          <label>
-            Dias de mensagens a apagar
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={daysId}>Dias de mensagens a apagar</Label>
+            <Input
+              id={daysId}
               type="text"
               inputMode="numeric"
               autoComplete="off"
+              className="w-40"
               value={days}
               aria-invalid={daysValue === null}
               onChange={(event) => {
                 setDays(event.target.value);
               }}
             />
-          </label>
+            {daysValue === null ? (
+              <p className="text-sm text-destructive">Use de 0 a {String(DAYS_MAX)} dias.</p>
+            ) : null}
+          </div>
         ) : null}
-        {current.id === 'ban' && daysValue === null ? (
-          <p className="field-hint">Use de 0 a {String(DAYS_MAX)} dias.</p>
-        ) : null}
-        <div className="form-actions">
-          <button
-            ref={submitRef}
-            type="submit"
-            className="button button-primary"
-            disabled={!valid || mutation.isPending}
-          >
+        <div className="flex flex-wrap items-center gap-3">
+          <Button ref={submitRef} type="submit" disabled={!valid || mutation.isPending}>
             {current.submit}
-          </button>
+          </Button>
         </div>
-        <div ref={resultRef} tabIndex={-1} role="status" className="action-result">
+        <div
+          ref={resultRef}
+          tabIndex={-1}
+          role="status"
+          className="flex flex-col gap-1 text-sm outline-none empty:hidden"
+        >
           {result === null ? null : (
             <>
-              <p className="notice">Caso #{result.caseId} registrado.</p>
+              <p className="font-semibold">Caso #{result.caseId} registrado.</p>
               {result.dmFailed === true ? (
-                <p className="muted">Não foi possível enviar mensagem direta.</p>
+                <p className="text-muted-foreground">Não foi possível enviar mensagem direta.</p>
               ) : null}
             </>
           )}
         </div>
         {confirming ? null : (
-          <p role="alert" className="form-error">
+          <p role="alert" className="text-sm font-semibold text-destructive empty:hidden">
             {mutation.isError ? actionErrorText(mutation.error) : null}
           </p>
         )}
@@ -268,7 +291,7 @@ export function Actions() {
           }}
         >
           <p>
-            O usuário <span className="mono">{id}</span> será{' '}
+            O usuário <span className="font-mono">{id}</span> será{' '}
             {current.id === 'ban' ? 'banido' : 'expulso'}. O motivo será registrado no caso.
           </p>
         </ConfirmDialog>

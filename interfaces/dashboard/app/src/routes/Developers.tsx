@@ -1,10 +1,17 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
+import { Button } from '../components/ui/button.tsx';
+import { Card, CardContent } from '../components/ui/card.tsx';
+import { Input } from '../components/ui/input.tsx';
+import { Label } from '../components/ui/label.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
 import { isSnowflake } from '../ids.ts';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 interface DeveloperEntry {
@@ -12,9 +19,12 @@ interface DeveloperEntry {
   addedAt: string;
 }
 
+const column = createDataTableColumns<DeveloperEntry>();
+
 export function Developers() {
   const client = useQueryClient();
   const me = useCurrentMe();
+  const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [userId, setUserId] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
@@ -29,6 +39,7 @@ export function Developers() {
   };
   const add = useOperationMutation<unknown, { userId: string }>('administration.developers.add', {
     onSuccess: () => {
+      notify('Desenvolvedor adicionado.');
       setUserId('');
       refresh();
       inputRef.current?.focus();
@@ -38,6 +49,7 @@ export function Developers() {
     'administration.developers.remove',
     {
       onSuccess: () => {
+        notify('Desenvolvedor removido.');
         setRemoving(null);
         refresh();
       },
@@ -47,66 +59,95 @@ export function Developers() {
   const trimmed = userId.trim();
   const valid = isSnowflake(trimmed);
   const developers = query.data?.developers ?? [];
+  const columns = column.columns([
+    column.accessor('userId', {
+      header: 'Pessoa',
+      cell: ({ row }) => (
+        <span className="break-all whitespace-normal">
+          <span className="font-mono">{row.original.userId}</span>
+          {row.original.userId === me.id ? <strong className="font-semibold"> Você</strong> : null}
+        </span>
+      ),
+    }),
+    column.accessor((entry) => formatDate(entry.addedAt), {
+      id: 'addedAt',
+      header: 'Desde',
+      sortFn: sortBy((entry) => entry.addedAt),
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          onClick={() => {
+            add.reset();
+            remove.reset();
+            setRemoving(row.original.userId);
+          }}
+        >
+          Remover
+        </Button>
+      ),
+    }),
+  ]);
 
   return (
-    <section>
-      <h1>Desenvolvedores</h1>
-      <p className="muted">Desenvolvedores têm acesso total ao painel e podem administrar o bot.</p>
-      <form
-        className="inline-form panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (valid) add.mutate({ userId: trimmed });
-        }}
-      >
-        <label>
-          ID da pessoa
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={20}
-            value={userId}
-            aria-invalid={trimmed !== '' && !valid}
-            onChange={(event) => {
-              setUserId(event.target.value);
+    <section className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Desenvolvedores</h1>
+      <p className="text-sm text-muted-foreground">
+        Desenvolvedores têm acesso total ao painel e podem administrar o bot.
+      </p>
+      <Card>
+        <CardContent>
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (valid) add.mutate({ userId: trimmed });
             }}
-          />
-        </label>
-        <button type="submit" className="button button-primary" disabled={add.isPending || !valid}>
-          Adicionar
-        </button>
-      </form>
-      <p role="alert" className="form-error">
+          >
+            <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+              <Label htmlFor={inputId}>ID da pessoa</Label>
+              <Input
+                id={inputId}
+                ref={inputRef}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={20}
+                value={userId}
+                aria-invalid={trimmed !== '' && !valid}
+                onChange={(event) => {
+                  setUserId(event.target.value);
+                }}
+              />
+            </div>
+            <Button type="submit" disabled={add.isPending || !valid}>
+              Adicionar
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+      <p role="alert" className="text-sm text-destructive empty:hidden">
         {error === null ? null : errorText(error)}
       </p>
-      {query.isPending ? <p className="muted">Carregando…</p> : null}
-      {developers.length === 0 ? null : (
-        <div className="panel">
-          <ul className="domain-rows">
-            {developers.map((entry) => (
-              <li key={entry.userId}>
-                <span>
-                  <span className="mono">{entry.userId}</span>
-                  {entry.userId === me.id ? <strong className="self-mark"> Você</strong> : null}
-                  <span className="muted"> desde {formatDate(entry.addedAt)}</span>
-                </span>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() => {
-                    add.reset();
-                    remove.reset();
-                    setRemoving(entry.userId);
-                  }}
-                >
-                  Remover
-                </button>
-              </li>
-            ))}
-          </ul>
+      {query.isPending ? (
+        <div className="flex flex-col gap-2">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-9 w-full" />
+          ))}
         </div>
+      ) : null}
+      {developers.length === 0 ? null : (
+        <Card>
+          <CardContent>
+            <DataTable columns={columns} data={developers} getRowId={(entry) => entry.userId} />
+          </CardContent>
+        </Card>
       )}
       {removing === null ? null : (
         <ConfirmDialog
@@ -123,8 +164,8 @@ export function Developers() {
           }}
         >
           <p>
-            Remover <span className="mono">{removing}</span> dos desenvolvedores? A pessoa perde o
-            acesso de desenvolvedor ao painel e ao bot.
+            Remover <span className="font-mono break-all">{removing}</span> dos desenvolvedores? A
+            pessoa perde o acesso de desenvolvedor ao painel e ao bot.
           </p>
         </ConfirmDialog>
       )}

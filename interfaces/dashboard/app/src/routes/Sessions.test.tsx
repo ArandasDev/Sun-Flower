@@ -2,13 +2,26 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  noToast,
+  okBody,
+  setupOperations,
+  type OperationCall,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
 const SELF = '111111111111111111';
 const OTHER = '444444444444444444';
-const NAME = (id: string) => `Sessões de ${id}`;
+
+/** The body rows of the sessions table that show `userId`. */
+const rowsOf = (userId: string): HTMLElement[] =>
+  screen
+    .getAllByRole('row')
+    .filter((row) => within(row).queryAllByRole('cell').length > 0)
+    .filter((row) => within(row).queryByText(userId) !== null);
 
 function setup(override?: (call: OperationCall) => ReturnType<typeof okBody> | undefined) {
   let sessions = [
@@ -49,20 +62,41 @@ function setup(override?: (call: OperationCall) => ReturnType<typeof okBody> | u
 }
 
 describe('sessions screen', () => {
-  it('groups sessions by person and marks the own one', async () => {
+  it('lists the sessions with the person and marks the own one', async () => {
     setup();
-    const own = await screen.findByRole('region', { name: NAME(SELF) });
-    const other = screen.getByRole('region', { name: NAME(OTHER) });
-    expect(within(own).getByText('Você')).toBeInTheDocument();
-    expect(within(own).getAllByRole('button', { name: 'Encerrar' })).toHaveLength(1);
-    expect(within(other).queryByText('Você')).toBeNull();
-    expect(within(other).getAllByRole('button', { name: 'Encerrar' })).toHaveLength(2);
+    await screen.findByRole('table');
+    const own = rowsOf(SELF);
+    const other = rowsOf(OTHER);
+    expect(own).toHaveLength(1);
+    expect(within(own[0]!).getByText('Você')).toBeInTheDocument();
+    expect(within(own[0]!).getByRole('button', { name: 'Encerrar' })).toBeInTheDocument();
+    expect(other).toHaveLength(2);
+    for (const row of other) {
+      expect(within(row).queryByText('Você')).toBeNull();
+      expect(within(row).getByRole('button', { name: 'Encerrar' })).toBeInTheDocument();
+    }
+  });
+
+  it('filters the rows by the person searched, and ends the session of a filtered row', async () => {
+    const { calls } = setup();
+    await screen.findByRole('table');
+    await userEvent.type(screen.getByLabelText('Buscar'), OTHER);
+    expect(rowsOf(SELF)).toHaveLength(0);
+    const other = rowsOf(OTHER);
+    expect(other).toHaveLength(2);
+    await userEvent.click(within(other[0]!).getByRole('button', { name: 'Encerrar' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls.find((call) => call.name === 'administration.sessions.revoke')?.input).toEqual({
+      ref: 'bbbbbbbbbbbbbbbb',
+    });
   });
 
   it('asks for confirmation, then sends the ref of one session', async () => {
     const { calls } = setup();
-    const other = await screen.findByRole('region', { name: NAME(OTHER) });
-    await userEvent.click(within(other).getAllByRole('button', { name: 'Encerrar' })[0]!);
+    await screen.findByRole('table');
+    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
     expect(calls.some((call) => call.name === 'administration.sessions.revoke')).toBe(false);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
@@ -70,25 +104,22 @@ describe('sessions screen', () => {
     expect(calls.find((call) => call.name === 'administration.sessions.revoke')?.input).toEqual({
       ref: 'bbbbbbbbbbbbbbbb',
     });
-    await waitFor(() =>
-      expect(
-        within(screen.getByRole('region', { name: NAME(OTHER) })).getAllByRole('button', {
-          name: 'Encerrar',
-        }),
-      ).toHaveLength(1),
-    );
+    expect(await findToast('Sessão revogada.')).toBeInTheDocument();
+    await waitFor(() => expect(rowsOf(OTHER)).toHaveLength(1));
   });
 
   it('asks for confirmation, then sends the user id to end all of a person', async () => {
     const { calls } = setup();
-    const other = await screen.findByRole('region', { name: NAME(OTHER) });
+    await screen.findByRole('table');
     await userEvent.click(
-      within(other).getByRole('button', { name: 'Encerrar todas desta pessoa' }),
+      within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar todas desta pessoa' }),
     );
     expect(calls.some((call) => call.name === 'administration.sessions.revoke-all')).toBe(false);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
-    await waitFor(() => expect(screen.queryByRole('region', { name: NAME(OTHER) })).toBeNull());
+    await waitFor(() => expect(rowsOf(OTHER)).toHaveLength(0));
+    expect(rowsOf(SELF)).toHaveLength(1);
+    expect(await findToast('Sessão revogada.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.sessions.revoke-all')?.input).toEqual(
       { userId: OTHER },
     );
@@ -100,11 +131,12 @@ describe('sessions screen', () => {
         ? errorBody(404, 'not_found', 'Sessão não encontrada.')
         : undefined,
     );
-    const other = await screen.findByRole('region', { name: NAME(OTHER) });
-    await userEvent.click(within(other).getAllByRole('button', { name: 'Encerrar' })[0]!);
+    await screen.findByRole('table');
+    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     expect(await within(dialog).findByText('Sessão não encontrada.')).toBeInTheDocument();
+    expect(noToast()).toBe(true);
   });
 
   it('reloads the list even when ending a session fails', async () => {
@@ -113,14 +145,21 @@ describe('sessions screen', () => {
         ? errorBody(404, 'not_found', 'Sessão não encontrada.')
         : undefined,
     );
-    const other = await screen.findByRole('region', { name: NAME(OTHER) });
-    await userEvent.click(within(other).getAllByRole('button', { name: 'Encerrar' })[0]!);
+    await screen.findByRole('table');
+    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     await within(dialog).findByText('Sessão não encontrada.');
     await waitFor(() =>
       expect(calls.filter((call) => call.name === 'administration.sessions.list')).toHaveLength(2),
     );
+  });
+
+  it('shows the empty text when there is no session', async () => {
+    setup((call) =>
+      call.name === 'administration.sessions.list' ? okBody({ sessions: [] }) : undefined,
+    );
+    expect(await screen.findByText('Nenhuma sessão aberta.')).toBeInTheDocument();
   });
 
   it('shows "Sem permissão." on a 403', async () => {

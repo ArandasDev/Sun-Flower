@@ -19,6 +19,19 @@ const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
+/** Typing fields keep Ctrl/Cmd+B for themselves (bold, browser shortcuts). */
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable ||
+    // jsdom has no isContentEditable; the attribute check covers it there.
+    target.closest('[contenteditable]:not([contenteditable="false"])') !== null
+  );
+}
+
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
   open: boolean;
@@ -102,6 +115,7 @@ function SidebarProvider({
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditable(event.target)) return;
       if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         toggleSidebar();

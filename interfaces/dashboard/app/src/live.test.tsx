@@ -167,7 +167,7 @@ describe('connection', () => {
           await waitFor(() => expect(fetchMock.mock.calls.length).toBe(calls + 1));
           await new Promise((resolve) => setTimeout(resolve, 0));
           expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
-          expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: 'Conta de Girassol' })).toBeInTheDocument();
           expect(screen.queryByText('Tentar de novo')).toBeNull();
           expect(clock.pendingDelays()).toHaveLength(1);
         }
@@ -196,12 +196,12 @@ describe('connection', () => {
         : me('member'),
     );
     const { client } = renderApp('/', clock);
-    await screen.findByRole('button', { name: 'Girassol' });
+    await screen.findByRole('button', { name: 'Conta de Girassol' });
     failing = true;
     await act(async () => {
       await client.refetchQueries({ queryKey: ['me'] });
     });
-    expect(screen.getByRole('button', { name: 'Girassol' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conta de Girassol' })).toBeInTheDocument();
     expect(screen.queryByText('Tentar de novo')).toBeNull();
   });
 
@@ -429,7 +429,7 @@ describe('presence list', () => {
     // Only this seed opens it: the sidebar wrapper is an unnamed `group` too.
     expect(item).toHaveClass('group/seed');
     expect(tip).toHaveClass('group-hover/seed:block', 'group-focus-visible/seed:block');
-    expect(tip?.className).not.toMatch(/(^|s)group-(hover|focus-visible):/);
+    expect(tip?.className).not.toMatch(/(^|\s)group-(hover|focus-visible):/);
   });
 
   it('says so when nobody else is online', async () => {

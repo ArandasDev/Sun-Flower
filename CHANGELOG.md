@@ -16,20 +16,32 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - cabeçalho com o caminho "Você está em" e o indicador de conexão ("Conectando…", "Ao vivo" e "Reconectando…"), no lugar do aviso flutuante;
   - menu da conta com a escolha de tema e o botão Sair;
   - login, sem acesso, carregando e erro como um cartão centralizado.
+- Painel, melhorias de uso:
+  - toasts de confirmação depois de uma ação que deu certo, com o `Toast` do Radix: somem em 4 s, podem ser fechados e são anunciados a leitores de tela. Os textos são "Caso revertido." / "Caso descartado.", o resultado da ação em Ações, "Domínio adicionado." / "Domínio removido.", "Configuração salva.", "Permissão concedida." / "Permissão removida.", "Desenvolvedor adicionado." / "Desenvolvedor removido.", "Módulo ligado." / "Módulo desligado." e "Sessão revogada.". Erros continuam na tela, perto do que falhou;
+  - tabelas com TanStack Table em Logs, Sessões, Domínios, Desenvolvedores, Permissões e Módulos: campo "Buscar" que ignora maiúsculas e acentos, ordenação pelo cabeçalho (crescente, decrescente e a ordem do servidor, com `aria-sort`) e "Nenhum resultado para a busca." quando a busca não acha nada. Sessões passa a ser uma tabela única, com a pessoa numa coluna. Domínios mantém uma tabela por lista, e Permissões, uma por permissão. Casos não muda.
 
 ### Changed
 
 - O item de menu `/moderacao` do painel passa a se chamar "Configuração", dentro do grupo Moderação.
-- As telas restantes do painel ainda usam o CSS antigo, em uma camada legada, até a parte 2 do novo visual.
-- Os toasts do painel usarão o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
+- Painel, novo visual (parte 2 de 2), telas em componentes do shadcn/ui:
+  - confirmações como `AlertDialog` e detalhe do caso em um `Sheet` lateral;
+  - módulos ligados e desligados com um `Switch` cujo nome acessível é o nome do módulo (desligar continua pedindo confirmação);
+  - tabela de Logs com o nível num `Badge` e quebra de valores longos, sem cortá-los;
+  - `Skeleton` enquanto as listas carregam.
+- Os toasts do painel usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
+
+### Removed
+
+- O CSS escrito à mão do painel (`styles.css`) e a camada legada: nenhuma tela depende mais dele.
+
+### Fixed
+
+- Painel, acessibilidade: o anel de foco fica visível no tema claro e nos botões amber (amber-700, 2 px, com folga na cor do fundo), o `Switch` desligado ganha contraste contra o fundo e o botão do menu da conta passa a se chamar "Conta de {nome}" para leitores de tela.
+- Documentação da `v0.3.0` (ROADMAP, README e CHANGELOG): o teste manual do painel no servidor real não foi feito antes da release, ao contrário do que ela dizia. Os critérios do painel voltam a ficar abertos até esse teste.
 
 ### Security
 
 - O `index.html` do painel é entregue com um nonce de estilo novo a cada requisição (`<meta name="csp-nonce">` e `style-src 'self' 'nonce-…'`, só nessa resposta), com `Cache-Control: no-store`. `/` e `/index.html` não são mais servidos direto pelo plugin de arquivos estáticos. A CSP não usa `'unsafe-inline'`.
-
-### Fixed
-
-- Documentação da `v0.3.0` (ROADMAP, README e CHANGELOG): o teste manual do painel no servidor real não foi feito antes da release, ao contrário do que ela dizia. Os critérios do painel voltam a ficar abertos até esse teste.
 
 ## [0.3.0] - 2026-11-26
 

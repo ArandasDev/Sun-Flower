@@ -1,6 +1,16 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
-
-const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]';
+import { AlertDialog as AlertDialogPrimitive } from 'radix-ui';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogTitle,
+} from './ui/alert-dialog.tsx';
+import { Button } from './ui/button.tsx';
 
 interface ConfirmDialogProps {
   title: string;
@@ -17,8 +27,9 @@ interface ConfirmDialogProps {
 }
 
 /**
- * Modal confirmation: focus moves to the cancel button, Tab stays inside, Escape and the
- * backdrop cancel, and focus returns to what had it before.
+ * Modal confirmation on the Radix AlertDialog, shown while mounted: focus starts on Cancelar,
+ * Tab stays inside, Escape and a click outside cancel, and focus returns to the opener (or to
+ * `returnFocusRef`). Opened from inside a Sheet, Escape closes only this dialog.
  */
 export function ConfirmDialog({
   title,
@@ -30,26 +41,10 @@ export function ConfirmDialog({
   returnFocusRef,
   children,
 }: ConfirmDialogProps) {
-  const titleId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const cancelCallback = useRef(onCancel);
-  const pendingRef = useRef(pending);
-
-  useEffect(() => {
-    cancelCallback.current = onCancel;
-    pendingRef.current = pending;
-  }, [onCancel, pending]);
-
-  useEffect(() => {
-    const previous = document.activeElement;
-    cancelRef.current?.focus();
-    return () => {
-      // A caller whose opener is about to disappear names where focus goes instead.
-      const target = returnFocusRef?.current ?? previous;
-      if (target instanceof HTMLElement && target.isConnected) target.focus();
-    };
-  }, [returnFocusRef]);
+  // There is no Radix Trigger (the callers mount the dialog to open it), so the element that had
+  // focus when it opened is kept here to give focus back on close.
+  const [opener] = useState(() => document.activeElement);
 
   // A confirm button that turns disabled drops focus; after a failed attempt, bring it back.
   const wasPending = useRef(false);
@@ -60,77 +55,57 @@ export function ConfirmDialog({
     wasPending.current = pending;
   }, [pending, error]);
 
-  // On the document, so the keys keep working even when focus is on the page body.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        if (!pendingRef.current) cancelCallback.current();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const items = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [];
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (first === undefined || last === undefined) return;
-      const active = document.activeElement;
-      const inside = active instanceof Node && panelRef.current?.contains(active) === true;
-      if (!inside) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && active === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
+  const cancel = (): void => {
+    if (!pending) onCancel();
+  };
 
   return (
-    <div
-      className="dialog-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) onCancel();
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) cancel();
       }}
     >
-      <div
-        ref={panelRef}
-        className="dialog panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <h2 id={titleId}>{title}</h2>
-        {children}
-        <p className="dialog-error" role="alert">
-          {error}
-        </p>
-        <div className="dialog-actions">
-          <button
-            ref={cancelRef}
-            type="button"
-            className="button button-quiet"
-            disabled={pending}
-            onClick={onCancel}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="button button-primary"
-            disabled={pending}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+      <AlertDialogPortal>
+        <AlertDialogOverlay onClick={cancel} />
+        <AlertDialogPrimitive.Content
+          data-slot="alert-dialog-content"
+          // The confirmations keep the dialog role the screens and their tests rely on.
+          role="dialog"
+          className="fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg"
+          {...(children === undefined ? { 'aria-describedby': undefined } : {})}
+          onEscapeKeyDown={(event) => {
+            if (pending) event.preventDefault();
+          }}
+          onCloseAutoFocus={(event) => {
+            // A caller whose opener is about to disappear names where focus goes instead.
+            event.preventDefault();
+            const target = returnFocusRef?.current ?? opener;
+            if (target instanceof HTMLElement && target.isConnected) target.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+          </AlertDialogHeader>
+          {children === undefined ? null : (
+            <AlertDialogDescription asChild>
+              <div className="flex flex-col gap-3 text-sm text-foreground">{children}</div>
+            </AlertDialogDescription>
+          )}
+          <p role="alert" className="text-sm font-semibold text-destructive empty:hidden">
+            {error}
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel ref={cancelRef} disabled={pending}>
+              Cancelar
+            </AlertDialogCancel>
+            {/* A plain button, not AlertDialogAction: the dialog closes only after success. */}
+            <Button type="button" variant="destructive" disabled={pending} onClick={onConfirm}>
+              {confirmLabel}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPrimitive.Content>
+      </AlertDialogPortal>
+    </AlertDialog>
   );
 }
