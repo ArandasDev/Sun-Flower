@@ -1,4 +1,4 @@
-import { EllipsisIcon } from 'lucide-react';
+import { EllipsisIcon, Trash2 } from 'lucide-react';
 import { Button } from './ui/button.tsx';
 import {
   DropdownMenu,
@@ -19,6 +19,13 @@ interface RowActionsProps {
   items: RowAction[];
 }
 
+/**
+ * Red text on the highlighted item's `bg-accent` falls below 4.5:1 (3.9:1 in dark), so a
+ * destructive item turns to the regular text color while highlighted and keeps its red icon.
+ */
+const DESTRUCTIVE_ITEM =
+  'text-destructive focus:text-accent-foreground data-[highlighted]:text-accent-foreground';
+
 /** A per-row actions menu; the trigger is named so each row's menu is reachable by name. */
 export function RowActions({ label, items }: RowActionsProps) {
   return (
@@ -33,9 +40,10 @@ export function RowActions({ label, items }: RowActionsProps) {
           <DropdownMenuItem
             key={item.label}
             disabled={item.disabled}
-            className={item.destructive ? 'text-destructive focus:text-destructive' : undefined}
+            className={item.destructive ? DESTRUCTIVE_ITEM : undefined}
             onSelect={item.onSelect}
           >
+            {item.destructive ? <Trash2 aria-hidden="true" className="text-destructive" /> : null}
             {item.label}
           </DropdownMenuItem>
         ))}

@@ -1,12 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { AddDialog } from '../components/AddDialog.tsx';
 import { DataTable, DataTableSearch, createDataTableColumns } from '../components/DataTable.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { Alert, AlertDescription } from '../components/ui/alert.tsx';
-import { Button } from '../components/ui/button.tsx';
+import { RemoveButton } from '../components/RemoveButton.tsx';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
@@ -76,20 +75,13 @@ function DomainList({ list, title, dialogTitle }: DomainListProps) {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
+        <RemoveButton
           aria-describedby={domainId(row.index)}
           disabled={remove.isPending}
           onClick={() => {
             remove.mutate({ domain: row.original.domain });
           }}
-        >
-          <Trash2 aria-hidden="true" />
-          Remover
-        </Button>
+        />
       ),
     }),
   ]);

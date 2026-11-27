@@ -1,5 +1,4 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Trash2 } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { AddDialog } from '../components/AddDialog.tsx';
 import { formatDate } from '../components/CaseDetail.tsx';
@@ -13,7 +12,7 @@ import {
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { Alert, AlertDescription } from '../components/ui/alert.tsx';
-import { Button } from '../components/ui/button.tsx';
+import { RemoveButton } from '../components/RemoveButton.tsx';
 import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
@@ -90,20 +89,12 @@ export function Developers() {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-destructive hover:text-destructive"
+        <RemoveButton
           onClick={() => {
-            add.reset();
             remove.reset();
             setRemoving(row.original.userId);
           }}
-        >
-          <Trash2 aria-hidden="true" />
-          Remover
-        </Button>
+        />
       ),
     }),
   ]);
