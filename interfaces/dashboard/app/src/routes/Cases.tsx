@@ -161,7 +161,7 @@ export function Cases() {
             <li key={row.id}>
               <button
                 type="button"
-                className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-[current=true]:border-primary"
+                className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-[current=true]:border-primary"
                 aria-current={row.id === selected ? 'true' : undefined}
                 onClick={() => {
                   setParam('caso', String(row.id), true);

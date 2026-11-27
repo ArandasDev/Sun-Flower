@@ -62,7 +62,7 @@ export function renderApp(path: string, clock?: LiveClock) {
 
 /** Opens the account menu (named after the signed-in person, "Girassol") and picks "Sair". */
 export async function clickSignOut(): Promise<void> {
-  await userEvent.click(await screen.findByRole('button', { name: 'Girassol' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Conta de Girassol' }));
   await userEvent.click(await screen.findByRole('menuitem', { name: 'Sair' }));
 }
 

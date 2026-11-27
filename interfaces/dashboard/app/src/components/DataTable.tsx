@@ -58,7 +58,8 @@ function matchesSearch<T extends RowData>(
   columnId: string,
   term: string,
 ): boolean {
-  return normalizeSearch(cellText(row.getValue(columnId))).includes(normalizeSearch(term));
+  // Surrounding spaces are not part of the term; a blank term filters nothing.
+  return normalizeSearch(cellText(row.getValue(columnId))).includes(normalizeSearch(term.trim()));
 }
 
 function compareText<T extends RowData>(
@@ -184,7 +185,7 @@ export function DataTable<T extends RowData>({
                   >
                     <button
                       type="button"
-                      className="-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 font-medium outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      className="-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                       onClick={() => {
                         column.toggleSorting();
                       }}

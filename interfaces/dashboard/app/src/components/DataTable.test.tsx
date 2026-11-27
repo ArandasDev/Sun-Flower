@@ -51,6 +51,17 @@ describe('DataTable', () => {
     expect(names()).toEqual(['Beta', 'Alfa']);
   });
 
+  it('ignores spaces around the term, and a blank term filters nothing', async () => {
+    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    const search = screen.getByLabelText('Buscar');
+    await userEvent.type(search, '  dominio  ');
+    expect(names()).toEqual(['Domínio']);
+    await userEvent.clear(search);
+    await userEvent.type(search, '   ');
+    expect(names()).toEqual(['Beta', 'Domínio', 'Alfa']);
+    expect(screen.queryByText('Nenhum resultado para a busca.')).toBeNull();
+  });
+
   it('shows its own text when the search finds nothing, not the empty text', async () => {
     render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'zzz');

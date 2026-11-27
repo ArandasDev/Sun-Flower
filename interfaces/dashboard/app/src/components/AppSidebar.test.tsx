@@ -192,6 +192,45 @@ describe('collapsing', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Alternar menu' }));
     expect(sidebar).toHaveAttribute('data-state', 'collapsed');
   });
+  it('toggles on Ctrl+B, but not while typing in a field', async () => {
+    signIn('member');
+    const { container } = renderApp('/');
+    await screen.findByRole('link', { name: 'Meu perfil' });
+    const sidebar = container.querySelector('[data-slot="sidebar"]');
+    const field = document.createElement('input');
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    document.body.append(field, editor);
+    try {
+      for (const target of [field, editor]) {
+        const press = new KeyboardEvent('keydown', {
+          key: 'b',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        });
+        act(() => {
+          target.dispatchEvent(press);
+        });
+        expect(press.defaultPrevented).toBe(false);
+        expect(sidebar).toHaveAttribute('data-state', 'expanded');
+      }
+      const press = new KeyboardEvent('keydown', {
+        key: 'b',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        document.body.dispatchEvent(press);
+      });
+      expect(press.defaultPrevented).toBe(true);
+      expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+    } finally {
+      field.remove();
+      editor.remove();
+    }
+  });
 });
 
 describe('phone drawer', () => {
@@ -214,7 +253,7 @@ describe('account menu', () => {
   it('puts the dark class on <html> when "Escuro" is chosen', async () => {
     signIn('member');
     renderApp('/');
-    await userEvent.click(await screen.findByRole('button', { name: 'Girassol' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Conta de Girassol' }));
     await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Escuro' }));
     expect(document.documentElement).toHaveClass('dark');
     expect(localStorage.getItem('sunflower-theme')).toBe('dark');

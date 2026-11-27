@@ -68,7 +68,13 @@ export function Sessions() {
         <span id={`${personId}-${row.id}`} className="font-mono break-all whitespace-normal">
           {row.original.userId}
           {row.original.userId === me.id ? (
-            <strong className="font-sans font-semibold"> Você</strong>
+            <>
+              {' '}
+              {/* The id may break anywhere; the marker stays one word. */}
+              <strong className="font-sans font-semibold break-normal whitespace-nowrap">
+                Você
+              </strong>
+            </>
           ) : null}
         </span>
       ),
