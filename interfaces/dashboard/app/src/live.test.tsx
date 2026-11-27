@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock, FakeWebSocket, lastSocket } from './fake-websocket.ts';
 import { makeCoalescer, screenFor } from './live.ts';
-import { me, renderApp, stubFetch, type FakeResponse } from './test-utils.tsx';
+import { clickSignOut, me, renderApp, stubFetch, type FakeResponse } from './test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -54,9 +54,9 @@ describe('connection', () => {
     expect(lastSocket().url).toBe(`ws://${location.host}/api/live`);
   });
 
-  it('shows no banner while connected, and "Reconectando…" after a drop', async () => {
+  it('shows "Ao vivo" while connected, and "Reconectando…" after a drop', async () => {
     await start('member');
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
     drop();
     expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
   });
@@ -100,7 +100,7 @@ describe('connection', () => {
       clock.advance(5_000);
     });
     await waitFor(() => expect(meCalls()).toBe(before + 1));
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
     drop();
     expect(clock.pendingDelays()).toEqual([1_000]);
   });
@@ -167,7 +167,7 @@ describe('connection', () => {
           await waitFor(() => expect(fetchMock.mock.calls.length).toBe(calls + 1));
           await new Promise((resolve) => setTimeout(resolve, 0));
           expect(screen.getByRole('status')).toHaveTextContent('Reconectando…');
-          expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: 'Conta de Girassol' })).toBeInTheDocument();
           expect(screen.queryByText('Tentar de novo')).toBeNull();
           expect(clock.pendingDelays()).toHaveLength(1);
         }
@@ -196,16 +196,16 @@ describe('connection', () => {
         : me('member'),
     );
     const { client } = renderApp('/', clock);
-    await screen.findByRole('button', { name: 'Sair' });
+    await screen.findByRole('button', { name: 'Conta de Girassol' });
     failing = true;
     await act(async () => {
       await client.refetchQueries({ queryKey: ['me'] });
     });
-    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Conta de Girassol' })).toBeInTheDocument();
     expect(screen.queryByText('Tentar de novo')).toBeNull();
   });
 
-  it('keeps the status region in the accessibility tree while empty', async () => {
+  it('keeps the status region in the accessibility tree while connected', async () => {
     await start('member');
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
@@ -242,7 +242,8 @@ describe('connection', () => {
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
     expect(clock.pendingDelays()).toEqual([]);
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
     expect(client.getQueryData(['me'])).toBeUndefined();
   });
 
@@ -255,7 +256,8 @@ describe('connection', () => {
     expect(await screen.findByRole('link', { name: 'Entrar com Discord' })).toBeInTheDocument();
     expect(clock.pendingDelays()).toEqual([]);
     expect(FakeWebSocket.instances).toHaveLength(1);
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('logging out clears the whole cache', async () => {
@@ -263,9 +265,10 @@ describe('connection', () => {
     const { client } = renderApp('/', clock);
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
     client.setQueryData(['config', 'moderation'], { a: 1 });
-    await userEvent.click(await screen.findByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     await screen.findByRole('link', { name: 'Entrar com Discord' });
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('the login screen clears the cache when it mounts', async () => {
@@ -288,13 +291,14 @@ describe('connection', () => {
     const { client } = renderApp('/visao-geral', clock);
     client.setQueryData(['config', 'moderation'], { a: 1 });
     await screen.findByRole('link', { name: 'Entrar com Discord' });
-    expect(client.getQueryData(['config', 'moderation'])).toBeUndefined();
+    // The login screen can render a tick before the cache is cleared, so wait for it.
+    await waitFor(() => expect(client.getQueryData(['config', 'moderation'])).toBeUndefined());
   });
 
   it('closes the socket when leaving', async () => {
     await start('member');
     const socket = lastSocket();
-    await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    await clickSignOut();
     await screen.findByRole('link', { name: 'Entrar com Discord' });
     expect(socket.readyState).toBe(3);
   });
@@ -338,7 +342,7 @@ describe('messages', () => {
       lastSocket().receive('presence', { users: 'nope' });
       lastSocket().receive('mystery', {});
     });
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(screen.getByRole('status')).toHaveTextContent('Ao vivo');
   });
 });
 
@@ -424,7 +428,12 @@ describe('presence list', () => {
     });
     const item = screen.getByLabelText('Ana — Visão geral');
     expect(item).toHaveAttribute('tabindex', '0');
-    expect(item.querySelector('[role="tooltip"]')).toHaveTextContent('Ana — Visão geral');
+    const tip = item.querySelector('[role="tooltip"]');
+    expect(tip).toHaveTextContent('Ana — Visão geral');
+    // Only this seed opens it: the sidebar wrapper is an unnamed `group` too.
+    expect(item).toHaveClass('group/seed');
+    expect(tip).toHaveClass('group-hover/seed:block', 'group-focus-visible/seed:block');
+    expect(tip?.className).not.toMatch(/(^|\s)group-(hover|focus-visible):/);
   });
 
   it('says so when nobody else is online', async () => {

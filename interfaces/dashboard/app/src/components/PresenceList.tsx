@@ -12,6 +12,8 @@ const MAX_CENTER_RADIUS = SIZE / 2 - AVATAR / 2 - 4;
 const SPACING = 14;
 const MAX_SEEDS = 24;
 const SPRING = { type: 'spring', stiffness: 320, damping: 22 } as const;
+const SEED_FACE =
+  'block size-7 rounded-full bg-primary object-cover text-center text-sm leading-7 font-bold text-primary-foreground';
 
 /** The smallest free slot for each person; people keep their slot while they stay online. */
 function assignSlots(slots: Map<string, number>, users: readonly PresenceUser[]): void {
@@ -34,7 +36,7 @@ function Seed({ user, slot, spacing }: { user: PresenceUser; slot: number; spaci
   const label = `${user.name} — ${screenLabel(user.screen)}`;
   return (
     <motion.li
-      className="seed"
+      className="group/seed absolute top-[calc(50%-14px)] left-[calc(50%-14px)] size-7 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       tabIndex={0}
       aria-label={label}
       initial={{ scale: 0, x, y }}
@@ -43,13 +45,17 @@ function Seed({ user, slot, spacing }: { user: PresenceUser; slot: number; spaci
       transition={SPRING}
     >
       {user.avatarUrl === null ? (
-        <span className="seed-initial" aria-hidden="true">
+        <span className={SEED_FACE} aria-hidden="true">
           {[...user.name][0]?.toUpperCase() ?? '?'}
         </span>
       ) : (
-        <img className="seed-avatar" src={user.avatarUrl} alt="" width={AVATAR} height={AVATAR} />
+        <img className={SEED_FACE} src={user.avatarUrl} alt="" width={AVATAR} height={AVATAR} />
       )}
-      <span role="tooltip" className="seed-tip" aria-hidden="true">
+      <span
+        role="tooltip"
+        aria-hidden="true"
+        className="pointer-events-none absolute top-[calc(100%+6px)] left-1/2 z-50 hidden -translate-x-1/2 rounded-md border bg-popover px-2 py-0.5 text-sm whitespace-nowrap text-popover-foreground group-hover/seed:block group-focus-visible/seed:block"
+      >
         {label}
       </span>
     </motion.li>
@@ -72,12 +78,15 @@ export function PresenceList() {
   const spacing = Math.min(SPACING, MAX_CENTER_RADIUS / Math.sqrt(highest));
   const hidden = others.length - shown.length;
   return (
-    <div className="presence">
+    <div className="flex flex-col items-center gap-2">
       {others.length === 0 ? (
-        <p className="muted">Só você por aqui agora.</p>
+        <p className="m-0 text-sm text-muted-foreground">Só você por aqui agora.</p>
       ) : (
         <>
-          <ul className="seed-head" aria-label="Quem está online">
+          <ul
+            className="relative m-0 size-[136px] list-none rounded-full border-2 border-primary p-0"
+            aria-label="Quem está online"
+          >
             <AnimatePresence>
               {shown.map((user) => (
                 <Seed
@@ -89,7 +98,9 @@ export function PresenceList() {
               ))}
             </AnimatePresence>
           </ul>
-          {hidden > 0 ? <p className="muted">{`e mais ${hidden}`}</p> : null}
+          {hidden > 0 ? (
+            <p className="m-0 text-sm text-muted-foreground">{`e mais ${hidden}`}</p>
+          ) : null}
         </>
       )}
     </div>

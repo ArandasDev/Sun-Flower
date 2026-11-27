@@ -1,6 +1,6 @@
 # Spec — Painel: visual com Tailwind e shadcn/ui
 
-**Status:** Aprovada em 2026-11-26
+**Status:** Implementada em 2026-11-26
 **Fase:** [ROADMAP — Fase 3](../ROADMAP.md#fase-3--painel-administrativo), antes do teste manual do painel
 **Decisões aplicadas:** [0019](../decisions/0019-panel-stack.md), [0021](../decisions/0021-panel-hosting.md), [0025](../decisions/0025-panel-ui-kit.md)
 
@@ -43,6 +43,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 - **Celular** (menos de 768 px): o menu vira uma gaveta (`Sheet`) aberta pelo botão do cabeçalho, que se fecha ao escolher uma tela.
 - **Login, sem acesso e erro:** um cartão centralizado, sem o menu lateral.
 
+> **Atualização (2026-11-26):** o indicador de conexão ganha um terceiro estado, "Conectando…", mostrado enquanto a primeira conexão ainda não foi feita. "Ao vivo" e "Reconectando…" seguem como descritos.
+
 ## 4. Cores e tema
 
 - **Tokens:** as cores são os tokens do shadcn (`--background`, `--card`, `--primary` e outros), em variáveis CSS, nas variantes clara e escura.
@@ -81,6 +83,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 ## 6. Melhorias de uso
 
 ### 6.1. Notificações (toasts)
+
+> **Atualização (2026-11-26):** os toasts usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce. Ver a [0025](../decisions/0025-panel-ui-kit.md).
 
 - **Onde:** um `Toaster` do Sonner no canto inferior direito, ou no topo no celular. Ele mostra uma confirmação curta depois de uma ação que deu certo:
 
@@ -122,6 +126,8 @@ Trocar o visual do painel pelo padrão de painéis administrativos, com Tailwind
 - **`style="…"` via JavaScript:** os componentes podem definir estilo pelo JavaScript, como o React faz. Isso não é bloqueado pela CSP. Continua proibido gerar `<style>` ou atributos `style` no HTML entregue.
 
 ## 8. Dependências (só no app)
+
+> **Atualização (2026-11-26):** o `sonner` sai da lista. Os toasts usam o `Toast` do Radix, porque o Sonner 2.0.8 injeta um `<style>` sem nonce. Ver a [0025](../decisions/0025-panel-ui-kit.md).
 
 - `tailwindcss` e `@tailwindcss/vite`;
 - os pacotes do Radix usados pelos componentes copiados (`radix-ui` ou `@radix-ui/react-*`);
@@ -181,3 +187,22 @@ Sai o `styles.css` escrito à mão. O `motion` continua. A versão de cada depen
 - Os toasts da seção 6.1 e a busca e ordenação da seção 6.2 funcionam.
 - Nenhuma violação de CSP no console, sem `'unsafe-inline'`.
 - `npm run check` passa, com os testes atuais e os novos.
+
+## 13. Nota de 2026-11-26: desvios decididos na implementação
+
+- O indicador de conexão ganhou o estado "Conectando…", antes do primeiro "Ao vivo".
+- O nome acessível do `Switch` de módulo é o nome do módulo, não "Ligar" ou "Desligar".
+- Sessões é uma tabela única, com a pessoa numa coluna.
+- Permissões mantém uma tabela por permissão.
+- Os booleanos ainda não salvos em Configuração usam `Switch`.
+- Os toasts usam o `Toast` do Radix, não o Sonner, porque o Sonner injeta um `<style>` sem nonce.
+- O `ConfirmDialog` usa o `AlertDialog` do Radix, mas mantém `role="dialog"`, não `alertdialog`, como antes da mudança.
+- Em Sessões, os textos de criação e de último uso, antes juntos numa frase, viram as colunas "Criada em" e "Último uso".
+- O "Carregando…" visível vira um texto só para leitores de tela (`sr-only`), ao lado de um `Skeleton`.
+- Domínios mantém uma tabela por lista.
+- Em Sessões, o botão "Encerrar todas desta pessoa" aparece em cada linha daquela pessoa.
+- O botão do menu da conta tem o nome acessível "Conta de {nome}", e o nome continua visível.
+- O `--ring` no tema claro é amber-700, não amber-500: o anel de foco precisa de 3:1 contra o fundo (WCAG 1.4.11), e o amber-500 dá cerca de 2,1:1 no branco. Os anéis têm 2 px, sem transparência, com 2 px de folga na cor do fundo, para aparecerem também nos botões amber. No escuro, o `--ring` continua amber-400.
+- O `Switch` desligado usa a cor do `--muted-foreground` (zinc-600 no claro e zinc-400 no escuro), não a do `--input`, para passar de 3:1 contra o fundo.
+
+**Conferência no navegador:** o build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas foram conferidas em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP. O teste manual no servidor real continua pendente.

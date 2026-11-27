@@ -2,7 +2,16 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { errorBody, me, okBody, renderApp, setupOperations, stubFetch } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  me,
+  noToast,
+  okBody,
+  renderApp,
+  setupOperations,
+  stubFetch,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,6 +30,11 @@ function answer() {
 
 function setup(permissions = ALL, operation = answer) {
   return setupOperations(permissions, operation, '/acoes', new FakeClock());
+}
+
+/** The result text also appears in a toast, so the screen's own copy is looked up inside <main>. */
+function inScreen(text: string) {
+  return within(screen.getByRole('main')).findByText(text);
 }
 
 async function fill(reason = 'Motivo de teste') {
@@ -44,7 +58,8 @@ describe('actions screen', () => {
     const { calls } = setup();
     await fill();
     await userEvent.click(screen.getByRole('button', { name: 'Enviar aviso' }));
-    expect(await screen.findByText('Caso #9 registrado.')).toBeInTheDocument();
+    expect(await inScreen('Caso #9 registrado.')).toBeInTheDocument();
+    expect(await findToast('Caso #9 registrado.')).toBeInTheDocument();
     expect(calls).toEqual([
       { name: 'moderation.actions.warn', input: { userId: TARGET, reason: 'Motivo de teste' } },
     ]);
@@ -54,7 +69,7 @@ describe('actions screen', () => {
     setup();
     await fill();
     await userEvent.click(screen.getByRole('button', { name: 'Enviar aviso' }));
-    const status = await screen.findByText('Caso #9 registrado.');
+    const status = await inScreen('Caso #9 registrado.');
     await waitFor(() => expect(status.parentElement).toHaveFocus());
   });
 
@@ -62,7 +77,7 @@ describe('actions screen', () => {
     setup(ALL, () => okBody({ caseId: 3, dmFailed: true }));
     await fill();
     await userEvent.click(screen.getByRole('button', { name: 'Enviar aviso' }));
-    expect(await screen.findByText('Caso #3 registrado.')).toBeInTheDocument();
+    expect(await inScreen('Caso #3 registrado.')).toBeInTheDocument();
     expect(screen.getByText('Não foi possível enviar mensagem direta.')).toBeInTheDocument();
   });
 
@@ -73,7 +88,7 @@ describe('actions screen', () => {
     await userEvent.clear(screen.getByLabelText('Minutos'));
     await userEvent.type(screen.getByLabelText('Minutos'), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar silêncio' }));
-    await screen.findByText('Caso #9 registrado.');
+    await inScreen('Caso #9 registrado.');
     expect(calls[0]).toEqual({
       name: 'moderation.actions.timeout',
       input: { userId: TARGET, reason: 'Motivo de teste', minutes: 30 },
@@ -89,7 +104,7 @@ describe('actions screen', () => {
     expect(calls).toHaveLength(0);
     const dialog = screen.getByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Banir' }));
-    expect(await screen.findByText('Caso #9 registrado.')).toBeInTheDocument();
+    expect(await inScreen('Caso #9 registrado.')).toBeInTheDocument();
     expect(calls).toEqual([
       {
         name: 'moderation.actions.ban',
@@ -127,6 +142,7 @@ describe('actions screen', () => {
         'Sem permissão.',
       ),
     );
+    expect(noToast()).toBe(true);
   });
 
   it('goes to the login when an action answers 401', async () => {

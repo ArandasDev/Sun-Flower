@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { CaseDetail, formatDate, type CaseSummary } from '../components/CaseDetail.tsx';
+import { Badge } from '../components/ui/badge.tsx';
+import { Button } from '../components/ui/button.tsx';
+import { Input } from '../components/ui/input.tsx';
+import { Label } from '../components/ui/label.tsx';
+import { NativeSelect, NativeSelectOption } from '../components/ui/native-select.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
 import {
   caseActionLabel,
   caseKindLabel,
@@ -39,6 +45,9 @@ export function Cases() {
     setTargetText(target ?? '');
   }
   const targetInvalid = targetText !== '' && !isSnowflake(targetText);
+  const statusId = useId();
+  const ruleId = useId();
+  const targetId = useId();
 
   const filters = {
     ...(status === undefined ? {} : { status }),
@@ -63,107 +72,126 @@ export function Cases() {
   const rows = query.data?.pages.flatMap((page) => page.cases) ?? [];
 
   return (
-    <section className="cases-layout">
-      <div className="cases-list">
-        <h1>Casos</h1>
-        <form
-          className="panel filters"
-          onSubmit={(event) => {
-            event.preventDefault();
-          }}
-        >
-          <label>
-            Situação
-            <select
-              value={status ?? ''}
-              onChange={(event) => {
-                setParam('situacao', event.target.value);
-              }}
-            >
-              <option value="">Todas</option>
-              {STATUSES.map((item) => (
-                <option key={item} value={item}>
-                  {caseStatusLabel(item)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Regra
-            <select
-              value={rule ?? ''}
-              onChange={(event) => {
-                setParam('regra', event.target.value);
-              }}
-            >
-              <option value="">Todas</option>
-              {RULES.map((item) => (
-                <option key={item} value={item}>
-                  {caseRuleLabel(item)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            ID do alvo
-            <input
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={targetText}
-              aria-invalid={targetInvalid}
-              onChange={(event) => {
-                const text = event.target.value.trim();
-                setTargetText(text);
-                if (text === '') setParam('alvo', null);
-                else if (isSnowflake(text)) setParam('alvo', text);
-              }}
-            />
-          </label>
-          {targetInvalid ? <p className="field-hint">Use de 17 a 20 dígitos.</p> : null}
-        </form>
-
-        {query.isError ? <p role="alert">{errorText(query.error)}</p> : null}
-        {query.isPending ? <p className="muted">Carregando…</p> : null}
-        {!query.isPending && !query.isError && rows.length === 0 ? (
-          <p className="muted">Nenhum caso encontrado.</p>
-        ) : null}
-        {rows.length === 0 ? null : (
-          <ul className="case-rows">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <button
-                  type="button"
-                  className="case-row"
-                  aria-current={row.id === selected ? 'true' : undefined}
-                  onClick={() => {
-                    setParam('caso', String(row.id), true);
-                  }}
-                >
-                  <span className="case-id">Caso {row.id}</span>
-                  <span className="case-meta">
-                    {formatDate(row.createdAt)}, {caseKindLabel(row.kind, row.level)}
-                  </span>
-                  <span className="case-meta">
-                    {caseActionLabel(row.action)}, {caseStatusLabel(row.status)}
-                  </span>
-                  <span className="case-meta mono">{row.targetUserId}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {query.hasNextPage ? (
-          <button
-            type="button"
-            className="button"
-            disabled={query.isFetchingNextPage}
-            onClick={() => void query.fetchNextPage()}
+    <section className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Casos</h1>
+      <form
+        className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border bg-card p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={statusId}>Situação</Label>
+          <NativeSelect
+            id={statusId}
+            className="min-w-44"
+            value={status ?? ''}
+            onChange={(event) => {
+              setParam('situacao', event.target.value);
+            }}
           >
-            Carregar mais
-          </button>
+            <NativeSelectOption value="">Todas</NativeSelectOption>
+            {STATUSES.map((item) => (
+              <NativeSelectOption key={item} value={item}>
+                {caseStatusLabel(item)}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={ruleId}>Regra</Label>
+          <NativeSelect
+            id={ruleId}
+            className="min-w-44"
+            value={rule ?? ''}
+            onChange={(event) => {
+              setParam('regra', event.target.value);
+            }}
+          >
+            <NativeSelectOption value="">Todas</NativeSelectOption>
+            {RULES.map((item) => (
+              <NativeSelectOption key={item} value={item}>
+                {caseRuleLabel(item)}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={targetId}>ID do alvo</Label>
+          <Input
+            id={targetId}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            className="w-56 font-mono"
+            value={targetText}
+            aria-invalid={targetInvalid}
+            onChange={(event) => {
+              const text = event.target.value.trim();
+              setTargetText(text);
+              if (text === '') setParam('alvo', null);
+              else if (isSnowflake(text)) setParam('alvo', text);
+            }}
+          />
+        </div>
+        {targetInvalid ? (
+          <p className="basis-full text-sm text-destructive">Use de 17 a 20 dígitos.</p>
         ) : null}
-      </div>
+      </form>
+
+      {query.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errorText(query.error)}
+        </p>
+      ) : null}
+      {query.isPending ? (
+        <div className="flex flex-col gap-2">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-16 w-full" />
+          ))}
+        </div>
+      ) : null}
+      {!query.isPending && !query.isError && rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum caso encontrado.</p>
+      ) : null}
+      {rows.length === 0 ? null : (
+        <ul className="flex flex-col gap-2">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <button
+                type="button"
+                className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-card px-4 py-3 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-[current=true]:border-primary"
+                aria-current={row.id === selected ? 'true' : undefined}
+                onClick={() => {
+                  setParam('caso', String(row.id), true);
+                }}
+              >
+                <span className="font-semibold">Caso {row.id}</span>
+                <span className="text-muted-foreground">
+                  {formatDate(row.createdAt)}, {caseKindLabel(row.kind, row.level)}
+                </span>
+                <span className="text-muted-foreground">
+                  {caseActionLabel(row.action)},{' '}
+                  <Badge variant="secondary">{caseStatusLabel(row.status)}</Badge>
+                </span>
+                <span className="font-mono text-xs text-muted-foreground">{row.targetUserId}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {query.hasNextPage ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          Carregar mais
+        </Button>
+      ) : null}
       {selected === null ? null : (
         <CaseDetail
           key={selected}

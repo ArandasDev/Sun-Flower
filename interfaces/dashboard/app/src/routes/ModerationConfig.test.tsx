@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock, lastSocket } from '../fake-websocket.ts';
 import {
   errorBody,
+  findToast,
+  noToast,
   okBody,
   setupOperations,
   type FakeResponse,
@@ -100,6 +102,7 @@ describe('moderation settings', () => {
       expectedVersion: 1,
       changes: { timeoutMinutes: 90 },
     });
+    expect(await findToast('Configuração salva.')).toBeInTheDocument();
   });
 
   it('keeps Salvar disabled while the section has no unsaved changes', async () => {
@@ -189,6 +192,7 @@ describe('moderation settings', () => {
     state.config = makeConfig(120);
     await userEvent.click(within(section('Silenciamento')).getByRole('button', { name: 'Salvar' }));
     expect(await screen.findByText(CONFLICT)).toBeInTheDocument();
+    expect(noToast()).toBe(true);
     expect(field).toHaveValue('90');
     await userEvent.click(screen.getByRole('button', { name: 'Recarregar' }));
     await waitFor(() => expect(field).toHaveValue('120'));

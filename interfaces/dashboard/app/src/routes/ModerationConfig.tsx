@@ -2,8 +2,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { ApiError } from '../api.ts';
 import { isSnowflake } from '../ids.ts';
+import { Button } from '../components/ui/button.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
+import { Input } from '../components/ui/input.tsx';
+import { Label } from '../components/ui/label.tsx';
+import { NativeSelect } from '../components/ui/native-select.tsx';
+import { Skeleton } from '../components/ui/skeleton.tsx';
+import { Switch } from '../components/ui/switch.tsx';
+import { Textarea } from '../components/ui/textarea.tsx';
 import { errorText } from '../labels.ts';
 import { runOperation, useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 
 const CONFLICT_TEXT = 'Outra pessoa alterou esta configuração. Recarregue para ver a versão atual.';
 const CONFIG_KEY = ['config', 'moderation'] as const;
@@ -406,71 +415,129 @@ interface FieldInputProps {
 
 function FieldInput({ field, value, error, onChange }: FieldInputProps) {
   const hintId = useId();
+  const controlId = useId();
   const describedBy = field.hint === undefined && error === undefined ? undefined : hintId;
   if (field.kind === 'bool') {
     return (
-      <label className="check">
-        <input
-          type="checkbox"
+      <div className="flex items-center gap-2">
+        <Switch
+          id={controlId}
           checked={value === 'true'}
-          onChange={(event) => {
-            onChange(String(event.target.checked));
+          onCheckedChange={(checked) => {
+            onChange(String(checked));
           }}
         />
-        {field.label}
-      </label>
+        <Label htmlFor={controlId}>{field.label}</Label>
+      </div>
     );
   }
   const hint = (
     <>
-      {error === undefined ? null : <span className="field-hint">{error}</span>}
-      {field.hint === undefined ? null : <span className="muted">{field.hint}</span>}
+      {error === undefined ? null : <span className="text-destructive">{error}</span>}
+      {field.hint === undefined ? null : (
+        <span className="text-muted-foreground">{field.hint}</span>
+      )}
     </>
   );
   return (
-    <div className="field">
-      <label>
-        {field.label}
-        {field.kind === 'choice' ? (
-          <select
-            value={value}
-            onChange={(event) => {
-              onChange(event.target.value);
-            }}
-          >
-            {field.options?.map(([optionValue, label]) => (
-              <option key={optionValue} value={optionValue}>
-                {label}
-              </option>
-            ))}
-          </select>
-        ) : field.kind === 'ids' ? (
-          <textarea
-            rows={3}
-            value={value}
-            aria-invalid={error !== undefined}
-            aria-describedby={describedBy}
-            onChange={(event) => {
-              onChange(event.target.value);
-            }}
-          />
-        ) : (
-          <input
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={controlId}>{field.label}</Label>
+      {field.kind === 'choice' ? (
+        <NativeSelect
+          id={controlId}
+          className="w-full"
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        >
+          {field.options?.map(([optionValue, label]) => (
+            <option key={optionValue} value={optionValue}>
+              {label}
+            </option>
+          ))}
+        </NativeSelect>
+      ) : field.kind === 'ids' ? (
+        <Textarea
+          id={controlId}
+          rows={3}
+          className="font-mono"
+          value={value}
+          aria-invalid={error !== undefined}
+          aria-describedby={describedBy}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+      ) : (
+        <Input
+          id={controlId}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          aria-invalid={error !== undefined}
+          aria-describedby={describedBy}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+      )}
+      <span id={hintId} className="flex flex-col gap-0.5 text-sm empty:hidden">
+        {hint}
+      </span>
+    </div>
+  );
+}
+
+interface StepRowProps {
+  step: Step;
+  index: number;
+  canRemove: boolean;
+  onChange: (patch: Partial<Step>) => void;
+  onRemove: () => void;
+}
+
+function StepRow({ step, index, canRemove, onChange, onRemove }: StepRowProps) {
+  const kindId = useId();
+  const minutesId = useId();
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={kindId}>{`Etapa ${String(index + 1)}, ação`}</Label>
+        <NativeSelect
+          id={kindId}
+          value={step.kind}
+          onChange={(event) => {
+            onChange({ kind: event.target.value });
+          }}
+        >
+          {STEP_KINDS.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </NativeSelect>
+      </div>
+      {step.kind === 'timeout' ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={minutesId}>{`Etapa ${String(index + 1)}, minutos`}</Label>
+          <Input
+            id={minutesId}
             type="text"
             inputMode="numeric"
             autoComplete="off"
-            value={value}
-            aria-invalid={error !== undefined}
-            aria-describedby={describedBy}
+            className="w-28"
+            value={step.minutes}
             onChange={(event) => {
-              onChange(event.target.value);
+              onChange({ minutes: event.target.value });
             }}
           />
-        )}
-      </label>
-      <span id={hintId} className="field-notes">
-        {hint}
-      </span>
+        </div>
+      ) : null}
+      <Button type="button" variant="outline" disabled={!canRemove} onClick={onRemove}>
+        {`Remover etapa ${String(index + 1)}`}
+      </Button>
     </div>
   );
 }
@@ -486,63 +553,34 @@ function StepsEditor({ steps, error, onChange }: StepsEditorProps) {
     onChange(steps.map((step, at) => (at === index ? { ...step, ...patch } : step)));
   };
   return (
-    <fieldset className="steps">
-      <legend>Etapas, da primeira à última ocorrência</legend>
+    <fieldset className="flex flex-col items-start gap-3 border-0 p-0">
+      <legend className="mb-3 text-sm font-medium">Etapas, da primeira à última ocorrência</legend>
       {steps.map((step, index) => (
         // The list is edited by position, so the index is the identity of a row.
-        <div className="step-row" key={index}>
-          <label className="field">
-            {`Etapa ${String(index + 1)}, ação`}
-            <select
-              value={step.kind}
-              onChange={(event) => {
-                update(index, { kind: event.target.value });
-              }}
-            >
-              {STEP_KINDS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {step.kind === 'timeout' ? (
-            <label className="field">
-              {`Etapa ${String(index + 1)}, minutos`}
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={step.minutes}
-                onChange={(event) => {
-                  update(index, { minutes: event.target.value });
-                }}
-              />
-            </label>
-          ) : null}
-          <button
-            type="button"
-            className="button button-quiet"
-            disabled={steps.length <= 1}
-            onClick={() => {
-              onChange(steps.filter((_, at) => at !== index));
-            }}
-          >
-            {`Remover etapa ${String(index + 1)}`}
-          </button>
-        </div>
+        <StepRow
+          key={index}
+          step={step}
+          index={index}
+          canRemove={steps.length > 1}
+          onChange={(patch) => {
+            update(index, patch);
+          }}
+          onRemove={() => {
+            onChange(steps.filter((_, at) => at !== index));
+          }}
+        />
       ))}
-      <button
+      <Button
         type="button"
-        className="button"
+        variant="outline"
         disabled={steps.length >= STEPS_MAX}
         onClick={() => {
           onChange([...steps, { kind: 'timeout', minutes: '10' }]);
         }}
       >
         Adicionar etapa
-      </button>
-      {error === undefined ? null : <p className="field-hint">{error}</p>}
+      </Button>
+      {error === undefined ? null : <p className="text-sm text-destructive">{error}</p>}
     </fieldset>
   );
 }
@@ -604,6 +642,7 @@ function ConfigForm({ latest, reload }: FormProps) {
             steps: section.steps === true ? fresh.steps : current.steps,
           }));
           setSaved(section.id);
+          notify('Configuração salva.');
         },
         onError: (error) => {
           if (error instanceof ApiError && error.status === 409) {
@@ -627,19 +666,22 @@ function ConfigForm({ latest, reload }: FormProps) {
 
   return (
     <>
-      <div role="alert" className="conflict">
+      <div
+        role="alert"
+        className="sticky top-2 z-5 flex flex-wrap items-center gap-3 rounded-lg border border-destructive bg-card px-4 py-2.5 empty:hidden"
+      >
         {conflict || stale ? (
           <>
-            <p>{CONFLICT_TEXT}</p>
-            <button
+            <p className="m-0 font-semibold text-destructive">{CONFLICT_TEXT}</p>
+            <Button
               type="button"
-              className="button"
+              variant="outline"
               onClick={() => {
                 void doReload();
               }}
             >
               Recarregar
-            </button>
+            </Button>
           </>
         ) : null}
       </div>
@@ -690,56 +732,64 @@ function SectionForm({
   const emptyAlert =
     section.id === 'alerts' && (draft.values['alertChannelId'] ?? '').trim() === '';
   return (
-    <section className="panel config-section" aria-labelledby={titleId}>
-      <h2 id={titleId}>{section.title}</h2>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (dirty && Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
-        }}
-      >
-        <div className="config-fields">
-          {section.fields.map((field) => (
-            <FieldInput
-              key={keyOf(field)}
-              field={field}
-              value={draft.values[keyOf(field)] ?? ''}
-              error={errors[keyOf(field)]}
-              onChange={(value) => {
-                onEdit((current) => ({
-                  ...current,
-                  values: { ...current.values, [keyOf(field)]: value },
-                }));
+    <Card role="region" aria-labelledby={titleId}>
+      <CardHeader>
+        <CardTitle>
+          <h2 id={titleId} className="text-base font-semibold">
+            {section.title}
+          </h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (dirty && Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
+          }}
+        >
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-x-5 gap-y-4">
+            {section.fields.map((field) => (
+              <FieldInput
+                key={keyOf(field)}
+                field={field}
+                value={draft.values[keyOf(field)] ?? ''}
+                error={errors[keyOf(field)]}
+                onChange={(value) => {
+                  onEdit((current) => ({
+                    ...current,
+                    values: { ...current.values, [keyOf(field)]: value },
+                  }));
+                }}
+              />
+            ))}
+          </div>
+          {section.steps === true ? (
+            <StepsEditor
+              steps={draft.steps}
+              error={errors['steps']}
+              onChange={(steps) => {
+                onEdit((current) => ({ ...current, steps }));
               }}
             />
-          ))}
-        </div>
-        {section.steps === true ? (
-          <StepsEditor
-            steps={draft.steps}
-            error={errors['steps']}
-            onChange={(steps) => {
-              onEdit((current) => ({ ...current, steps }));
-            }}
-          />
-        ) : null}
-        <div className="form-actions">
-          <button
-            type="submit"
-            className="button button-primary"
-            disabled={!dirty || pending || emptyAlert || Object.keys(errors).length > 0}
-          >
-            Salvar
-          </button>
-          <span role="status" className="notice-inline">
-            {dirty ? 'Alterações não salvas.' : saved ? 'Salvo.' : null}
-          </span>
-        </div>
-        <p role="alert" className="form-error">
-          {problem}
-        </p>
-      </form>
-    </section>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="submit"
+              disabled={!dirty || pending || emptyAlert || Object.keys(errors).length > 0}
+            >
+              Salvar
+            </Button>
+            <span role="status" className="text-sm text-muted-foreground">
+              {dirty ? 'Alterações não salvas.' : saved ? 'Salvo.' : null}
+            </span>
+          </div>
+          <p role="alert" className="text-sm text-destructive empty:hidden">
+            {problem}
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -755,10 +805,21 @@ export function ModerationConfig() {
     return fresh;
   };
   return (
-    <section>
-      <h1>Moderação</h1>
-      {query.isError ? <p role="alert">{errorText(query.error)}</p> : null}
-      {query.isPending ? <p className="muted">Carregando…</p> : null}
+    <section className="flex max-w-2xl flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Moderação</h1>
+      {query.isError ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errorText(query.error)}
+        </p>
+      ) : null}
+      {query.isPending ? (
+        <div className="flex flex-col gap-2">
+          <p className="sr-only">Carregando…</p>
+          {[0, 1, 2].map((index) => (
+            <Skeleton key={index} aria-hidden="true" className="h-24 w-full" />
+          ))}
+        </div>
+      ) : null}
       {query.data === undefined ? null : <ConfigForm latest={query.data} reload={reload} />}
     </section>
   );

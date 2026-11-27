@@ -145,6 +145,10 @@ npm run build --prefix interfaces/dashboard/app
 
 **Hospedagem.** O bot não abre portas para a internet: coloque um proxy HTTPS na frente da porta local. O proxy precisa repassar o WebSocket de `/api/live`.
 
+O túnel ou proxy precisa repassar o cabeçalho `Origin` sem alteração. Sem isso, o painel abre, mas o canal ao vivo fica em `Reconectando…`.
+
+O `index.html` do painel não é guardado em cache, porque leva um nonce novo a cada carregamento.
+
 - **Caddy** (o WebSocket não pede diretivas extras; o IP do cliente só é lido corretamente com `PANEL_TRUST_PROXY=127.0.0.1`):
 
   ```caddyfile
@@ -243,6 +247,16 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 - Com várias abas em Módulos enquanto módulos mudam, as leituras podem chegar ao limite de 30 por minuto das alterações, e as telas passam a receber erro de excesso de requisições. Separar as leituras desse limite é uma decisão pendente.
 - Cada leitura das telas de administração também entra no log em memória, e pode empurrar registros mais antigos para fora das 500 guardadas.
 - As telas foram conferidas em um navegador, em 1024 px e em 375 px de largura, com a política de segurança (CSP) real. O teste manual no servidor real continua pendente.
+
+**Visual do painel.** O painel usa Tailwind e shadcn/ui ([0025](docs/decisions/0025-panel-ui-kit.md)). O que a pessoa vê:
+
+- tema claro, escuro ou do sistema, escolhido no menu da conta;
+- menu lateral agrupado em Geral, Moderação e Administração, que vira gaveta no celular;
+- indicador de conexão no cabeçalho: `Conectando…`, `Ao vivo` e `Reconectando…`;
+- avisos (toasts) depois de uma ação que deu certo; os erros continuam na tela;
+- busca e ordenação nas tabelas de Logs, Sessões, Domínios, Desenvolvedores, Permissões e Módulos.
+
+**Conferência do visual no navegador.** O build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas foram conferidas em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal da página. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP no console. O teste manual no servidor real continua pendente.
 
 **Teste manual da etapa 3** (pessoa mantenedora), atrás de um proxy HTTPS e com contas de teste:
 

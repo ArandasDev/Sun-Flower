@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
 import { okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
@@ -30,7 +30,7 @@ describe('my cases', () => {
       ],
     );
     expect(await screen.findByRole('heading', { name: 'Meus casos' })).toBeInTheDocument();
-    const row = await screen.findByRole('listitem');
+    const row = await within(screen.getByRole('main')).findByRole('listitem');
     expect(row).toHaveTextContent('Manual');
     expect(row).toHaveTextContent('Aviso');
     expect(row).toHaveTextContent('Com ação aplicada');
@@ -47,7 +47,7 @@ describe('menu by permission', () => {
   it('hides the moderation items without permission', async () => {
     setup([]);
     await screen.findByRole('heading', { level: 1, name: 'Meu perfil' });
-    for (const name of ['Ações', 'Domínios', 'Moderação']) {
+    for (const name of ['Ações', 'Domínios', 'Configuração']) {
       expect(screen.queryByRole('link', { name })).toBeNull();
     }
   });
@@ -57,12 +57,15 @@ describe('menu by permission', () => {
     expect(await screen.findByRole('link', { name: 'Ações' })).toHaveAttribute('href', '/acoes');
   });
 
-  it('shows Domínios and Moderação with their permissions', async () => {
+  it('shows Domínios and Configuração with their permissions', async () => {
     setup(['moderation.domains.manage', 'moderation.config.manage']);
     expect(await screen.findByRole('link', { name: 'Domínios' })).toHaveAttribute(
       'href',
       '/dominios',
     );
-    expect(screen.getByRole('link', { name: 'Moderação' })).toHaveAttribute('href', '/moderacao');
+    expect(screen.getByRole('link', { name: 'Configuração' })).toHaveAttribute(
+      'href',
+      '/moderacao',
+    );
   });
 });
