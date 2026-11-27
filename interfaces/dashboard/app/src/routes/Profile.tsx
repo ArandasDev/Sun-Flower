@@ -2,6 +2,7 @@ import { formatDate } from '../components/CaseDetail.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { StatusBadge } from '../components/StatusBadge.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -41,16 +42,16 @@ function MyCases() {
     <Card role="region" aria-labelledby="my-cases-title">
       <CardHeader>
         <CardTitle>
-          <h2 id="my-cases-title" className="text-lg font-semibold">
+          <h2 id="my-cases-title" className="text-base font-semibold">
             Meus casos
           </h2>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {query.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {query.error.message}
-          </p>
+          <Alert variant="destructive">
+            <AlertDescription>{query.error.message}</AlertDescription>
+          </Alert>
         ) : null}
         {query.isPending ? (
           <div className="flex flex-col gap-2">

@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock, FakeWebSocket, lastSocket } from '../fake-websocket.ts';
-import { me, renderApp, stubFetch } from '../test-utils.tsx';
+import { errorBody, me, renderApp, stubFetch } from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -61,12 +61,26 @@ describe('overview indicators', () => {
   });
 });
 
+describe('overview error', () => {
+  it('shows a failed status load in a destructive alert', async () => {
+    stubFetch((url) =>
+      url === '/api/status'
+        ? errorBody(500, 'internal', 'Falha ao carregar o estado.')
+        : me('owner', { permissions: [] }),
+    );
+    renderApp('/visao-geral', new FakeClock());
+    const text = await screen.findByText('Falha ao carregar o estado.');
+    const alert = text.closest('[role="alert"]');
+    expect(alert).toHaveAttribute('data-slot', 'alert');
+    expect(alert).toHaveClass('text-destructive');
+  });
+});
+
 describe('overview modules card', () => {
   it('shows each module with its state', async () => {
     await start([]);
-    const list = within(
-      screen.getByRole('heading', { name: 'Módulos' }).closest('[data-slot="card"]') as HTMLElement,
-    );
+    const list = within(screen.getByRole('region', { name: 'Módulos' }));
+    expect(list.getByRole('heading', { level: 2, name: 'Módulos' })).toHaveClass('text-base');
     expect(list.getAllByRole('listitem')).toHaveLength(3);
     expect(list.getByText('Com falha')).toBeInTheDocument();
   });

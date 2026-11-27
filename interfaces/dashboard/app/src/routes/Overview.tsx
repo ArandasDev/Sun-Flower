@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ApiError, apiFetch } from '../api.ts';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { cn } from '../lib/utils.ts';
@@ -54,6 +55,7 @@ function Indicator({
 
 export function Overview() {
   const { presence } = useLive();
+  const modulesTitleId = useId();
   const canManageModules = useCurrentMe().permissions.includes('core.modules.manage');
   const query = useQuery({
     queryKey: ['status'],
@@ -66,9 +68,9 @@ export function Overview() {
     return (
       <>
         <PageHeader title={TITLE} description={DESCRIPTION} />
-        <p role="alert" className="text-sm text-destructive">
-          {query.error.message}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{query.error.message}</AlertDescription>
+        </Alert>
       </>
     );
   }
@@ -97,10 +99,12 @@ export function Overview() {
         </Indicator>
         <Indicator label="No painel agora">{presence.length}</Indicator>
       </div>
-      <Card className="py-2">
+      <Card role="region" aria-labelledby={modulesTitleId}>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>
-            <h2 className="text-lg font-semibold">Módulos</h2>
+            <h2 id={modulesTitleId} className="text-base font-semibold">
+              Módulos
+            </h2>
           </CardTitle>
           {canManageModules ? (
             <Link
@@ -111,16 +115,18 @@ export function Overview() {
             </Link>
           ) : null}
         </CardHeader>
-        <ul className="divide-y">
-          {status.modules.map((module) => (
-            <li key={module.id} className="flex items-center justify-between gap-4 px-6 py-2.5">
-              <span className="font-mono text-sm">{module.id}</span>
-              <StatusBadge tone={moduleTone(module.state)}>
-                {moduleStateLabel(module.state)}
-              </StatusBadge>
-            </li>
-          ))}
-        </ul>
+        <CardContent>
+          <ul className="divide-y">
+            {status.modules.map((module) => (
+              <li key={module.id} className="flex items-center justify-between gap-4 py-2.5">
+                <span className="font-mono text-sm">{module.id}</span>
+                <StatusBadge tone={moduleTone(module.state)}>
+                  {moduleStateLabel(module.state)}
+                </StatusBadge>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
       </Card>
     </>
   );

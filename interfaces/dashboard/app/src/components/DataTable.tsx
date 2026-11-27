@@ -145,8 +145,6 @@ interface DataTableProps<T extends RowData> {
    */
   search?: string;
   searchLabel?: string;
-  /** Shown instead of the table when `data` is empty; without it, nothing is shown. */
-  emptyText?: string;
   noResultsText?: string;
 }
 
@@ -161,7 +159,6 @@ export function DataTable<T extends RowData>({
   getRowId,
   search: externalSearch,
   searchLabel = 'Buscar',
-  emptyText,
   noResultsText = 'Nenhum resultado para a busca.',
 }: DataTableProps<T>) {
   const table = useTable({
@@ -177,11 +174,8 @@ export function DataTable<T extends RowData>({
     ...(externalSearch === undefined ? {} : { state: { globalFilter: externalSearch } }),
   });
 
-  if (data.length === 0) {
-    return emptyText === undefined ? null : (
-      <p className="text-sm text-muted-foreground">{emptyText}</p>
-    );
-  }
+  // With no data the screen shows its own EmptyState, so the table renders nothing.
+  if (data.length === 0) return null;
 
   const rows = table.getRowModel().rows;
   const search = typeof table.state.globalFilter === 'string' ? table.state.globalFilter : '';

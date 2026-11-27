@@ -35,25 +35,25 @@ const names = (): string[] =>
 
 describe('DataTable', () => {
   it('starts in the server order inside a scrollable container', () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     expect(names()).toEqual(['Beta', 'Domínio', 'Alfa']);
     expect(screen.getByRole('table').parentElement).toHaveClass('overflow-x-auto');
   });
 
   it('finds "Domínio" when searching "dominio"', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'dominio');
     expect(names()).toEqual(['Domínio']);
   });
 
   it('finds "abc" and "ABC" when searching "ABC"', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'ABC');
     expect(names()).toEqual(['Beta', 'Alfa']);
   });
 
   it('ignores spaces around the term, and a blank term filters nothing', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     const search = screen.getByLabelText('Buscar');
     await userEvent.type(search, '  dominio  ');
     expect(names()).toEqual(['Domínio']);
@@ -63,21 +63,19 @@ describe('DataTable', () => {
     expect(screen.queryByText('Nenhum resultado para a busca.')).toBeNull();
   });
 
-  it('shows its own text when the search finds nothing, not the empty text', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+  it('shows its own text when the search finds nothing', async () => {
+    render(<DataTable columns={columns} data={DATA} />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'zzz');
     expect(screen.getByText('Nenhum resultado para a busca.')).toBeInTheDocument();
-    expect(screen.queryByText('Nada aqui.')).toBeNull();
   });
 
-  it('shows the empty text when there is no data at all', () => {
-    render(<DataTable columns={columns} data={[]} emptyText="Nada aqui." />);
-    expect(screen.getByText('Nada aqui.')).toBeInTheDocument();
-    expect(screen.queryByText('Nenhum resultado para a busca.')).toBeNull();
+  it('renders nothing when there is no data at all', () => {
+    const { container } = render(<DataTable columns={columns} data={[]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('does not search the action column', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     await userEvent.type(screen.getByLabelText('Buscar'), 'Abrir');
     expect(screen.getByText('Nenhum resultado para a busca.')).toBeInTheDocument();
   });
@@ -99,7 +97,7 @@ describe('DataTable', () => {
   });
 
   it('cycles ascending, descending and back to the server order', async () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     const header = screen.getByRole('columnheader', { name: 'Nome' });
     const button = within(header).getByRole('button', { name: 'Nome' });
     expect(header).toHaveAttribute('aria-sort', 'none');
@@ -115,7 +113,7 @@ describe('DataTable', () => {
   });
 
   it('leaves the action column without sorting', () => {
-    render(<DataTable columns={columns} data={DATA} emptyText="Nada aqui." />);
+    render(<DataTable columns={columns} data={DATA} />);
     const header = screen.getByRole('columnheader', { name: 'Ações' });
     expect(header).not.toHaveAttribute('aria-sort');
     expect(within(header).queryByRole('button')).toBeNull();
