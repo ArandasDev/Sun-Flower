@@ -196,5 +196,13 @@ Sai o `styles.css` escrito à mão. O `motion` continua. A versão de cada depen
 - Permissões mantém uma tabela por permissão.
 - Os booleanos ainda não salvos em Configuração usam `Switch`.
 - Os toasts usam o `Toast` do Radix, não o Sonner, porque o Sonner injeta um `<style>` sem nonce.
+- O `ConfirmDialog` usa o `AlertDialog` do Radix, mas mantém `role="dialog"`, não `alertdialog`, como antes da mudança.
+- Em Sessões, os textos de criação e de último uso, antes juntos numa frase, viram as colunas "Criada em" e "Último uso".
+- O "Carregando…" visível vira um texto só para leitores de tela (`sr-only`), ao lado de um `Skeleton`.
+- Domínios mantém uma tabela por lista.
+- Em Sessões, o botão "Encerrar todas desta pessoa" aparece em cada linha daquela pessoa.
+- O botão do menu da conta tem o nome acessível "Conta de {nome}", e o nome continua visível.
+- O `--ring` no tema claro é amber-700, não amber-500: o anel de foco precisa de 3:1 contra o fundo (WCAG 1.4.11), e o amber-500 dá cerca de 2,1:1 no branco. Os anéis têm 2 px, sem transparência, com 2 px de folga na cor do fundo, para aparecerem também nos botões amber. No escuro, o `--ring` continua amber-400.
+- O `Switch` desligado usa a cor do `--muted-foreground` (zinc-600 no claro e zinc-400 no escuro), não a do `--input`, para passar de 3:1 contra o fundo.
 
-**Conferência no navegador:** o build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas e o login foram conferidos em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP. O teste manual no servidor real continua pendente.
+**Conferência no navegador:** o build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas foram conferidas em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP. O teste manual no servidor real continua pendente.

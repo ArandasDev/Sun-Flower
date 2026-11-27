@@ -256,7 +256,7 @@ As telas buscam os dados ao abrir e depois de cada alteração, sem consulta per
 - avisos (toasts) depois de uma ação que deu certo; os erros continuam na tela;
 - busca e ordenação nas tabelas de Logs, Sessões, Domínios, Desenvolvedores, Permissões e Módulos.
 
-**Conferência do visual no navegador.** O build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas e o login foram conferidos em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal da página. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP no console. O teste manual no servidor real continua pendente.
+**Conferência do visual no navegador.** O build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas foram conferidas em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal da página. Foram abertos o detalhe do caso, uma confirmação, um toast e a gaveta do celular, com zero violações de CSP no console. O teste manual no servidor real continua pendente.
 
 **Teste manual da etapa 3** (pessoa mantenedora), atrás de um proxy HTTPS e com contas de teste:
 

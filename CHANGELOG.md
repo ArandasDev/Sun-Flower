@@ -36,6 +36,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
 
 ### Fixed
 
+- Painel, acessibilidade: o anel de foco fica visível no tema claro e nos botões amber (amber-700, 2 px, com folga na cor do fundo), o `Switch` desligado ganha contraste contra o fundo e o botão do menu da conta passa a se chamar "Conta de {nome}" para leitores de tela.
 - Documentação da `v0.3.0` (ROADMAP, README e CHANGELOG): o teste manual do painel no servidor real não foi feito antes da release, ao contrário do que ela dizia. Os critérios do painel voltam a ficar abertos até esse teste.
 
 ### Security
