@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach } from 'vitest';
 import { stubWebSocket } from './fake-websocket.ts';
+import { resetToasts } from './toast.ts';
 
 // jsdom lacks these browser APIs; Radix primitives and the shadcn Sidebar call them.
 class NoopResizeObserver {
@@ -42,4 +43,7 @@ beforeEach(() => {
   window.matchMedia = noMatch;
   stubWebSocket();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  resetToasts();
+});

@@ -2,7 +2,13 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import {
+  errorBody,
+  findToast,
+  okBody,
+  setupOperations,
+  type OperationCall,
+} from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -59,6 +65,7 @@ describe('grants screen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Associar' }));
     const group = await screen.findByRole('region', { name: 'moderation.config.manage' });
     expect(within(group).getByText(ROLE_B)).toBeInTheDocument();
+    expect(await findToast('Permissão concedida.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.grants.grant')?.input).toEqual({
       permission: 'moderation.config.manage',
       roleId: ROLE_B,
@@ -100,6 +107,7 @@ describe('grants screen', () => {
     const group = await screen.findByRole('region', { name: 'moderation.cases.read' });
     await userEvent.click(within(group).getByRole('button', { name: 'Remover' }));
     expect(await screen.findByText('Nenhuma permissão associada a cargos.')).toBeInTheDocument();
+    expect(await findToast('Permissão removida.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.grants.revoke')?.input).toEqual({
       permission: 'moderation.cases.read',
       roleId: ROLE_A,

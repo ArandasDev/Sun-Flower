@@ -57,6 +57,7 @@ export function AccountMenu() {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
+                aria-label={`Conta de ${me.name}`}
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <Avatar name={me.name} url={me.avatarUrl} />

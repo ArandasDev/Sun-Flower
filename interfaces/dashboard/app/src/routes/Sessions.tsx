@@ -1,12 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
+import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
 import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
+import { Card, CardContent } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationMutation, useOperationQuery } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 interface SessionEntry {
@@ -16,12 +18,15 @@ interface SessionEntry {
   lastSeenAt: string;
 }
 
+const column = createDataTableColumns<SessionEntry>();
+
 type Ending = { kind: 'one'; entry: SessionEntry } | { kind: 'all'; userId: string };
 
 export function Sessions() {
   const client = useQueryClient();
   const me = useCurrentMe();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const personId = useId();
   const [ending, setEnding] = useState<Ending | null>(null);
   const query = useOperationQuery<{ sessions: SessionEntry[] }>(
     ['admin', 'sessions'],
@@ -31,6 +36,7 @@ export function Sessions() {
   );
   const options = {
     onSuccess: () => {
+      notify('Sessão revogada.');
       setEnding(null);
     },
     onSettled: () => {
@@ -46,10 +52,6 @@ export function Sessions() {
     options,
   );
   const sessions = query.data?.sessions ?? [];
-  const groups = new Map<string, SessionEntry[]>();
-  for (const entry of sessions) {
-    groups.set(entry.userId, [...(groups.get(entry.userId) ?? []), entry]);
-  }
   const failure = revoke.error ?? revokeAll.error;
 
   // Only the latest attempt's error is shown, so both mutations start clean.
@@ -58,6 +60,66 @@ export function Sessions() {
     revokeAll.reset();
     setEnding(next);
   };
+
+  const columns = column.columns([
+    column.accessor('userId', {
+      header: 'Pessoa',
+      cell: ({ row }) => (
+        <span id={`${personId}-${row.id}`} className="font-mono break-all whitespace-normal">
+          {row.original.userId}
+          {row.original.userId === me.id ? (
+            <>
+              {' '}
+              {/* The id may break anywhere; the marker stays one word. */}
+              <strong className="font-sans font-semibold break-normal whitespace-nowrap">
+                Você
+              </strong>
+            </>
+          ) : null}
+        </span>
+      ),
+    }),
+    column.accessor((entry) => formatDate(entry.createdAt), {
+      id: 'createdAt',
+      header: 'Criada em',
+      sortFn: sortBy((entry) => entry.createdAt),
+    }),
+    column.accessor((entry) => formatDate(entry.lastSeenAt), {
+      id: 'lastSeenAt',
+      header: 'Último uso',
+      sortFn: sortBy((entry) => entry.lastSeenAt),
+    }),
+    column.display({
+      id: 'actions',
+      header: 'Ações',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            aria-describedby={`${personId}-${row.id}`}
+            onClick={() => {
+              open({ kind: 'one', entry: row.original });
+            }}
+          >
+            Encerrar
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            aria-describedby={`${personId}-${row.id}`}
+            onClick={() => {
+              open({ kind: 'all', userId: row.original.userId });
+            }}
+          >
+            Encerrar todas desta pessoa
+          </Button>
+        </div>
+      ),
+    }),
+  ]);
 
   return (
     <section className="flex flex-col gap-4">
@@ -78,59 +140,18 @@ export function Sessions() {
           ))}
         </div>
       ) : null}
-      {query.isSuccess && sessions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma sessão aberta.</p>
+      {sessions.length > 0 || query.isSuccess ? (
+        <Card>
+          <CardContent>
+            <DataTable
+              columns={columns}
+              data={sessions}
+              getRowId={(entry) => entry.ref}
+              emptyText="Nenhuma sessão aberta."
+            />
+          </CardContent>
+        </Card>
       ) : null}
-      <div className="flex flex-col gap-4">
-        {[...groups.entries()].map(([userId, entries]) => (
-          <Card key={userId} role="region" aria-label={`Sessões de ${userId}`}>
-            <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle>
-                <h2 className="font-mono text-base font-semibold break-all">
-                  {userId}
-                  {userId === me.id ? (
-                    <strong className="font-sans font-semibold"> Você</strong>
-                  ) : null}
-                </h2>
-              </CardTitle>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  open({ kind: 'all', userId });
-                }}
-              >
-                Encerrar todas desta pessoa
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <ul className="flex flex-col divide-y rounded-md border">
-                {entries.map((entry) => (
-                  <li key={entry.ref} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <span className="min-w-0 text-sm">
-                      Criada em {formatDate(entry.createdAt)}
-                      <span className="text-muted-foreground">
-                        , último uso {formatDate(entry.lastSeenAt)}
-                      </span>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        open({ kind: 'one', entry });
-                      }}
-                    >
-                      Encerrar
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
       {ending === null ? null : (
         <ConfirmDialog
           title={ending.kind === 'one' ? 'Encerrar sessão' : 'Encerrar todas as sessões'}

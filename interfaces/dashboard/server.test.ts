@@ -15,6 +15,7 @@ import type { OAuthClient } from './ports.ts';
 import {
   buildDashboard,
   cspWithStyleNonce,
+  isIndexPath,
   renderIndex,
   startDashboard,
   type DashboardDeps,
@@ -289,6 +290,16 @@ describe('index.html style nonce', () => {
     }
   });
 
+  // On a case-insensitive filesystem (a Windows host) these spellings name index.html too.
+  it.each(['/INDEX.HTML', '/Index.html', '/index.html.', '/index.html%20', '/index.html::$DATA'])(
+    'never serves %s raw, with the placeholder',
+    async (url) => {
+      const server = await build();
+      const res = await server.inject({ method: 'GET', url });
+      expect(res.body).not.toContain('__CSP_NONCE__');
+    },
+  );
+
   it('keeps style-src out of the API and of static files', async () => {
     const server = await build();
     const api = await server.inject({ method: 'GET', url: '/api/me' });
@@ -304,6 +315,23 @@ describe('index.html style nonce', () => {
     const res = await server.inject({ method: 'GET', url: '/' });
     expect(res.statusCode).toBe(503);
     expect(res.body).toBe('Painel não compilado.');
+  });
+
+  it('isIndexPath matches the page however a Windows filesystem would spell it', () => {
+    for (const path of [
+      '/',
+      '/index.html',
+      '/INDEX.HTML',
+      '/Index.html',
+      '/index.html.',
+      '/index.html .',
+      '/index.html::$DATA',
+    ]) {
+      expect(isIndexPath(path)).toBe(true);
+    }
+    for (const path of ['/app.js', '/assets/x.js', '/index.html.js', '/myindex.html']) {
+      expect(isIndexPath(path)).toBe(false);
+    }
   });
 
   it('renderIndex replaces every marker', () => {

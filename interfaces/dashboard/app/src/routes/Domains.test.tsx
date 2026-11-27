@@ -2,14 +2,14 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import { findToast, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup() {
+function setup(allow: string[] = ['good.example.com']) {
   const lists: Record<string, string[]> = {
     block: ['bad.example.com'],
-    allow: ['good.example.com'],
+    allow,
   };
   const operation = (call: OperationCall) => {
     const domain = String(call.input['domain']);
@@ -45,6 +45,7 @@ describe('domains screen', () => {
     await userEvent.type(within(blocked).getByLabelText('Adicionar domínio'), 'new.example.com');
     await userEvent.click(within(blocked).getByRole('button', { name: 'Adicionar' }));
     expect(await within(blocked).findByText('new.example.com')).toBeInTheDocument();
+    expect(await findToast('Domínio adicionado.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'moderation.domains.block')?.input).toEqual({
       domain: 'new.example.com',
     });
@@ -56,8 +57,23 @@ describe('domains screen', () => {
     await within(allowed).findByText('good.example.com');
     await userEvent.click(within(allowed).getByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(within(allowed).queryByText('good.example.com')).toBeNull());
+    expect(await findToast('Domínio removido.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'moderation.domains.remove')?.input).toEqual({
       domain: 'good.example.com',
     });
+  });
+
+  it('does not hand the focused Remover to the next domain after a removal', async () => {
+    setup(['first.example.com', 'second.example.com']);
+    const allowed = await screen.findByRole('region', { name: 'Permitidos' });
+    await within(allowed).findByText('first.example.com');
+    const first = within(allowed).getAllByRole('button', { name: 'Remover' })[0]!;
+    first.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(within(allowed).queryByText('first.example.com')).toBeNull());
+    const second = within(allowed).getByRole('button', { name: 'Remover' });
+    expect(within(allowed).getByText('second.example.com')).toBeInTheDocument();
+    expect(first).not.toBeInTheDocument();
+    expect(second).not.toHaveFocus();
   });
 });

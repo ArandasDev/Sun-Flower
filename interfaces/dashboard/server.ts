@@ -41,6 +41,17 @@ export function cspWithStyleNonce(nonce: string): string {
   return `${CSP}; style-src 'self' 'nonce-${nonce}'`;
 }
 
+/**
+ * Whether a static path names the panel page, which must only leave with its nonce. Windows
+ * ignores case, trailing dots and spaces, and reads `name::$DATA` as the file itself, so the
+ * last segment is compared in that loose form.
+ */
+export function isIndexPath(path: string): boolean {
+  const name = (path.split('/').at(-1) ?? '').split(':')[0] ?? '';
+  const loose = name.replace(/[. ]+$/, '').toLowerCase();
+  return loose === '' || loose === 'index.html';
+}
+
 /** Puts the nonce in every place index.html has the marker. */
 export function renderIndex(html: string, nonce: string): string {
   return html.replaceAll(STYLE_NONCE_PLACEHOLDER, nonce);
@@ -412,7 +423,7 @@ export async function buildDashboard(deps: DashboardDeps): Promise<FastifyInstan
       root: staticDir,
       dotfiles: 'deny',
       index: false,
-      allowedPath: (path) => path !== '/' && path !== '/index.html',
+      allowedPath: (path) => !isIndexPath(path),
     });
 
     // Cached after the first successful read; a missing file is looked up again on the next request.

@@ -62,7 +62,7 @@ export function renderApp(path: string, clock?: LiveClock) {
 
 /** Opens the account menu (named after the signed-in person, "Girassol") and picks "Sair". */
 export async function clickSignOut(): Promise<void> {
-  await userEvent.click(await screen.findByRole('button', { name: 'Girassol' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Conta de Girassol' }));
   await userEvent.click(await screen.findByRole('menuitem', { name: 'Sair' }));
 }
 
@@ -100,3 +100,10 @@ export function setupOperations(
   });
   return { ...renderApp(path, clock), calls };
 }
+
+/** A toast's text, looked up by its title so Radix's visually hidden announcement does not count. */
+export const findToast = (text: string) =>
+  screen.findByText(text, { selector: '[data-slot="toast-title"]' });
+
+/** True when no toast is on screen. */
+export const noToast = (): boolean => document.querySelector('[data-slot="toast"]') === null;

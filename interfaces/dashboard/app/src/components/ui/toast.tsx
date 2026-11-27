@@ -19,7 +19,7 @@ function ToastViewport({
     <ToastPrimitive.Viewport
       data-slot="toast-viewport"
       className={cn(
-        'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 outline-none md:top-auto md:right-0 md:bottom-0 md:max-w-[420px] md:flex-col',
+        'fixed inset-x-0 top-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 outline-none md:top-auto md:right-0 md:bottom-0 md:left-auto md:max-w-[420px] md:flex-col',
         className,
       )}
       {...props}
@@ -62,7 +62,7 @@ function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastP
     <ToastPrimitive.Action
       data-slot="toast-action"
       className={cn(
-        'inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors outline-none hover:bg-secondary focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}
@@ -76,7 +76,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
     <ToastPrimitive.Close
       data-slot="toast-close"
       className={cn(
-        'absolute top-2 right-2 rounded-xs p-1 opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'absolute top-2 right-2 rounded-xs p-1 opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className,
       )}
       {...props}

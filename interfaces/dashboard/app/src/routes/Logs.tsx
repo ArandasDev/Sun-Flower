@@ -1,19 +1,12 @@
 import { useId, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
+import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent } from '../components/ui/card.tsx';
 import { Label } from '../components/ui/label.tsx';
 import { NativeSelect } from '../components/ui/native-select.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table.tsx';
 import { errorText } from '../labels.ts';
 import { useOperationQuery } from '../operations.ts';
 
@@ -51,6 +44,37 @@ function fieldsText(fields: LogEntry['fields']): string {
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(', ');
 }
+
+const column = createDataTableColumns<LogEntry>();
+
+const COLUMNS = column.columns([
+  column.accessor((entry) => formatDate(entry.time), {
+    id: 'time',
+    header: 'Hora',
+    sortFn: sortBy((entry) => entry.time),
+  }),
+  column.accessor((entry) => levelLabel(entry.level), {
+    id: 'level',
+    header: 'Nível',
+    cell: ({ row, getValue }) => (
+      <Badge variant={levelVariant(row.original.level)}>{getValue()}</Badge>
+    ),
+  }),
+  column.accessor((entry) => entry.module ?? '—', {
+    id: 'module',
+    header: 'Módulo',
+    meta: { cellClassName: 'wrap-anywhere whitespace-normal' },
+  }),
+  column.accessor('message', {
+    header: 'Mensagem',
+    meta: { cellClassName: 'wrap-anywhere whitespace-pre-wrap' },
+  }),
+  column.accessor((entry) => fieldsText(entry.fields), {
+    id: 'fields',
+    header: 'Campos',
+    meta: { cellClassName: 'font-mono text-xs wrap-anywhere whitespace-pre-wrap' },
+  }),
+]);
 
 export function Logs() {
   const levelId = useId();
@@ -110,45 +134,13 @@ export function Logs() {
           ))}
         </div>
       ) : null}
-      {query.isSuccess && entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum registro.</p>
-      ) : null}
-      {entries.length === 0 ? null : (
+      {entries.length > 0 || query.isSuccess ? (
         <Card>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope="col">Hora</TableHead>
-                  <TableHead scope="col">Nível</TableHead>
-                  <TableHead scope="col">Módulo</TableHead>
-                  <TableHead scope="col">Mensagem</TableHead>
-                  <TableHead scope="col">Campos</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {entries.map((entry, index) => (
-                  <TableRow key={`${entry.time}-${String(index)}`} className="align-top">
-                    <TableCell>{formatDate(entry.time)}</TableCell>
-                    <TableCell>
-                      <Badge variant={levelVariant(entry.level)}>{levelLabel(entry.level)}</Badge>
-                    </TableCell>
-                    <TableCell className="wrap-anywhere whitespace-normal">
-                      {entry.module ?? '—'}
-                    </TableCell>
-                    <TableCell className="wrap-anywhere whitespace-pre-wrap">
-                      {entry.message}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs wrap-anywhere whitespace-pre-wrap">
-                      {fieldsText(entry.fields)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable columns={COLUMNS} data={entries} emptyText="Nenhum registro." />
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </section>
   );
 }

@@ -7,6 +7,7 @@ import { Textarea } from '../components/ui/textarea.tsx';
 import { isSnowflake } from '../ids.ts';
 import { NO_PERMISSION_TEXT, actionErrorText } from '../labels.ts';
 import { useOperationMutation } from '../operations.ts';
+import { notify } from '../toast.ts';
 import { useCurrentMe } from '../session.tsx';
 
 type ActionId = 'warn' | 'timeout' | 'kick' | 'ban';
@@ -66,6 +67,7 @@ export function Actions() {
     {
       onSuccess: (data) => {
         setResult(data);
+        notify(`Caso #${data.caseId} registrado.`);
         setConfirming(false);
         setUserId('');
         setReason('');
@@ -158,7 +160,7 @@ export function Actions() {
             aria-selected={spec.id === current.id}
             aria-controls="action-panel"
             tabIndex={spec.id === current.id ? 0 : -1}
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
             onClick={() => {
               select(spec.id);
             }}

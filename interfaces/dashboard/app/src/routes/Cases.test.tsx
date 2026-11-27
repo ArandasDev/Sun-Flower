@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { FakeClock, FakeWebSocket, lastSocket } from '../fake-websocket.ts';
-import { me, renderApp, stubFetch, type FakeResponse } from '../test-utils.tsx';
+import { findToast, me, noToast, renderApp, stubFetch, type FakeResponse } from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -308,6 +308,7 @@ describe('case detail', () => {
         allowDomains: true,
       }),
     );
+    expect(await findToast('Caso revertido.')).toBeInTheDocument();
   });
 
   it('sends allowDomains false by default', async () => {
@@ -342,6 +343,7 @@ describe('case detail', () => {
         id: 5,
       }),
     );
+    expect(await findToast('Caso descartado.')).toBeInTheDocument();
   });
 
   it('shows the error message of a failed operation', async () => {
@@ -357,6 +359,7 @@ describe('case detail', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Reverter' }));
     expect(await screen.findByText('Este caso não pode ser revertido.')).toBeInTheDocument();
+    expect(noToast()).toBe(true);
   });
 });
 
