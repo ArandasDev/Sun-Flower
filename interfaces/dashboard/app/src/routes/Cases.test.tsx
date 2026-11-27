@@ -501,3 +501,33 @@ describe('list errors and target id', () => {
     expect(calls.every((call) => call.input['targetUserId'] === undefined)).toBe(true);
   });
 });
+
+describe('cases table', () => {
+  it('shows the columns Caso, Data, Tipo, Ação, Situação and Alvo', async () => {
+    setup([READ], standard);
+    const table = await screen.findByRole('table');
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent),
+    ).toEqual(['Caso', 'Data', 'Tipo', 'Ação', 'Situação', 'Alvo']);
+  });
+
+  it('opens the detail on a click anywhere in the row', async () => {
+    setup([READ], standard);
+    const button = await screen.findByRole('button', { name: /Caso 5/ });
+    const row = button.closest('tr');
+    expect(row).not.toBeNull();
+    await userEvent.click(within(row as HTMLElement).getByText(TARGET));
+    expect(await screen.findByText('Link suspeito')).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('opens the detail with Enter on the row button', async () => {
+    setup([READ], standard);
+    const button = await screen.findByRole('button', { name: /Caso 5/ });
+    button.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByText('Link suspeito')).toBeInTheDocument();
+  });
+});

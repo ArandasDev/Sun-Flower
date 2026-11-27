@@ -82,7 +82,7 @@ function setup(update?: (call: OperationCall, state: { version: number }) => Fak
 const section = (name: string) => screen.getByRole('region', { name });
 
 async function timeoutField() {
-  await screen.findByRole('heading', { level: 1, name: 'Moderação' });
+  await screen.findByRole('heading', { level: 1, name: 'Configuração' });
   return within(await screen.findByRole('region', { name: 'Silenciamento' })).getByLabelText(
     'Minutos de silêncio padrão',
   );
@@ -145,7 +145,7 @@ describe('moderation settings', () => {
 
   it('keeps the alert channel out of the save when the field is empty', async () => {
     const { calls } = setup();
-    await screen.findByRole('heading', { level: 1, name: 'Moderação' });
+    await screen.findByRole('heading', { level: 1, name: 'Configuração' });
     const alerts = await screen.findByRole('region', { name: 'Alertas' });
     expect(within(alerts).getByText('Deixe em branco para manter o canal atual.')).toBeVisible();
     const field = within(alerts).getByLabelText('ID do canal de alertas');
@@ -157,7 +157,7 @@ describe('moderation settings', () => {
 
   it('sends the whole spam key with only the rule changed', async () => {
     const { calls, state } = setup();
-    await screen.findByRole('heading', { level: 1, name: 'Moderação' });
+    await screen.findByRole('heading', { level: 1, name: 'Configuração' });
     const flood = await screen.findByRole('region', { name: 'Excesso de mensagens' });
     const limit = within(flood).getByLabelText('Limite de mensagens');
     await userEvent.clear(limit);
@@ -249,5 +249,55 @@ describe('moderation settings', () => {
     await act(() => Promise.resolve());
     expect(screen.queryByText(CONFLICT)).toBeNull();
     expect(field).toHaveValue('6051');
+  });
+});
+
+describe('moderation settings sections', () => {
+  it('links each section from the section navigation', async () => {
+    setup();
+    await timeoutField();
+    const nav = screen.getByRole('navigation', { name: 'Seções da configuração' });
+    const links = within(nav).getAllByRole('link');
+    const regions = within(screen.getByRole('main')).getAllByRole('region');
+    expect(links).toHaveLength(regions.length);
+    links.forEach((link, index) => {
+      const href = link.getAttribute('href') ?? '';
+      expect(href.startsWith('#')).toBe(true);
+      const target = document.getElementById(href.slice(1));
+      expect(target).not.toBeNull();
+      expect(regions[index]).toContainElement(target);
+      expect(link).toHaveTextContent(target?.textContent ?? '');
+    });
+  });
+
+  it('hides the section navigation below lg', async () => {
+    setup();
+    await timeoutField();
+    const nav = screen.getByRole('navigation', { name: 'Seções da configuração' });
+    expect(nav).toHaveClass('hidden', 'lg:block');
+  });
+
+  it('shows the conflict inside an alert with Recarregar', async () => {
+    const { state } = setup(() => errorBody(409, 'conflict', CONFLICT));
+    const field = await timeoutField();
+    await userEvent.type(field, '1');
+    state.version = 5;
+    await userEvent.click(within(section('Silenciamento')).getByRole('button', { name: 'Salvar' }));
+    const alert = (await screen.findByText(CONFLICT)).closest('[role="alert"]');
+    expect(alert).toHaveAttribute('data-slot', 'alert');
+    expect(within(alert as HTMLElement).getByRole('button', { name: 'Recarregar' })).toBeVisible();
+  });
+
+  it('puts Salvar and the state in the section footer', async () => {
+    setup();
+    const field = await timeoutField();
+    await userEvent.type(field, '1');
+    const footer = within(section('Silenciamento'))
+      .getByRole('button', { name: 'Salvar' })
+      .closest('[data-slot="card-footer"]');
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole('status')).toHaveTextContent(
+      'Alterações não salvas.',
+    );
   });
 });

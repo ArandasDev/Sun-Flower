@@ -168,4 +168,22 @@ describe('actions screen', () => {
       ),
     );
   });
+
+  it('shows the result inside an Alert, with the same text', async () => {
+    setup(ALL, () => okBody({ caseId: 3, dmFailed: true }));
+    await fill();
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar aviso' }));
+    const text = await inScreen('Caso #3 registrado.');
+    const region = text.closest('[role="status"], [role="alert"]');
+    expect(region).toHaveAttribute('data-slot', 'alert');
+    expect(region).toHaveTextContent('Caso #3 registrado.Não foi possível enviar mensagem direta.');
+  });
+
+  it('places the tabs and the form in one card', async () => {
+    setup();
+    const tablist = await screen.findByRole('tablist');
+    const card = tablist.closest('[data-slot="card"]');
+    expect(card).toHaveClass('max-w-3xl');
+    expect(card).toContainElement(screen.getByRole('tabpanel'));
+  });
 });
