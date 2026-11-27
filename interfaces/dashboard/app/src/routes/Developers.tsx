@@ -1,8 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
+import { AddDialog } from '../components/AddDialog.tsx';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
 import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
@@ -25,8 +28,9 @@ export function Developers() {
   const client = useQueryClient();
   const me = useCurrentMe();
   const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [userId, setUserId] = useState('');
+  const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const query = useOperationQuery<{ developers: DeveloperEntry[] }>(
     ['admin', 'developers'],
@@ -41,8 +45,8 @@ export function Developers() {
     onSuccess: () => {
       notify('Desenvolvedor adicionado.');
       setUserId('');
+      setAdding(false);
       refresh();
-      inputRef.current?.focus();
     },
   });
   const remove = useOperationMutation<unknown, { userId: string }>(
@@ -55,7 +59,7 @@ export function Developers() {
       },
     },
   );
-  const error = add.error ?? (query.isError ? query.error : null);
+  const error = query.isError ? query.error : null;
   const trimmed = userId.trim();
   const valid = isSnowflake(trimmed);
   const developers = query.data?.developers ?? [];
@@ -80,14 +84,16 @@ export function Developers() {
       cell: ({ row }) => (
         <Button
           type="button"
-          variant="destructive"
+          variant="ghost"
           size="sm"
+          className="text-destructive hover:text-destructive"
           onClick={() => {
             add.reset();
             remove.reset();
             setRemoving(row.original.userId);
           }}
         >
+          <Trash2 aria-hidden="true" />
           Remover
         </Button>
       ),
@@ -95,25 +101,32 @@ export function Developers() {
   ]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Desenvolvedores</h1>
-      <p className="text-sm text-muted-foreground">
-        Desenvolvedores têm acesso total ao painel e podem administrar o bot.
-      </p>
-      <Card>
-        <CardContent>
-          <form
-            className="flex flex-wrap items-end gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (valid) add.mutate({ userId: trimmed });
+    <>
+      <PageHeader
+        title="Desenvolvedores"
+        description="Desenvolvedores têm acesso total ao painel e podem administrar o bot."
+        actions={
+          <AddDialog
+            triggerLabel="Adicionar desenvolvedor"
+            triggerRef={triggerRef}
+            title="Adicionar desenvolvedor"
+            submitLabel="Adicionar"
+            open={adding}
+            onOpenChange={(open) => {
+              setAdding(open);
+              if (!open) add.reset();
             }}
+            onSubmit={() => {
+              add.mutate({ userId: trimmed });
+            }}
+            pending={add.isPending}
+            canSubmit={valid}
+            error={add.error === null ? null : errorText(add.error)}
           >
-            <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor={inputId}>ID da pessoa</Label>
               <Input
                 id={inputId}
-                ref={inputRef}
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
@@ -125,12 +138,9 @@ export function Developers() {
                 }}
               />
             </div>
-            <Button type="submit" disabled={add.isPending || !valid}>
-              Adicionar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </AddDialog>
+        }
+      />
       <p role="alert" className="text-sm text-destructive empty:hidden">
         {error === null ? null : errorText(error)}
       </p>
@@ -155,7 +165,7 @@ export function Developers() {
           confirmLabel="Remover"
           pending={remove.isPending}
           error={remove.error === null ? null : errorText(remove.error)}
-          returnFocusRef={inputRef}
+          returnFocusRef={triggerRef}
           onConfirm={() => {
             remove.mutate({ userId: removing });
           }}
@@ -169,6 +179,6 @@ export function Developers() {
           </p>
         </ConfirmDialog>
       )}
-    </section>
+    </>
   );
 }
