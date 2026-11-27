@@ -97,6 +97,32 @@ describe('modules screen', () => {
     expect(await findToast('Módulo ligado.')).toBeInTheDocument();
   });
 
+  it('shows the situation in a status badge with the tone of the state', async () => {
+    setup([
+      entry({}),
+      entry({ id: 'ping', name: 'Ping', enabled: false, state: 'STOPPED' }),
+      entry({ id: 'cases', name: 'Casos', state: 'FAILED' }),
+      entry({ id: 'alarm', name: 'Alarme', state: 'STARTING' }),
+    ]);
+    const main = await screen.findByRole('main');
+    const tone = async (text: string) =>
+      (await within(main).findByText(text)).closest('[data-tone]')?.getAttribute('data-tone');
+    expect(await tone('Ligado')).toBe('active');
+    expect(await tone('Desligado')).toBe('inactive');
+    expect(await tone('Falhou ao iniciar')).toBe('failed');
+    expect(await tone('Em transição')).toBe('pending');
+  });
+
+  it('puts the search in the card header and filters the modules', async () => {
+    setup([entry({}), entry({ id: 'ping', name: 'Ping' })]);
+    await screen.findByText('Ping');
+    const search = screen.getByLabelText('Buscar');
+    expect(search.closest('[data-slot="card-header"]')).not.toBeNull();
+    await userEvent.type(search, 'ping');
+    expect(screen.getByRole('switch', { name: 'Ping' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Moderação' })).toBeNull();
+  });
+
   it('draws the table inside a card so the rows keep their padding', async () => {
     setup([entry({})]);
     const row = (await screen.findByText('Moderação')).closest('tr') as HTMLElement;
@@ -202,7 +228,8 @@ describe('modules screen', () => {
         ? errorBody(403, 'forbidden', 'Você não tem permissão para isso.')
         : undefined,
     );
-    expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
+    const message = await screen.findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
   });
 
   it('reloads the list when a live status arrives, at most once per window', async () => {

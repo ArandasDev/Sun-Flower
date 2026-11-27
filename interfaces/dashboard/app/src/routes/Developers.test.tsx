@@ -5,6 +5,7 @@ import { FakeClock } from '../fake-websocket.ts';
 import {
   errorBody,
   findToast,
+  noToast,
   okBody,
   setupOperations,
   type OperationCall,
@@ -47,6 +48,12 @@ function setup(override?: (call: OperationCall) => ReturnType<typeof okBody> | u
   );
 }
 
+async function openAdd(): Promise<{ trigger: HTMLElement; dialog: HTMLElement }> {
+  const trigger = screen.getByRole('button', { name: 'Adicionar desenvolvedor' });
+  await userEvent.click(trigger);
+  return { trigger, dialog: screen.getByRole('dialog', { name: 'Adicionar desenvolvedor' }) };
+}
+
 describe('developers screen', () => {
   it('lists the developers and marks the own row', async () => {
     setup();
@@ -57,11 +64,12 @@ describe('developers screen', () => {
     expect(within(other as HTMLElement).queryByText('Você')).toBeNull();
   });
 
-  it('adds a developer by id and reloads', async () => {
+  it('adds a developer by id from the dialog and reloads', async () => {
     const { calls } = setup();
     await screen.findByText(OTHER);
-    await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
-    await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    const { dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     expect(await screen.findByText(NEW_ID)).toBeInTheDocument();
     expect(await findToast('Desenvolvedor adicionado.')).toBeInTheDocument();
     expect(calls.find((call) => call.name === 'administration.developers.add')?.input).toEqual({
@@ -69,13 +77,43 @@ describe('developers screen', () => {
     });
   });
 
-  it('puts focus back on the id field after adding', async () => {
+  it('closes the dialog and puts focus back on its trigger after adding', async () => {
     setup();
     await screen.findByText(OTHER);
-    await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
-    await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    const { trigger, dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     await screen.findByText(NEW_ID);
-    expect(screen.getByLabelText('ID da pessoa')).toHaveFocus();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
+    await userEvent.click(trigger);
+    expect(screen.getByLabelText('ID da pessoa')).toHaveValue('');
+  });
+
+  it('keeps the dialog open with the error on a 422', async () => {
+    setup((call) =>
+      call.name === 'administration.developers.add'
+        ? errorBody(422, 'invalid', 'Pessoa inválida.')
+        : undefined,
+    );
+    await screen.findByText(OTHER);
+    const { dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Pessoa inválida.');
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(noToast()).toBe(true);
+  });
+
+  it('closes the dialog on Escape without sending', async () => {
+    const { calls } = setup();
+    await screen.findByText(OTHER);
+    const { trigger, dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(calls.some((call) => call.name === 'administration.developers.add')).toBe(false);
   });
 
   it('draws the table inside a card so the rows keep their padding', async () => {
@@ -84,17 +122,39 @@ describe('developers screen', () => {
     expect(list?.closest('[data-slot="card"]')).not.toBeNull();
   });
 
+  it('puts the search in the card header and filters the developers', async () => {
+    setup();
+    await screen.findByText(SELF);
+    const search = screen.getByLabelText('Buscar');
+    expect(search.closest('[data-slot="card-header"]')).not.toBeNull();
+    await userEvent.type(search, OTHER);
+    expect(screen.queryByText(SELF)).toBeNull();
+    expect(screen.getByText(OTHER)).toBeInTheDocument();
+  });
+
+  it('shows the empty state when there is no developer', async () => {
+    setup((call) =>
+      call.name === 'administration.developers.list' ? okBody({ developers: [] }) : undefined,
+    );
+    const empty = await screen.findByText('Nenhum desenvolvedor.');
+    expect(empty.closest('.border-dashed')).not.toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
   it('blocks an invalid id', async () => {
     setup();
     await screen.findByText(OTHER);
-    await userEvent.type(screen.getByLabelText('ID da pessoa'), '12');
-    expect(screen.getByRole('button', { name: 'Adicionar' })).toBeDisabled();
+    const { dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), '12');
+    expect(within(dialog).getByRole('button', { name: 'Adicionar' })).toBeDisabled();
   });
 
   it('asks for confirmation before removing, then sends the id', async () => {
     const { calls } = setup();
     const row = (await screen.findByText(OTHER)).closest('tr') as HTMLElement;
-    await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
+    const remove = within(row).getByRole('button', { name: 'Remover' });
+    expect(remove).toHaveClass('text-destructive');
+    await userEvent.click(remove);
     expect(calls.some((call) => call.name === 'administration.developers.remove')).toBe(false);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remover' }));
@@ -103,6 +163,7 @@ describe('developers screen', () => {
     expect(calls.find((call) => call.name === 'administration.developers.remove')?.input).toEqual({
       userId: OTHER,
     });
+    expect(screen.getByRole('button', { name: 'Adicionar desenvolvedor' })).toHaveFocus();
   });
 
   it('shows the server conflict when removing oneself', async () => {
@@ -124,23 +185,26 @@ describe('developers screen', () => {
         ? errorBody(403, 'forbidden', 'Você não tem permissão para isso.')
         : undefined,
     );
-    expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
+    const message = await screen.findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
   });
 });
 
 describe('developers screen: latest error', () => {
-  it('clears a failed add when a removal starts', async () => {
+  it('does not show a failed add again after the dialog is closed', async () => {
     setup((call) =>
       call.name === 'administration.developers.add'
         ? errorBody(422, 'invalid', 'Pessoa inválida.')
         : undefined,
     );
     await screen.findByText(OTHER);
-    await userEvent.type(screen.getByLabelText('ID da pessoa'), NEW_ID);
-    await userEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+    const { trigger, dialog } = await openAdd();
+    await userEvent.type(within(dialog).getByLabelText('ID da pessoa'), NEW_ID);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
     expect(await screen.findByText('Pessoa inválida.')).toBeInTheDocument();
-    const row = screen.getByText(OTHER).closest('tr') as HTMLElement;
-    await userEvent.click(within(row).getByRole('button', { name: 'Remover' }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByText('Pessoa inválida.')).toBeNull();
+    await userEvent.click(trigger);
     expect(screen.queryByText('Pessoa inválida.')).toBeNull();
   });
 });

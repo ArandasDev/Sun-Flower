@@ -1,4 +1,5 @@
 import { ApiError } from './api.ts';
+import type { StatusTone } from './components/StatusBadge.tsx';
 
 export type Level = 'developer' | 'owner' | 'staff' | 'member';
 
@@ -56,6 +57,13 @@ const CASE_STATUSES: Record<string, string> = {
 
 export function caseStatusLabel(status: string): string {
   return CASE_STATUSES[status] ?? status;
+}
+
+/** The badge tone of a case status: open is pending, actioned is active, the rest is inactive. */
+export function caseStatusTone(status: string): StatusTone {
+  if (status === 'open') return 'pending';
+  if (status === 'actioned') return 'active';
+  return 'inactive';
 }
 
 const CASE_ACTIONS: Record<string, string> = {

@@ -100,14 +100,51 @@ function renderTemplate<TContext>(
 
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
 
+interface DataTableSearchProps {
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+  className?: string;
+}
+
+/**
+ * The search field of a `DataTable`. A screen renders it itself, in the toolbar of its `Card`
+ * header, and passes the same value to the table's `search`.
+ */
+export function DataTableSearch({
+  value,
+  onChange,
+  label = 'Buscar',
+  className,
+}: DataTableSearchProps) {
+  const id = useId();
+  return (
+    <div className={cn('flex w-full max-w-sm flex-col gap-1.5', className)}>
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="search"
+        autoComplete="off"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      />
+    </div>
+  );
+}
+
 interface DataTableProps<T extends RowData> {
   columns: DataTableColumn<T>[];
   data: T[];
   /** A stable key per item, so a row's DOM (and focus) never passes to another item after a reload. */
   getRowId?: (item: T) => string;
+  /**
+   * The search term, when the screen renders the field itself with `DataTableSearch` (in the
+   * `Card` header toolbar); the table then shows no field of its own.
+   */
+  search?: string;
   searchLabel?: string;
-  /** Shown instead of the table when `data` is empty; without it, nothing is shown. */
-  emptyText?: string;
   noResultsText?: string;
 }
 
@@ -120,11 +157,10 @@ export function DataTable<T extends RowData>({
   columns,
   data,
   getRowId,
+  search: externalSearch,
   searchLabel = 'Buscar',
-  emptyText,
   noResultsText = 'Nenhum resultado para a busca.',
 }: DataTableProps<T>) {
-  const searchId = useId();
   const table = useTable({
     features,
     columns,
@@ -135,31 +171,26 @@ export function DataTable<T extends RowData>({
     enableSortingRemoval: true,
     enableMultiSort: false,
     sortDescFirst: false,
+    ...(externalSearch === undefined ? {} : { state: { globalFilter: externalSearch } }),
   });
 
-  if (data.length === 0) {
-    return emptyText === undefined ? null : (
-      <p className="text-sm text-muted-foreground">{emptyText}</p>
-    );
-  }
+  // With no data the screen shows its own EmptyState, so the table renders nothing.
+  if (data.length === 0) return null;
 
   const rows = table.getRowModel().rows;
   const search = typeof table.state.globalFilter === 'string' ? table.state.globalFilter : '';
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex max-w-sm flex-col gap-1.5">
-        <Label htmlFor={searchId}>{searchLabel}</Label>
-        <Input
-          id={searchId}
-          type="search"
-          autoComplete="off"
+      {externalSearch === undefined ? (
+        <DataTableSearch
+          label={searchLabel}
           value={search}
-          onChange={(event) => {
-            table.setGlobalFilter(event.target.value);
+          onChange={(value) => {
+            table.setGlobalFilter(value);
           }}
         />
-      </div>
+      ) : null}
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((group) => (

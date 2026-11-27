@@ -1,8 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
-import { DataTable, createDataTableColumns } from '../components/DataTable.tsx';
-import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
+import { AddDialog } from '../components/AddDialog.tsx';
+import { DataTable, DataTableSearch, createDataTableColumns } from '../components/DataTable.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
+import { RemoveButton } from '../components/RemoveButton.tsx';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
@@ -18,11 +22,19 @@ interface DomainRow {
 
 const column = createDataTableColumns<DomainRow>();
 
-function DomainList({ list, title }: { list: ListName; title: string }) {
+interface DomainListProps {
+  list: ListName;
+  title: string;
+  dialogTitle: string;
+}
+
+function DomainList({ list, title, dialogTitle }: DomainListProps) {
   const client = useQueryClient();
   const titleId = useId();
   const inputId = useId();
   const [text, setText] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState('');
   const query = useOperationQuery<{ domains: string[] }>(
     ['domains', list],
     'moderation.domains.list',
@@ -35,6 +47,7 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
     onSuccess: () => {
       notify('Domínio adicionado.');
       setText('');
+      setAdding(false);
       refresh();
     },
   });
@@ -44,7 +57,8 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
       refresh();
     },
   });
-  const error = add.error ?? remove.error ?? (query.isError ? query.error : null);
+  const error = remove.error ?? (query.isError ? query.error : null);
+  const trimmed = text.trim();
   const domains = query.data?.domains ?? [];
   const rows = domains.map((domain) => ({ domain }));
   const domainId = (index: number): string => `${titleId}-d${String(index)}`;
@@ -61,18 +75,13 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
+        <RemoveButton
           aria-describedby={domainId(row.index)}
           disabled={remove.isPending}
           onClick={() => {
             remove.mutate({ domain: row.original.domain });
           }}
-        >
-          Remover
-        </Button>
+        />
       ),
     }),
   ]);
@@ -85,36 +94,52 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
             {title}
           </h2>
         </CardTitle>
+        <CardAction>
+          <AddDialog
+            triggerLabel="Adicionar"
+            triggerVariant="outline"
+            triggerSize="sm"
+            triggerDescribedBy={titleId}
+            title={dialogTitle}
+            submitLabel="Adicionar"
+            open={adding}
+            onOpenChange={(open) => {
+              setAdding(open);
+              if (!open) add.reset();
+            }}
+            onSubmit={() => {
+              remove.reset();
+              add.mutate({ domain: trimmed });
+            }}
+            pending={add.isPending}
+            canSubmit={trimmed !== ''}
+            error={add.error === null ? null : errorText(add.error)}
+          >
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={inputId}>Domínio</Label>
+              <Input
+                id={inputId}
+                type="text"
+                autoComplete="off"
+                maxLength={253}
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value);
+                }}
+              />
+            </div>
+          </AddDialog>
+        </CardAction>
+        {domains.length === 0 ? null : (
+          <DataTableSearch value={search} onChange={setSearch} className="mt-2" />
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const domain = text.trim();
-            if (domain !== '') add.mutate({ domain });
-          }}
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <Label htmlFor={inputId}>Adicionar domínio</Label>
-            <Input
-              id={inputId}
-              type="text"
-              autoComplete="off"
-              maxLength={253}
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-              }}
-            />
-          </div>
-          <Button type="submit" disabled={add.isPending || text.trim() === ''}>
-            Adicionar
-          </Button>
-        </form>
-        <p role="alert" className="text-sm text-destructive empty:hidden">
-          {error === null ? null : errorText(error)}
-        </p>
+        {error === null ? null : (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{errorText(error)}</AlertDescription>
+          </Alert>
+        )}
         {query.isPending ? (
           <div className="flex flex-col gap-2">
             <p className="sr-only">Carregando…</p>
@@ -123,14 +148,17 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
             ))}
           </div>
         ) : null}
-        {domains.length > 0 || query.isSuccess ? (
+        {query.isSuccess && domains.length === 0 ? (
+          <EmptyState title="Nenhum domínio nesta lista." />
+        ) : null}
+        {domains.length === 0 ? null : (
           <DataTable
             columns={columns}
             data={rows}
             getRowId={(item) => item.domain}
-            emptyText="Nenhum domínio nesta lista."
+            search={search}
           />
-        ) : null}
+        )}
       </CardContent>
     </Card>
   );
@@ -138,16 +166,15 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
 
 export function Domains() {
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Domínios</h1>
-      <p className="text-sm text-muted-foreground">
-        Domínios bloqueados contam como sinal forte de golpe. Links para domínios permitidos são
-        ignorados na análise.
-      </p>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DomainList list="block" title="Bloqueados" />
-        <DomainList list="allow" title="Permitidos" />
+    <>
+      <PageHeader
+        title="Domínios"
+        description="Domínios bloqueados contam como sinal forte de golpe. Links para domínios permitidos são ignorados na análise."
+      />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <DomainList list="block" title="Bloqueados" dialogTitle="Adicionar domínio bloqueado" />
+        <DomainList list="allow" title="Permitidos" dialogTitle="Adicionar domínio permitido" />
       </div>
-    </section>
+    </>
   );
 }

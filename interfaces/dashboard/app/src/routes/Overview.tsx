@@ -1,10 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
+import { useId, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { ApiError, apiFetch } from '../api.ts';
-import { Badge } from '../components/ui/badge.tsx';
-import { Card, CardContent } from '../components/ui/card.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
+import { cn } from '../lib/utils.ts';
 import { formatUptime } from '../format.ts';
 import { connectionLabel, moduleStateLabel } from '../labels.ts';
+import { useLive } from '../live.ts';
+import { useCurrentMe } from '../session.tsx';
 import { NoPermission } from './NoPermission.tsx';
 
 interface Status {
@@ -18,9 +25,38 @@ export function statusRefetchInterval(query: { state: { status: string } }): num
   return query.state.status === 'error' ? false : 15_000;
 }
 
-const TITLE_CLASS = 'text-2xl font-semibold tracking-tight';
+const TITLE = 'Visão geral';
+const DESCRIPTION = 'Estado do bot, dos módulos e de quem está no painel.';
+
+function moduleTone(state: string): StatusTone {
+  if (state === 'RUNNING') return 'active';
+  if (state === 'FAILED') return 'failed';
+  return 'inactive';
+}
+
+function Indicator({
+  label,
+  alarm = false,
+  children,
+}: {
+  label: string;
+  alarm?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-1">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className={cn('text-2xl font-semibold', alarm && 'text-destructive')}>{children}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function Overview() {
+  const { presence } = useLive();
+  const modulesTitleId = useId();
+  const canManageModules = useCurrentMe().permissions.includes('core.modules.manage');
   const query = useQuery({
     queryKey: ['status'],
     queryFn: () => apiFetch<Status>('/api/status'),
@@ -30,59 +66,68 @@ export function Overview() {
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 403) return <NoPermission />;
     return (
-      <section className="flex flex-col gap-4">
-        <h1 className={TITLE_CLASS}>Visão geral</h1>
-        <p role="alert" className="text-sm text-destructive">
-          {query.error.message}
-        </p>
-      </section>
+      <>
+        <PageHeader title={TITLE} description={DESCRIPTION} />
+        <Alert variant="destructive">
+          <AlertDescription>{query.error.message}</AlertDescription>
+        </Alert>
+      </>
     );
   }
   if (query.isPending) {
     return (
-      <section className="flex max-w-2xl flex-col gap-4">
-        <h1 className={TITLE_CLASS}>Visão geral</h1>
+      <>
+        <PageHeader title={TITLE} description={DESCRIPTION} />
         <p className="sr-only">Carregando…</p>
         <Skeleton aria-hidden="true" className="h-24 w-full" />
         <Skeleton aria-hidden="true" className="h-40 w-full" />
-      </section>
+      </>
     );
   }
   const status = query.data;
+  const running = status.modules.filter((module) => module.state === 'RUNNING').length;
   return (
-    <section className="flex max-w-2xl flex-col gap-4">
-      <h1 className={TITLE_CLASS}>Visão geral</h1>
-      <Card>
+    <>
+      <PageHeader title={TITLE} description={DESCRIPTION} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Indicator label="Conexão" alarm={status.connection === 'disconnected'}>
+          {connectionLabel(status.connection)}
+        </Indicator>
+        <Indicator label="Tempo no ar">{formatUptime(status.uptimeMs)}</Indicator>
+        <Indicator label="Módulos ativos">
+          {running} de {status.modules.length}
+        </Indicator>
+        <Indicator label="No painel agora">{presence.length}</Indicator>
+      </div>
+      <Card role="region" aria-labelledby={modulesTitleId}>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <CardTitle>
+            <h2 id={modulesTitleId} className="text-base font-semibold">
+              Módulos
+            </h2>
+          </CardTitle>
+          {canManageModules ? (
+            <Link
+              to="/modulos"
+              className="rounded-sm text-sm text-link underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Gerenciar módulos
+            </Link>
+          ) : null}
+        </CardHeader>
         <CardContent>
-          <dl className="flex flex-wrap gap-x-12 gap-y-4">
-            <div className="flex flex-col gap-1">
-              <dt className="text-sm text-muted-foreground">Conexão</dt>
-              <dd>
-                <Badge variant={status.connection === 'disconnected' ? 'destructive' : 'secondary'}>
-                  {connectionLabel(status.connection)}
-                </Badge>
-              </dd>
-            </div>
-            <div className="flex flex-col gap-1">
-              <dt className="text-sm text-muted-foreground">Tempo no ar</dt>
-              <dd className="text-lg font-semibold">{formatUptime(status.uptimeMs)}</dd>
-            </div>
-          </dl>
+          <ul className="divide-y">
+            {status.modules.map((module) => (
+              <li key={module.id} className="flex items-center justify-between gap-4 py-2.5">
+                <span className="font-mono text-sm">{module.id}</span>
+                <StatusBadge tone={moduleTone(module.state)}>
+                  {moduleStateLabel(module.state)}
+                </StatusBadge>
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
-      <h2 className="text-lg font-semibold">Módulos</h2>
-      <Card className="py-2">
-        <ul className="divide-y">
-          {status.modules.map((module) => (
-            <li key={module.id} className="flex items-center justify-between gap-4 px-6 py-2.5">
-              <span className="font-mono text-sm">{module.id}</span>
-              <Badge variant={module.state === 'FAILED' ? 'destructive' : 'secondary'}>
-                {moduleStateLabel(module.state)}
-              </Badge>
-            </li>
-          ))}
-        </ul>
-      </Card>
-    </section>
+    </>
   );
 }

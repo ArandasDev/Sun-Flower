@@ -123,6 +123,14 @@ npm run staff -- grant moderation.actions.ban <ID do cargo>
 
 O painel é opcional e roda no mesmo processo do bot, atrás de um proxy HTTPS ([0021](docs/decisions/0021-panel-hosting.md)). Sem `PANEL_PUBLIC_URL` ele fica desligado e o bot sobe normalmente. Na etapa 1 ele tem login com Discord, "Meu perfil", "Visão geral" (para desenvolvedores e o dono), conexão ao vivo com reconexão automática e a presença de quem está no painel. Na etapa 2 ele ganha a moderação: casos, ações manuais, domínios e configuração, cada tela visível só a quem tem a permissão correspondente, e "Meus casos" em "Meu perfil", visível a todos. Na etapa 3 ele ganha a administração: permissões dos cargos, desenvolvedores, módulos, logs e sessões.
 
+**Estrutura das telas.** Toda tela começa com um cabeçalho: título, descrição e, à direita, a ação principal. Os blocos vêm em cartões, e as tabelas trazem uma barra com a busca. Nas telas com tabela (Módulos, Logs, Sessões, Domínios e Desenvolvedores), a busca fica na barra do cartão; em "Permissões", cada cartão de permissão traz a própria busca acima da tabela.
+
+- **Adicionar:** "Domínios", "Desenvolvedores" e "Permissões" abrem um `Dialog` pelo botão de adicionar. Ele fecha quando dá certo e mostra o erro dentro dele quando falha.
+- **Sessões:** cada linha tem um menu de ações, com a revogação da sessão.
+- **Visão geral:** mostra indicadores acima do detalhe.
+- **Configuração:** tem uma navegação por seções, com âncoras, para ir direto a cada regra de moderação.
+- **Vazio e erro:** listas sem itens mostram uma mensagem própria, e o erro de uma tela aparece num aviso (`Alert`).
+
 **Variáveis** (todas no `.env`): o painel liga quando `PANEL_PUBLIC_URL` está definida, e então `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` e `SESSION_SECRET` passam a ser obrigatórias; `PANEL_PORT` (padrão `3000`) e `PANEL_TRUST_PROXY` são opcionais:
 
 | Variável                | Conteúdo                                                                             |

@@ -2,9 +2,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
-import { DataTable, createDataTableColumns } from '../components/DataTable.tsx';
-import { Badge } from '../components/ui/badge.tsx';
-import { Card, CardContent } from '../components/ui/card.tsx';
+import { DataTable, DataTableSearch, createDataTableColumns } from '../components/DataTable.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { Switch } from '../components/ui/switch.tsx';
 import { errorText } from '../labels.ts';
@@ -40,8 +42,12 @@ function situation(entry: ModuleEntry): string {
   return 'Em transição';
 }
 
-function situationVariant(entry: ModuleEntry): 'secondary' | 'destructive' {
-  return entry.enabled && entry.state === 'FAILED' ? 'destructive' : 'secondary';
+/** The tone of `situation`: on, off, failed, or in transition. */
+function situationTone(entry: ModuleEntry): StatusTone {
+  if (entry.state === 'RUNNING') return 'active';
+  if (!entry.enabled) return 'inactive';
+  if (entry.state === 'FAILED') return 'failed';
+  return 'pending';
 }
 
 const column = createDataTableColumns<ModuleEntry>();
@@ -50,6 +56,7 @@ export function Modules() {
   const client = useQueryClient();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const watchFocus = useRef(false);
+  const [search, setSearch] = useState('');
   const [disabling, setDisabling] = useState<ModuleEntry | null>(null);
   const query = useOperationQuery<{ modules: ModuleEntry[] }>(
     ['admin', 'modules'],
@@ -93,9 +100,9 @@ export function Modules() {
       id: 'situation',
       header: 'Situação',
       cell: ({ row, getValue }) => (
-        <Badge variant={situationVariant(row.original)} className="whitespace-normal">
+        <StatusBadge tone={situationTone(row.original)} className="whitespace-normal">
           {getValue()}
-        </Badge>
+        </StatusBadge>
       ),
     }),
     column.accessor('description', {
@@ -152,17 +159,17 @@ export function Modules() {
     disabling === null && toggle.error !== null ? toggle.error : query.isError ? query.error : null;
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight">
-        Módulos
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Ligue ou desligue módulos do bot sem reiniciá-lo. A escolha vale também depois de um
-        reinício.
-      </p>
-      <p role="alert" className="text-sm text-destructive empty:hidden">
-        {pageError === null ? null : errorText(pageError)}
-      </p>
+    <>
+      <PageHeader
+        title="Módulos"
+        description="Ligue ou desligue módulos do bot sem reiniciá-lo. A escolha vale também depois de um reinício."
+        headingRef={headingRef}
+      />
+      {pageError === null ? null : (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{errorText(pageError)}</AlertDescription>
+        </Alert>
+      )}
       {query.isPending ? (
         <div className="flex flex-col gap-2">
           <p className="sr-only">Carregando…</p>
@@ -173,8 +180,16 @@ export function Modules() {
       ) : null}
       {modules.length === 0 ? null : (
         <Card>
+          <CardHeader className="border-b">
+            <DataTableSearch value={search} onChange={setSearch} />
+          </CardHeader>
           <CardContent>
-            <DataTable columns={columns} data={modules} getRowId={(entry) => entry.id} />
+            <DataTable
+              columns={columns}
+              data={modules}
+              getRowId={(entry) => entry.id}
+              search={search}
+            />
           </CardContent>
         </Card>
       )}
@@ -199,6 +214,6 @@ export function Modules() {
           </p>
         </ConfirmDialog>
       )}
-    </section>
+    </>
   );
 }

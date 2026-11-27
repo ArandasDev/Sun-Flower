@@ -2,8 +2,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState } from 'react';
 import { ApiError } from '../api.ts';
 import { isSnowflake } from '../ids.ts';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Button } from '../components/ui/button.tsx';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
 import { NativeSelect } from '../components/ui/native-select.tsx';
@@ -255,6 +257,9 @@ const SECTIONS: readonly Section[] = [
 ];
 
 const keyOf = (field: Field): string => field.path.join('.');
+
+/** The id of a section's heading: it names the section and is the target of its link. */
+const titleIdOf = (section: Section): string => `config-${section.id}`;
 
 function getPath(root: unknown, path: readonly string[]): unknown {
   let current = root;
@@ -665,44 +670,58 @@ function ConfigForm({ latest, reload }: FormProps) {
   };
 
   return (
-    <>
-      <div
-        role="alert"
-        className="sticky top-2 z-5 flex flex-wrap items-center gap-3 rounded-lg border border-destructive bg-card px-4 py-2.5 empty:hidden"
-      >
-        {conflict || stale ? (
-          <>
-            <p className="m-0 font-semibold text-destructive">{CONFLICT_TEXT}</p>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                void doReload();
-              }}
-            >
-              Recarregar
-            </Button>
-          </>
-        ) : null}
+    <div className="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
+      <nav aria-label="Seções da configuração" className="sticky top-20 hidden self-start lg:block">
+        <ul className="flex flex-col gap-1">
+          {SECTIONS.map((section) => (
+            <li key={section.id}>
+              <a
+                href={`#${titleIdOf(section)}`}
+                className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                {section.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="flex w-full max-w-3xl min-w-0 flex-col gap-6">
+        {/* Mounted while empty, so the conflict is announced when it appears. */}
+        <Alert variant="destructive" className="sticky top-16 z-5 border-destructive empty:hidden">
+          {conflict || stale ? (
+            <AlertDescription className="flex flex-wrap items-center gap-3">
+              <p className="m-0 font-semibold text-destructive">{CONFLICT_TEXT}</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void doReload();
+                }}
+              >
+                Recarregar
+              </Button>
+            </AlertDescription>
+          ) : null}
+        </Alert>
+        {SECTIONS.map((section) => (
+          <SectionForm
+            key={section.id}
+            section={section}
+            draft={draft}
+            pending={save.isPending}
+            problem={problems[section.id]}
+            saved={saved === section.id}
+            dirty={sectionDirty(section, draft, baseDraft)}
+            onEdit={(patch) => {
+              edit(section, patch);
+            }}
+            onSubmit={() => {
+              submit(section);
+            }}
+          />
+        ))}
       </div>
-      {SECTIONS.map((section) => (
-        <SectionForm
-          key={section.id}
-          section={section}
-          draft={draft}
-          pending={save.isPending}
-          problem={problems[section.id]}
-          saved={saved === section.id}
-          dirty={sectionDirty(section, draft, baseDraft)}
-          onEdit={(patch) => {
-            edit(section, patch);
-          }}
-          onSubmit={() => {
-            submit(section);
-          }}
-        />
-      ))}
-    </>
+    </div>
   );
 }
 
@@ -727,7 +746,7 @@ function SectionForm({
   onEdit,
   onSubmit,
 }: SectionProps) {
-  const titleId = useId();
+  const titleId = titleIdOf(section);
   const errors = sectionErrors(section, draft);
   const emptyAlert =
     section.id === 'alerts' && (draft.values['alertChannelId'] ?? '').trim() === '';
@@ -735,19 +754,19 @@ function SectionForm({
     <Card role="region" aria-labelledby={titleId}>
       <CardHeader>
         <CardTitle>
-          <h2 id={titleId} className="text-base font-semibold">
+          <h2 id={titleId} className="scroll-mt-20 text-base font-semibold">
             {section.title}
           </h2>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (dirty && Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
-          }}
-        >
+      <form
+        className="flex flex-col gap-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (dirty && Object.keys(errors).length === 0 && !emptyAlert && !pending) onSubmit();
+        }}
+      >
+        <CardContent className="flex flex-col gap-4">
           <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-x-5 gap-y-4">
             {section.fields.map((field) => (
               <FieldInput
@@ -773,22 +792,22 @@ function SectionForm({
               }}
             />
           ) : null}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="submit"
-              disabled={!dirty || pending || emptyAlert || Object.keys(errors).length > 0}
-            >
-              Salvar
-            </Button>
-            <span role="status" className="text-sm text-muted-foreground">
-              {dirty ? 'Alterações não salvas.' : saved ? 'Salvo.' : null}
-            </span>
-          </div>
-          <p role="alert" className="text-sm text-destructive empty:hidden">
+        </CardContent>
+        <CardFooter className="flex-wrap gap-3 border-t">
+          <Button
+            type="submit"
+            disabled={!dirty || pending || emptyAlert || Object.keys(errors).length > 0}
+          >
+            Salvar
+          </Button>
+          <span role="status" className="text-sm text-muted-foreground">
+            {dirty ? 'Alterações não salvas.' : saved ? 'Salvo.' : null}
+          </span>
+          <p role="alert" className="basis-full text-sm text-destructive empty:hidden">
             {problem}
           </p>
-        </form>
-      </CardContent>
+        </CardFooter>
+      </form>
     </Card>
   );
 }
@@ -805,15 +824,18 @@ export function ModerationConfig() {
     return fresh;
   };
   return (
-    <section className="flex max-w-2xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Moderação</h1>
+    <>
+      <PageHeader
+        title="Configuração"
+        description="Regras da moderação automática. Cada seção é salva separadamente."
+      />
       {query.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorText(query.error)}
-        </p>
+        <Alert variant="destructive" className="max-w-3xl">
+          <AlertDescription>{errorText(query.error)}</AlertDescription>
+        </Alert>
       ) : null}
       {query.isPending ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex max-w-3xl flex-col gap-2">
           <p className="sr-only">Carregando…</p>
           {[0, 1, 2].map((index) => (
             <Skeleton key={index} aria-hidden="true" className="h-24 w-full" />
@@ -821,6 +843,6 @@ export function ModerationConfig() {
         </div>
       ) : null}
       {query.data === undefined ? null : <ConfigForm latest={query.data} reload={reload} />}
-    </section>
+    </>
   );
 }

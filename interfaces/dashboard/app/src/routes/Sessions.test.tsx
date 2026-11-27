@@ -23,6 +23,12 @@ const rowsOf = (userId: string): HTMLElement[] =>
     .filter((row) => within(row).queryAllByRole('cell').length > 0)
     .filter((row) => within(row).queryByText(userId) !== null);
 
+/** Opens the actions menu of a session row and chooses an item. */
+async function chooseAction(row: HTMLElement, item: string): Promise<void> {
+  await userEvent.click(within(row).getByRole('button', { name: /^Ações da sessão de / }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: item }));
+}
+
 function setup(override?: (call: OperationCall) => ReturnType<typeof okBody> | undefined) {
   let sessions = [
     {
@@ -69,11 +75,15 @@ describe('sessions screen', () => {
     const other = rowsOf(OTHER);
     expect(own).toHaveLength(1);
     expect(within(own[0]!).getByText('Você')).toBeInTheDocument();
-    expect(within(own[0]!).getByRole('button', { name: 'Encerrar' })).toBeInTheDocument();
+    expect(
+      within(own[0]!).getByRole('button', { name: `Ações da sessão de ${SELF}` }),
+    ).toBeInTheDocument();
     expect(other).toHaveLength(2);
     for (const row of other) {
       expect(within(row).queryByText('Você')).toBeNull();
-      expect(within(row).getByRole('button', { name: 'Encerrar' })).toBeInTheDocument();
+      expect(
+        within(row).getByRole('button', { name: `Ações da sessão de ${OTHER}` }),
+      ).toBeInTheDocument();
     }
   });
 
@@ -84,21 +94,53 @@ describe('sessions screen', () => {
     expect(rowsOf(SELF)).toHaveLength(0);
     const other = rowsOf(OTHER);
     expect(other).toHaveLength(2);
-    await userEvent.click(within(other[0]!).getByRole('button', { name: 'Encerrar' }));
+    // The second filtered row is not the second row of the list.
+    await chooseAction(other[1]!, 'Encerrar');
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls.find((call) => call.name === 'administration.sessions.revoke')?.input).toEqual({
-      ref: 'bbbbbbbbbbbbbbbb',
+      ref: 'cccccccccccccccc',
     });
+  });
+
+  it('ends all sessions of the person of a filtered row from its menu', async () => {
+    const { calls } = setup();
+    await screen.findByRole('table');
+    await userEvent.type(screen.getByLabelText('Buscar'), OTHER);
+    // The first filtered row is not the first row of the list, which is the own session.
+    await chooseAction(rowsOf(OTHER)[0]!, 'Encerrar todas desta pessoa');
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls.filter((call) => call.name === 'administration.sessions.revoke')).toHaveLength(0);
+    expect(calls.find((call) => call.name === 'administration.sessions.revoke-all')?.input).toEqual(
+      { userId: OTHER },
+    );
+  });
+
+  it('puts the search in the card header and marks ending all as destructive', async () => {
+    setup();
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('Buscar').closest('[data-slot="card-header"]')).not.toBeNull();
+    await userEvent.click(
+      within(rowsOf(OTHER)[0]!).getByRole('button', { name: `Ações da sessão de ${OTHER}` }),
+    );
+    expect(
+      await screen.findByRole('menuitem', { name: 'Encerrar todas desta pessoa' }),
+    ).toHaveClass('text-destructive');
+    expect(screen.getByRole('menuitem', { name: 'Encerrar' })).not.toHaveClass('text-destructive');
   });
 
   it('asks for confirmation, then sends the ref of one session', async () => {
     const { calls } = setup();
     await screen.findByRole('table');
-    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
+    await chooseAction(rowsOf(OTHER)[0]!, 'Encerrar');
     expect(calls.some((call) => call.name === 'administration.sessions.revoke')).toBe(false);
     const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveFocus(),
+    );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(calls.find((call) => call.name === 'administration.sessions.revoke')?.input).toEqual({
@@ -106,14 +148,15 @@ describe('sessions screen', () => {
     });
     expect(await findToast('Sessão revogada.')).toBeInTheDocument();
     await waitFor(() => expect(rowsOf(OTHER)).toHaveLength(1));
+    // The menu and the dialog leave the page usable, with focus on the title.
+    expect(document.body.style.pointerEvents).not.toBe('none');
+    expect(screen.getByRole('heading', { name: 'Sessões', level: 1 })).toHaveFocus();
   });
 
   it('asks for confirmation, then sends the user id to end all of a person', async () => {
     const { calls } = setup();
     await screen.findByRole('table');
-    await userEvent.click(
-      within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar todas desta pessoa' }),
-    );
+    await chooseAction(rowsOf(OTHER)[0]!, 'Encerrar todas desta pessoa');
     expect(calls.some((call) => call.name === 'administration.sessions.revoke-all')).toBe(false);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
@@ -132,7 +175,7 @@ describe('sessions screen', () => {
         : undefined,
     );
     await screen.findByRole('table');
-    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
+    await chooseAction(rowsOf(OTHER)[0]!, 'Encerrar');
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     expect(await within(dialog).findByText('Sessão não encontrada.')).toBeInTheDocument();
@@ -146,7 +189,7 @@ describe('sessions screen', () => {
         : undefined,
     );
     await screen.findByRole('table');
-    await userEvent.click(within(rowsOf(OTHER)[0]!).getByRole('button', { name: 'Encerrar' }));
+    await chooseAction(rowsOf(OTHER)[0]!, 'Encerrar');
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Encerrar' }));
     await within(dialog).findByText('Sessão não encontrada.');
@@ -159,7 +202,8 @@ describe('sessions screen', () => {
     setup((call) =>
       call.name === 'administration.sessions.list' ? okBody({ sessions: [] }) : undefined,
     );
-    expect(await screen.findByText('Nenhuma sessão aberta.')).toBeInTheDocument();
+    const empty = await screen.findByText('Nenhuma sessão aberta.');
+    expect(empty.closest('.border-dashed')).not.toBeNull();
   });
 
   it('shows "Sem permissão." on a 403', async () => {
@@ -168,6 +212,7 @@ describe('sessions screen', () => {
         ? errorBody(403, 'forbidden', 'Você não tem permissão para isso.')
         : undefined,
     );
-    expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
+    const message = await screen.findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
   });
 });

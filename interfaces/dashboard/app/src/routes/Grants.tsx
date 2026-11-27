@@ -1,8 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
+import { AddDialog } from '../components/AddDialog.tsx';
 import { formatDate } from '../components/CaseDetail.tsx';
 import { DataTable, createDataTableColumns, sortBy } from '../components/DataTable.tsx';
-import { Button } from '../components/ui/button.tsx';
+import { EmptyState } from '../components/EmptyState.tsx';
+import { PageHeader } from '../components/PageHeader.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
+import { RemoveButton } from '../components/RemoveButton.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Label } from '../components/ui/label.tsx';
@@ -45,10 +49,10 @@ export function Grants() {
   const client = useQueryClient();
   const selectId = useId();
   const inputId = useId();
-  const selectRef = useRef<HTMLSelectElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [permission, setPermission] = useState('');
   const [roleId, setRoleId] = useState('');
+  const [granting, setGranting] = useState(false);
   const query = useOperationQuery<GrantList>(
     ['admin', 'grants'],
     'administration.grants.list',
@@ -64,18 +68,18 @@ export function Grants() {
     onSuccess: () => {
       notify('Permissão concedida.');
       setRoleId('');
+      setGranting(false);
       refresh();
-      inputRef.current?.focus();
     },
   });
   const revoke = useOperationMutation<unknown, GrantInput>('administration.grants.revoke', {
     onSuccess: () => {
       notify('Permissão removida.');
       refresh();
-      selectRef.current?.focus();
+      triggerRef.current?.focus();
     },
   });
-  const error = grant.error ?? revoke.error ?? (query.isError ? query.error : null);
+  const error = revoke.error ?? (query.isError ? query.error : null);
   const grantable = query.data?.grantable ?? [];
   const selected = grantable.includes(permission) ? permission : (grantable[0] ?? '');
   const trimmed = roleId.trim();
@@ -97,46 +101,44 @@ export function Grants() {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => (
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
+        <RemoveButton
           disabled={revoke.isPending}
           onClick={() => {
-            grant.reset();
             revoke.mutate({ permission: row.original.permission, roleId: row.original.roleId });
           }}
-        >
-          Remover
-        </Button>
+        />
       ),
     }),
   ]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Permissões</h1>
-      <p className="text-sm text-muted-foreground">
-        Associe as permissões dos módulos aos cargos do servidor. Quem tem o cargo passa a ter a
-        permissão.
-      </p>
-      <Card>
-        <CardContent>
-          <form
-            className="flex flex-wrap items-end gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (valid && selected !== '') {
-                revoke.reset();
-                grant.mutate({ permission: selected, roleId: trimmed });
-              }
+    <>
+      <PageHeader
+        title="Permissões"
+        description="Associe as permissões dos módulos aos cargos do servidor. Quem tem o cargo passa a ter a permissão."
+        actions={
+          <AddDialog
+            triggerLabel="Associar permissão"
+            triggerRef={triggerRef}
+            title="Associar permissão"
+            submitLabel="Associar"
+            open={granting}
+            onOpenChange={(open) => {
+              setGranting(open);
+              if (!open) grant.reset();
             }}
+            onSubmit={() => {
+              revoke.reset();
+              grant.mutate({ permission: selected, roleId: trimmed });
+            }}
+            pending={grant.isPending}
+            canSubmit={valid && selected !== ''}
+            error={grant.error === null ? null : errorText(grant.error)}
           >
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={selectId}>Permissão</Label>
               <NativeSelect
                 id={selectId}
-                ref={selectRef}
                 value={selected}
                 onChange={(event) => {
                   setPermission(event.target.value);
@@ -149,11 +151,10 @@ export function Grants() {
                 ))}
               </NativeSelect>
             </div>
-            <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor={inputId}>ID do cargo</Label>
               <Input
                 id={inputId}
-                ref={inputRef}
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
@@ -165,15 +166,14 @@ export function Grants() {
                 }}
               />
             </div>
-            <Button type="submit" disabled={grant.isPending || !valid || selected === ''}>
-              Associar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-      <p role="alert" className="text-sm text-destructive empty:hidden">
-        {error === null ? null : errorText(error)}
-      </p>
+          </AddDialog>
+        }
+      />
+      {error === null ? null : (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{errorText(error)}</AlertDescription>
+        </Alert>
+      )}
       {query.isPending ? (
         <div className="flex flex-col gap-2">
           <p className="sr-only">Carregando…</p>
@@ -183,26 +183,25 @@ export function Grants() {
         </div>
       ) : null}
       {query.isSuccess && groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhuma permissão associada a cargos.</p>
+        <EmptyState title="Nenhuma permissão associada a cargos." />
       ) : null}
-      <div className="flex flex-col gap-4">
-        {groups.map(([name, entries]) => (
-          <Card key={name} role="region" aria-label={name}>
-            <CardHeader>
-              <CardTitle>
-                <h2 className="font-mono text-base font-semibold break-all">{name}</h2>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                columns={columns}
-                data={entries}
-                getRowId={(entry) => `${entry.permission}:${entry.roleId}`}
-              />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </section>
+      {/* The shell main already spaces its children; each group is one more block. */}
+      {groups.map(([name, entries]) => (
+        <Card key={name} role="region" aria-label={name}>
+          <CardHeader>
+            <CardTitle>
+              <h2 className="font-mono text-base font-semibold break-all">{name}</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DataTable
+              columns={columns}
+              data={entries}
+              getRowId={(entry) => `${entry.permission}:${entry.roleId}`}
+            />
+          </CardContent>
+        </Card>
+      ))}
+    </>
   );
 }

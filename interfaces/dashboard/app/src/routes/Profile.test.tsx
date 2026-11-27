@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeClock } from '../fake-websocket.ts';
-import { okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
+import { errorBody, okBody, setupOperations, type OperationCall } from '../test-utils.tsx';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -30,11 +30,35 @@ describe('my cases', () => {
       ],
     );
     expect(await screen.findByRole('heading', { name: 'Meus casos' })).toBeInTheDocument();
-    const row = await within(screen.getByRole('main')).findByRole('listitem');
+    const main = within(screen.getByRole('main'));
+    const row = await main.findByRole('row', { name: /Caso 7/ });
+    expect(main.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Caso',
+      'Data',
+      'Tipo',
+      'Ação',
+      'Situação',
+    ]);
     expect(row).toHaveTextContent('Manual');
     expect(row).toHaveTextContent('Aviso');
     expect(row).toHaveTextContent('Com ação aplicada');
     expect(calls[0]).toEqual({ name: 'moderation.cases.mine', input: {} });
+  });
+
+  it('shows a failed load in a destructive alert inside the card', async () => {
+    setupOperations(
+      [],
+      (call: OperationCall) =>
+        call.name === 'moderation.cases.mine'
+          ? errorBody(500, 'internal', 'Falha ao carregar os casos.')
+          : okBody(null),
+      '/',
+      new FakeClock(),
+    );
+    const card = within(await screen.findByRole('region', { name: 'Meus casos' }));
+    const alert = await card.findByRole('alert');
+    expect(alert).toHaveAttribute('data-slot', 'alert');
+    expect(alert).toHaveTextContent('Falha ao carregar os casos.');
   });
 
   it('says so when there are none', async () => {
