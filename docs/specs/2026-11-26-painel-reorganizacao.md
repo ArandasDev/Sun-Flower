@@ -71,11 +71,11 @@ Toda tela do painel segue a mesma estrutura:
   - `PageHeader`;
   - `EmptyState`, com ícone, texto e descrição opcional, que é o único formato de lista vazia;
   - `RowActions`, um menu de ações por linha (`DropdownMenu`) com gatilho nomeado;
-  - `StatusBadge`, que leva situação a variante:
-    - `default` para ativo ou ligado;
-    - `secondary` para parado, descartado ou revertido;
-    - `destructive` para falha ou desconectado;
-    - `outline` para em transição.
+  - `StatusBadge`, que leva situação a um selo `outline` com o texto normal e um ponto à esquerda, para o âmbar ficar só na ação principal e no item ativo:
+    - ativo ou ligado: ponto `bg-primary`;
+    - parado, descartado ou revertido: ponto `bg-muted-foreground`;
+    - falha ou desconectado: ponto e texto `destructive`;
+    - em transição: ponto vazado, só com contorno.
 - **Novos em `components/ui/`:** `alert.tsx` e `dialog.tsx`, do shadcn, adaptados como os outros.
 - **Ações destrutivas por linha** ("Remover"): botão `ghost` com texto `text-destructive` e ícone de lixeira, com o mesmo nome. O botão vermelho sólido fica só dentro das confirmações.
 - **Avisos:** erros de tela, conflitos e resultados usam `Alert`. Erros de campo continuam abaixo do campo.

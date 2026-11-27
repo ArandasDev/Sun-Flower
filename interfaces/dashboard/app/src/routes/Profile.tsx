@@ -38,7 +38,7 @@ function MyCases() {
     {},
   );
   return (
-    <Card aria-labelledby="my-cases-title">
+    <Card role="region" aria-labelledby="my-cases-title">
       <CardHeader>
         <CardTitle>
           <h2 id="my-cases-title" className="text-lg font-semibold">

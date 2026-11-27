@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader.tsx';
 import { StatusBadge, type StatusTone } from '../components/StatusBadge.tsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
+import { cn } from '../lib/utils.ts';
 import { formatUptime } from '../format.ts';
 import { connectionLabel, moduleStateLabel } from '../labels.ts';
 import { useLive } from '../live.ts';
@@ -32,12 +33,20 @@ function moduleTone(state: string): StatusTone {
   return 'inactive';
 }
 
-function Indicator({ label, children }: { label: string; children: ReactNode }) {
+function Indicator({
+  label,
+  alarm = false,
+  children,
+}: {
+  label: string;
+  alarm?: boolean;
+  children: ReactNode;
+}) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-1">
         <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold">{children}</p>
+        <p className={cn('text-2xl font-semibold', alarm && 'text-destructive')}>{children}</p>
       </CardContent>
     </Card>
   );
@@ -79,7 +88,9 @@ export function Overview() {
     <>
       <PageHeader title={TITLE} description={DESCRIPTION} />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicator label="Conexão">{connectionLabel(status.connection)}</Indicator>
+        <Indicator label="Conexão" alarm={status.connection === 'disconnected'}>
+          {connectionLabel(status.connection)}
+        </Indicator>
         <Indicator label="Tempo no ar">{formatUptime(status.uptimeMs)}</Indicator>
         <Indicator label="Módulos ativos">
           {running} de {status.modules.length}
