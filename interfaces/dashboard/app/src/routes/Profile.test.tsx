@@ -30,7 +30,15 @@ describe('my cases', () => {
       ],
     );
     expect(await screen.findByRole('heading', { name: 'Meus casos' })).toBeInTheDocument();
-    const row = await within(screen.getByRole('main')).findByRole('listitem');
+    const main = within(screen.getByRole('main'));
+    const row = await main.findByRole('row', { name: /Caso 7/ });
+    expect(main.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Caso',
+      'Data',
+      'Tipo',
+      'Ação',
+      'Situação',
+    ]);
     expect(row).toHaveTextContent('Manual');
     expect(row).toHaveTextContent('Aviso');
     expect(row).toHaveTextContent('Com ação aplicada');
