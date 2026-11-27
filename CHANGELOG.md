@@ -18,7 +18,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - login, sem acesso, carregando e erro como um cartão centralizado.
 - Painel, melhorias de uso:
   - toasts de confirmação depois de uma ação que deu certo, com o `Toast` do Radix: somem em 4 s, podem ser fechados e são anunciados a leitores de tela. Os textos são "Caso revertido." / "Caso descartado.", o resultado da ação em Ações, "Domínio adicionado." / "Domínio removido.", "Configuração salva.", "Permissão concedida." / "Permissão removida.", "Desenvolvedor adicionado." / "Desenvolvedor removido.", "Módulo ligado." / "Módulo desligado." e "Sessão revogada.". Erros continuam na tela, perto do que falhou;
-  - tabelas com TanStack Table em Logs, Sessões, Domínios, Desenvolvedores, Permissões e Módulos: campo "Buscar" que ignora maiúsculas e acentos, ordenação pelo cabeçalho (crescente, decrescente e a ordem do servidor, com `aria-sort`) e "Nenhum resultado para a busca." quando a busca não acha nada. Sessões passa a ser uma tabela única, com a pessoa numa coluna. Domínios mantém uma tabela por lista, e Permissões, uma por permissão. Casos não muda.
+  - tabelas com TanStack Table em Logs, Sessões, Domínios, Desenvolvedores, Permissões e Módulos: campo "Buscar" que ignora maiúsculas e acentos, ordenação pelo cabeçalho (crescente, decrescente e a ordem do servidor, com `aria-sort`) e "Nenhum resultado para a busca." quando a busca não acha nada. Sessões passa a ser uma tabela única, com a pessoa numa coluna. Domínios mantém uma tabela por lista, e Permissões, uma por permissão. A tabela de Casos vem com a reorganização das telas, em "Changed".
 
 ### Changed
 
@@ -29,7 +29,6 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - tabela de Logs com o nível num `Badge` e quebra de valores longos, sem cortá-los;
   - `Skeleton` enquanto as listas carregam.
 - Os toasts do painel usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
-
 - Painel, reorganização estrutural das telas ([2026-11-26-painel-reorganizacao.md](docs/specs/2026-11-26-painel-reorganizacao.md)):
   - todas as telas com a mesma largura e o mesmo cabeçalho (título, descrição e ação principal), com os blocos em cartões e barra de busca nas tabelas;
   - formulários de adicionar de Domínios, Desenvolvedores e Permissões dentro de um `Dialog`;

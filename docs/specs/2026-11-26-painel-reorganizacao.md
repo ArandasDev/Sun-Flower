@@ -106,6 +106,6 @@ Toda tela do painel segue a mesma estrutura:
 - A busca de Domínios e de Desenvolvedores também foi para a barra do cartão.
 - Desenvolvedores mostra um `EmptyState` quando a lista está vazia.
 - Módulos não tem `EmptyState`: a lista sempre tem o módulo de administração.
-- Os erros de tela usam `Alert` nas telas com tabela e formulário. Visão geral e Meu perfil seguem com `role="alert"` em texto simples.
+- As telas de uma tabela só (Módulos, Logs, Sessões e Desenvolvedores) têm um cabeçalho de cartão só com a barra de ferramentas, sem título: um título repetiria o `h1` da página.
 - `PageHeader` aceita um `ref` opcional no título, para devolver o foco depois de uma confirmação.
 - Os ids das seções de Configuração são fixos (`config-<id>`), para as âncoras.
