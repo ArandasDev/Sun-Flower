@@ -149,7 +149,7 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 - [ ] Uma alteração de configuração pelo painel tem efeito sem reiniciar a aplicação.
 - [x] **Revisão ofensiva:** três subagentes independentes atacam o projeto como invasores, um focado em autenticação e permissões, um na API e em injeção, e um em vazamento de informações e segredos. Todas as falhas encontradas são corrigidas ou registradas como aceitas pela pessoa mantenedora antes da release. A revisão está concluída, com as correções no PR O, e o item C-6 foi resolvido pela pessoa mantenedora.
 
-**Visual do painel:** antes do teste manual, o painel passa para Tailwind e shadcn/ui ([0025](decisions/0025-panel-ui-kit.md), spec [2026-11-26-painel-visual-shadcn.md](specs/2026-11-26-painel-visual-shadcn.md)).
+**Visual do painel:** implementado em Tailwind e shadcn/ui ([0025](decisions/0025-panel-ui-kit.md), spec [2026-11-26-painel-visual-shadcn.md](specs/2026-11-26-painel-visual-shadcn.md)), nos PRs Q, R e S. O teste manual do painel no servidor real continua pendente, e os critérios acima seguem abertos.
 
 **Release:** `v0.3.0`, publicada antes do teste manual do painel. Os três critérios abertos acima dependem desse teste, e as correções que ele exigir saem numa versão `PATCH`.
 

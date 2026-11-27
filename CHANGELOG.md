@@ -28,7 +28,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - módulos ligados e desligados com um `Switch` cujo nome acessível é o nome do módulo (desligar continua pedindo confirmação);
   - tabela de Logs com o nível num `Badge` e quebra de valores longos, sem cortá-los;
   - `Skeleton` enquanto as listas carregam.
-- Os toasts do painel usarão o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
+- Os toasts do painel usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
 
 ### Removed
 
