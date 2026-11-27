@@ -151,6 +151,8 @@ As recomendações listadas nas decisões pendentes são sugestões de partida. 
 
 **Visual do painel:** implementado em Tailwind e shadcn/ui ([0025](decisions/0025-panel-ui-kit.md), spec [2026-11-26-painel-visual-shadcn.md](specs/2026-11-26-painel-visual-shadcn.md)), nos PRs Q, R e S. O teste manual do painel no servidor real continua pendente, e os critérios acima seguem abertos.
 
+**Reorganização do painel:** estrutura das telas, `Dialog`s de adicionar e menus de linha implementados (spec [2026-11-26-painel-reorganizacao.md](specs/2026-11-26-painel-reorganizacao.md)). O teste manual no servidor real continua pendente.
+
 **Release:** `v0.3.0`, publicada antes do teste manual do painel. Os três critérios abertos acima dependem desse teste, e as correções que ele exigir saem numa versão `PATCH`.
 
 ---

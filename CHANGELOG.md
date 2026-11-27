@@ -30,6 +30,13 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) e o pro
   - `Skeleton` enquanto as listas carregam.
 - Os toasts do painel usam o `Toast` do Radix, não o Sonner, porque o Sonner 2.0.8 injeta um `<style>` sem nonce.
 
+- Painel, reorganização estrutural das telas ([2026-11-26-painel-reorganizacao.md](docs/specs/2026-11-26-painel-reorganizacao.md)):
+  - todas as telas com a mesma largura e o mesmo cabeçalho (título, descrição e ação principal), com os blocos em cartões e barra de busca nas tabelas;
+  - formulários de adicionar de Domínios, Desenvolvedores e Permissões dentro de um `Dialog`;
+  - Visão geral com indicadores, Casos com colunas e detalhe, e Configuração com navegação por seções;
+  - menu de ações por linha em Sessões;
+  - estado vazio com `EmptyState`, selos de status neutros com um ponto colorido e erros de tela num `Alert`.
+
 ### Removed
 
 - O CSS escrito à mão do painel (`styles.css`) e a camada legada: nenhuma tela depende mais dele.

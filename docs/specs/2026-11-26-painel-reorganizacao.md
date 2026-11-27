@@ -1,6 +1,6 @@
 # Spec — Painel: reorganização estrutural
 
-**Status:** Aprovada em 2026-11-26, por pedido direto da pessoa mantenedora ("reorganização estrutural para melhorar hierarquia visual, navegação, distribuição de informações e consistência dos componentes").
+**Status:** Implementada em 2026-11-26. Aprovada em 2026-11-26, por pedido direto da pessoa mantenedora ("reorganização estrutural para melhorar hierarquia visual, navegação, distribuição de informações e consistência dos componentes").
 **Base:** [2026-11-26-painel-visual-shadcn.md](2026-11-26-painel-visual-shadcn.md) e [0025](../decisions/0025-panel-ui-kit.md). Não há tecnologia nova, então não há decisão nova.
 
 ## 1. Problemas encontrados
@@ -95,3 +95,17 @@ Toda tela do painel segue a mesma estrutura:
   - cada `Dialog` de adicionar (abrir, enviar, fechar no sucesso, manter aberto e mostrar o erro na falha);
   - o menu de ações de Sessões.
 - **Navegador:** com o servidor real do painel, em 1440, 1024 e 375 px, nos dois temas, as 11 telas não podem ter rolagem horizontal nem violação de CSP. Os `Dialog`s e menus também são conferidos.
+
+## 6. Implementação
+
+**Conferência no navegador.** O build foi servido com o servidor real do painel (CSP com nonce de estilo) e dados falsos. As 11 rotas foram conferidas em 1440, 1024 e 375 px, nos temas claro e escuro, sem rolagem horizontal da página. O `Dialog` de adicionar e o menu de linha de Sessões abriram, com zero violações de CSP. O teste manual no servidor real continua pendente.
+
+**Decisões tomadas durante a implementação:**
+
+- `StatusBadge` é um selo com contorno e um ponto colorido, e não uma pílula amber cheia, para manter o amber em 10%.
+- A busca de Domínios e de Desenvolvedores também foi para a barra do cartão.
+- Desenvolvedores mostra um `EmptyState` quando a lista está vazia.
+- Módulos não tem `EmptyState`: a lista sempre tem o módulo de administração.
+- Os erros de tela usam `Alert` nas telas com tabela e formulário. Visão geral e Meu perfil seguem com `role="alert"` em texto simples.
+- `PageHeader` aceita um `ref` opcional no título, para devolver o foco depois de uma confirmação.
+- Os ids das seções de Configuração são fixos (`config-<id>`), para as âncoras.
