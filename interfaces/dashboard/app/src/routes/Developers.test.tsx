@@ -185,7 +185,8 @@ describe('developers screen', () => {
         ? errorBody(403, 'forbidden', 'Você não tem permissão para isso.')
         : undefined,
     );
-    expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
+    const message = await screen.findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
   });
 });
 

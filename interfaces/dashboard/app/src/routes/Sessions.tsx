@@ -11,6 +11,7 @@ import {
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
 import { RowActions } from '../components/RowActions.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
 import { Skeleton } from '../components/ui/skeleton.tsx';
 import { errorText } from '../labels.ts';
@@ -129,9 +130,11 @@ export function Sessions() {
         description="Sessões abertas no painel. Encerrar uma sessão fecha o painel dessa pessoa na hora."
         headingRef={headingRef}
       />
-      <p role="alert" className="text-sm text-destructive empty:hidden">
-        {query.isError ? errorText(query.error) : null}
-      </p>
+      {query.isError ? (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{errorText(query.error)}</AlertDescription>
+        </Alert>
+      ) : null}
       {query.isPending ? (
         <div className="flex flex-col gap-2">
           <p className="sr-only">Carregando…</p>

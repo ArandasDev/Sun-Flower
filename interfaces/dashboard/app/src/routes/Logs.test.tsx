@@ -133,6 +133,7 @@ describe('logs screen', () => {
 
   it('shows "Sem permissão." on a 403', async () => {
     setup([], () => errorBody(403, 'forbidden', 'Você não tem permissão para isso.'));
-    expect(await screen.findByText('Sem permissão.')).toBeInTheDocument();
+    const message = await screen.findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
   });
 });

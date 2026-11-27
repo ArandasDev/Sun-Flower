@@ -5,6 +5,7 @@ import { AddDialog } from '../components/AddDialog.tsx';
 import { DataTable, DataTableSearch, createDataTableColumns } from '../components/DataTable.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
@@ -142,9 +143,11 @@ function DomainList({ list, title, dialogTitle }: DomainListProps) {
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p role="alert" className="text-sm text-destructive empty:hidden">
-          {error === null ? null : errorText(error)}
-        </p>
+        {error === null ? null : (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{errorText(error)}</AlertDescription>
+          </Alert>
+        )}
         {query.isPending ? (
           <div className="flex flex-col gap-2">
             <p className="sr-only">Carregando…</p>

@@ -8,6 +8,7 @@ import {
 } from '../components/DataTable.tsx';
 import { EmptyState } from '../components/EmptyState.tsx';
 import { PageHeader } from '../components/PageHeader.tsx';
+import { Alert, AlertDescription } from '../components/ui/alert.tsx';
 import { Badge } from '../components/ui/badge.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Card, CardContent, CardHeader } from '../components/ui/card.tsx';
@@ -135,9 +136,11 @@ export function Logs() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <p role="alert" className="text-sm text-destructive empty:hidden">
-            {query.isError ? errorText(query.error) : null}
-          </p>
+          {query.isError ? (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription>{errorText(query.error)}</AlertDescription>
+            </Alert>
+          ) : null}
           {query.isPending ? (
             <div className="flex flex-col gap-2">
               <p className="sr-only">Carregando…</p>

@@ -64,6 +64,19 @@ describe('domains screen', () => {
     expect(within(blocked).getByText('bad.example.com')).toBeInTheDocument();
   });
 
+  it('shows the error of a list in an alert inside its card', async () => {
+    setup(['good.example.com'], (call) =>
+      call.name === 'moderation.domains.list' && call.input['list'] === 'allow'
+        ? errorBody(403, 'forbidden', 'Você não tem permissão para isso.')
+        : undefined,
+    );
+    const allowed = await screen.findByRole('region', { name: 'Permitidos' });
+    const message = await within(allowed).findByText('Sem permissão.');
+    expect(message.closest('[data-slot="alert"]')).toHaveAttribute('role', 'alert');
+    const blocked = screen.getByRole('region', { name: 'Bloqueados' });
+    expect(within(blocked).queryByRole('alert')).toBeNull();
+  });
+
   it('adds a domain to the blocked list from the dialog and shows it', async () => {
     const { calls } = setup();
     const blocked = await screen.findByRole('region', { name: 'Bloqueados' });
