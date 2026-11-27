@@ -174,7 +174,7 @@ export function Modules() {
       {modules.length === 0 ? null : (
         <Card>
           <CardContent>
-            <DataTable columns={columns} data={modules} />
+            <DataTable columns={columns} data={modules} getRowId={(entry) => entry.id} />
           </CardContent>
         </Card>
       )}

@@ -92,4 +92,22 @@ describe('DataTable', () => {
     expect(header).not.toHaveAttribute('aria-sort');
     expect(within(header).queryByRole('button')).toBeNull();
   });
+
+  it('keeps focus in a cell when the screen rebuilds its columns on a re-render', () => {
+    const build = () =>
+      helper.columns([
+        helper.accessor('name', { header: 'Nome' }),
+        helper.display({
+          id: 'actions',
+          header: 'Ações',
+          cell: ({ row }) => <button type="button">Abrir {row.original.name}</button>,
+        }),
+      ]);
+    const view = render(<DataTable columns={build()} data={DATA} getRowId={(item) => item.name} />);
+    const button = screen.getByRole('button', { name: 'Abrir Beta' });
+    button.focus();
+    view.rerender(<DataTable columns={build()} data={DATA} getRowId={(item) => item.name} />);
+    expect(screen.getByRole('button', { name: 'Abrir Beta' })).toBe(button);
+    expect(button).toHaveFocus();
+  });
 });

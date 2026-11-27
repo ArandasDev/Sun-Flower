@@ -124,7 +124,12 @@ function DomainList({ list, title }: { list: ListName; title: string }) {
           </div>
         ) : null}
         {domains.length > 0 || query.isSuccess ? (
-          <DataTable columns={columns} data={rows} emptyText="Nenhum domínio nesta lista." />
+          <DataTable
+            columns={columns}
+            data={rows}
+            getRowId={(item) => item.domain}
+            emptyText="Nenhum domínio nesta lista."
+          />
         ) : null}
       </CardContent>
     </Card>

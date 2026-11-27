@@ -137,7 +137,12 @@ export function Sessions() {
       {sessions.length > 0 || query.isSuccess ? (
         <Card>
           <CardContent>
-            <DataTable columns={columns} data={sessions} emptyText="Nenhuma sessão aberta." />
+            <DataTable
+              columns={columns}
+              data={sessions}
+              getRowId={(entry) => entry.ref}
+              emptyText="Nenhuma sessão aberta."
+            />
           </CardContent>
         </Card>
       ) : null}

@@ -6,10 +6,10 @@ import { findToast, okBody, setupOperations, type OperationCall } from '../test-
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup() {
+function setup(allow: string[] = ['good.example.com']) {
   const lists: Record<string, string[]> = {
     block: ['bad.example.com'],
-    allow: ['good.example.com'],
+    allow,
   };
   const operation = (call: OperationCall) => {
     const domain = String(call.input['domain']);
@@ -61,5 +61,19 @@ describe('domains screen', () => {
     expect(calls.find((call) => call.name === 'moderation.domains.remove')?.input).toEqual({
       domain: 'good.example.com',
     });
+  });
+
+  it('does not hand the focused Remover to the next domain after a removal', async () => {
+    setup(['first.example.com', 'second.example.com']);
+    const allowed = await screen.findByRole('region', { name: 'Permitidos' });
+    await within(allowed).findByText('first.example.com');
+    const first = within(allowed).getAllByRole('button', { name: 'Remover' })[0]!;
+    first.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(within(allowed).queryByText('first.example.com')).toBeNull());
+    const second = within(allowed).getByRole('button', { name: 'Remover' });
+    expect(within(allowed).getByText('second.example.com')).toBeInTheDocument();
+    expect(first).not.toBeInTheDocument();
+    expect(second).not.toHaveFocus();
   });
 });

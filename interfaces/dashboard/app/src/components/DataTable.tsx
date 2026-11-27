@@ -13,7 +13,7 @@ import {
   type SortFn,
 } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '../lib/utils.ts';
 import { normalizeSearch } from '../search.ts';
 import { Input } from './ui/input.tsx';
@@ -83,11 +83,27 @@ export function sortBy<T extends RowData>(key: (item: T) => string): SortFn<Feat
   };
 }
 
+/**
+ * Renders a header or cell template by calling it, not by mounting it as a component. Screens
+ * rebuild their columns on every render (the cells close over mutation state), so a template
+ * mounted with `createElement`, as TanStack's `FlexRender` does, would be a new component type
+ * each time and React would remount every cell, dropping the focus of a button inside it.
+ * Templates therefore must not call hooks.
+ */
+function renderTemplate<TContext>(
+  template: string | ((context: TContext) => ReactNode) | undefined,
+  context: TContext,
+): ReactNode {
+  return typeof template === 'function' ? template(context) : template;
+}
+
 const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;
 
 interface DataTableProps<T extends RowData> {
   columns: DataTableColumn<T>[];
   data: T[];
+  /** A stable key per item, so a row's DOM (and focus) never passes to another item after a reload. */
+  getRowId?: (item: T) => string;
   searchLabel?: string;
   /** Shown instead of the table when `data` is empty; without it, nothing is shown. */
   emptyText?: string;
@@ -102,6 +118,7 @@ interface DataTableProps<T extends RowData> {
 export function DataTable<T extends RowData>({
   columns,
   data,
+  getRowId,
   searchLabel = 'Buscar',
   emptyText,
   noResultsText = 'Nenhum resultado para a busca.',
@@ -111,6 +128,7 @@ export function DataTable<T extends RowData>({
     features,
     columns,
     data,
+    ...(getRowId === undefined ? {} : { getRowId: (item: T) => getRowId(item) }),
     defaultColumn: { sortFn: compareText },
     globalFilterFn: matchesSearch,
     enableSortingRemoval: true,
@@ -151,7 +169,7 @@ export function DataTable<T extends RowData>({
                 if (!column.getCanSort()) {
                   return (
                     <TableHead key={header.id} scope="col">
-                      <table.FlexRender header={header} />
+                      {renderTemplate(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   );
                 }
@@ -171,7 +189,7 @@ export function DataTable<T extends RowData>({
                         column.toggleSorting();
                       }}
                     >
-                      <table.FlexRender header={header} />
+                      {renderTemplate(header.column.columnDef.header, header.getContext())}
                       <Icon
                         aria-hidden="true"
                         className={cn('size-3.5', sorted === false && 'text-muted-foreground')}
@@ -198,7 +216,7 @@ export function DataTable<T extends RowData>({
               <TableRow key={row.id} className="align-top">
                 {row.getAllCells().map((cell) => (
                   <TableCell key={cell.id} className={cell.column.columnDef.meta?.cellClassName}>
-                    <table.FlexRender cell={cell} />
+                    {renderTemplate(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
               </TableRow>

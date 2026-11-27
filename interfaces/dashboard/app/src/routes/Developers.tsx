@@ -145,7 +145,7 @@ export function Developers() {
       {developers.length === 0 ? null : (
         <Card>
           <CardContent>
-            <DataTable columns={columns} data={developers} />
+            <DataTable columns={columns} data={developers} getRowId={(entry) => entry.userId} />
           </CardContent>
         </Card>
       )}

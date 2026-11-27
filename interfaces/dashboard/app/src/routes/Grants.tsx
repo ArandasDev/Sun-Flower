@@ -194,7 +194,11 @@ export function Grants() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <DataTable columns={columns} data={entries} />
+              <DataTable
+                columns={columns}
+                data={entries}
+                getRowId={(entry) => `${entry.permission}:${entry.roleId}`}
+              />
             </CardContent>
           </Card>
         ))}
