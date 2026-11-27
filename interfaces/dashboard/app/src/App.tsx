@@ -32,7 +32,7 @@ function LiveShell({ clock }: { clock: LiveClock }) {
           <AnimatePresence mode="wait" initial={false}>
             <motion.main
               key={location.pathname}
-              className="min-w-0 flex-1 p-4 md:p-6"
+              className="mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col gap-6 p-4 md:p-6"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
